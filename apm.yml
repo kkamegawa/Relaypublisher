@@ -5,6 +5,7 @@ author: Kazushi Kamegawa
 targets:
 - claude
 - copilot
+- codex
 - agent-skills
 dependencies:
   apm:

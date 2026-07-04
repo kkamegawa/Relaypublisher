@@ -36,14 +36,15 @@ Relaypublisher は、winget 風の YAML manifest を Git に commit すると、
 - `doc/99-full-conversation-summary.md` は歴史的記録（最新設計ではない）
 - `doc/intune-lob-publisher-design-and-copilot-issues.md` は分割版へのポインタ
 
-## APM 管理（Copilot / Claude / Agent Skills）
+## APM 管理（Copilot / Claude / Codex / Agent Skills）
 
 このリポジトリは APM で skill / agent / MCP server を管理しています。
 
 - manifest: `apm.yml`
 - lockfile: `apm.lock.yaml`
 - skills: `.agents/skills/`
-- agents: `.claude/agents/`, `.github/agents/`
+- agents: `.claude/agents/`, `.github/agents/`, `.codex/agents/`
+- Codex 設定: `.codex/`（`config.toml`, hooks, agents）
 - MCP config: `.mcp.json`
 
 ## ライセンス

@@ -1,0 +1,10 @@
+[mcp_servers.microsoft-learn]
+url = "https://learn.microsoft.com/api/mcp"
+id = ""
+
+[mcp_servers.azure]
+command = "npx"
+args = [ "-y", "@azure/mcp@latest", "server", "start",]
+id = ""
+
+[mcp_servers.azure.env]
