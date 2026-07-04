@@ -1,0 +1,117 @@
+# macOS
+.DS_Store
+
+## .NET / Visual Studio
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+artifacts/
+
+# Visual Studio cache/options
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Rider
+.idea/
+
+# VS Code (keep shared settings if desired)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Test results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+
+# .NET tooling
+.dotnet/
+.mono/
+
+# MSBuild / build logs
+*.binlog
+msbuild.log
+msbuild.err
+msbuild.wrn
+
+# Benchmark / profiling
+BenchmarkDotNet.Artifacts/
+*.psess
+*.vsp
+*.vspx
+*.sap
+*.dmp
+
+# StyleCop / ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+StyleCopReport.xml
+
+# Publish output
+[Pp]ublish/
+PublishScripts/
+*.publishproj
+*.pubxml
+*.pubxml.user
+*.azurePubxml
+
+# ClickOnce
+*.application
+*.manifest.deploy
+
+# Others
+*.pidb
+*.svclog
+*.scc
+*.cache
+!?*.[Cc]ache/
+*.tmp
+*.tmp_proj
+*_wpftmp.csproj
+*.log
+*.tlog
+*.vspscc
+*.vssscc
+.builds
+
+# Tool output of this project
+out/
+
+# Local secrets (never commit)
+*.env
+appsettings.*.local.json
