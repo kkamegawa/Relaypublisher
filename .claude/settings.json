@@ -8,6 +8,24 @@
             "command": "bash \".claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/track-telemetry.sh\""
+          }
+        ],
+        "_apm_source": "azure-skills"
+      },
+      {
+        "type": "command",
+        "windows": ".claude/hooks/azure-skills/hooks/scripts/track-telemetry.ps1",
+        "osx": ".claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh",
+        "linux": ".claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh",
+        "bash": ".claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh",
+        "powershell": ".claude/hooks/azure-skills/hooks/scripts/track-telemetry.ps1",
+        "_apm_source": "azure-skills"
       }
     ]
   }
