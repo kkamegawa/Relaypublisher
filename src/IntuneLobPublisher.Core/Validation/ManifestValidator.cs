@@ -7,6 +7,12 @@ namespace IntuneLobPublisher.Core.Validation;
 /// <summary>FluentValidation based implementation of <see cref="IManifestValidator"/>.</summary>
 public sealed class ManifestValidator : IManifestValidator
 {
+    static ManifestValidator()
+    {
+        // Keep validation messages in English regardless of the OS locale so CI logs stay deterministic.
+        ValidatorOptions.Global.LanguageManager.Culture = System.Globalization.CultureInfo.InvariantCulture;
+    }
+
     private readonly IntunePackageManifestValidator _validator = new();
 
     public ValidationResult Validate(IntunePackageManifest manifest)
