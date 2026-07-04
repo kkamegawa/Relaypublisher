@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj" />
+    <Project Path="src/IntuneLobPublisher.Core/IntuneLobPublisher.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/IntuneLobPublisher.Core.Tests/IntuneLobPublisher.Core.Tests.csproj" />
+  </Folder>
+</Solution>
