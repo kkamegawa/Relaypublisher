@@ -12,12 +12,12 @@ This issue focuses on the foundation only. Actual Microsoft Intune upload, Micro
 
 Use the following technologies:
 
-- .NET 9
+- .NET 10
 - C#
 - System.CommandLine
 - YamlDotNet
 - FluentValidation
-- xUnit
+- MSTest
 - Microsoft.Extensions.Logging
 - Microsoft.Extensions.DependencyInjection
 
@@ -558,7 +558,7 @@ CLI should convert these errors into:
 
 ## Tests
 
-Add xUnit tests under:
+Add MSTest tests under:
 
 ```text
 tests/IntuneLobPublisher.Core.Tests

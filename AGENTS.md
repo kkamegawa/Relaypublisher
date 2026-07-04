@@ -7,7 +7,7 @@
 Relaypublisher は、winget 風の YAML manifest を Git に commit すると、CI が Microsoft Intune の LOB アプリを登録・更新するツールです。
 
 - 対象プラットフォーム: Windows Win32 (x64 / Arm64)、macOS (PKG)
-- 実装言語: .NET 9 / C#(**現時点では設計ドキュメントのみで、実装コードはまだ存在しません**)
+- 実装言語: .NET 10 / C#(**現時点では設計ドキュメントのみで、実装コードはまだ存在しません**)
 - 配布バイナリは Git に置かず、publicHttp / private GitHub Release / Azure Blob から取得する
 
 ## リポジトリ構成と正本
@@ -42,11 +42,14 @@ Relaypublisher は、winget 風の YAML manifest を Git に commit すると、
 
 ## 実装規約(`src/` を追加する場合)
 
-- .NET 9 / C#。使用パッケージ: System.CommandLine, YamlDotNet, FluentValidation, xUnit, Microsoft.Extensions.Logging / DependencyInjection, Azure.Identity, Azure.Storage.Blobs
+- .NET 10 / C#。テストフレームワークは MSTest
+- NuGet パッケージは Microsoft 製を優先する。Microsoft 製で要件を満たせない場合のみサードパーティを使う(現時点で許容しているのは YamlDotNet, FluentValidation)
+- 使用パッケージ: System.CommandLine, YamlDotNet, FluentValidation, MSTest, Microsoft.Extensions.Logging / DependencyInjection, Azure.Identity, Azure.Storage.Blobs
 - Microsoft Graph SDK は使わず `HttpClient` + `Azure.Identity`(REST URL と payload をレビュー可能に保つため)
 - ソースコードのコメントは英語(MIT ライセンス)
 - secrets / token / Authorization ヘッダー / 署名付き URL をログ・成果物・例外メッセージに出さない
 - manifest 由来のパスは必ず path traversal / 絶対パス検証を通す
+- スクリプトは bash(macOS / Linux)と PowerShell 7 の両方を用意する。Windows で実行する場合は PowerShell を優先する
 - `dotnet build` と `dotnet test` が通ることを変更の完了条件とする
 
 ## ドキュメント規約

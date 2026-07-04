@@ -318,8 +318,9 @@ validation ルール:
 
 IntuneWinAppUtil.exe は全パッケージの中身に触れるため:
 
-- 使用するバージョンを設定ファイルまたは CLI オプションで**固定**する。
-- ダウンロード取得する場合は**既知の SHA256 と照合**し、不一致なら fail する。
+- 使用するバージョンは設定ファイルまたは CLI オプションで**固定(pin)できる**。指定がない場合は GitHub の公式リポジトリ(`microsoft/Microsoft-Win32-Content-Prep-Tool`)の**最新リリースを取得**する。
+- バージョンを pin し、既知の SHA256 が設定されている場合は、ダウンロード後に**照合**し、不一致なら fail する。
+- 最新リリース取得時は照合する既知ハッシュがないため、取得したバイナリの SHA256 を計算して package metadata に記録する(監査可能性の確保)。
 - 使用したツールのバージョンとハッシュを package metadata JSON に記録する。
 
 ### 6.16 Graph throttling
@@ -354,6 +355,8 @@ Intune 系 Graph API は 429 が発生しやすい。すべての Graph 呼び�
 
 .NET で実装する場合の推奨:
 
+- .NET 10 / C#。テストフレームワークは MSTest。
+- NuGet パッケージは Microsoft 製を優先する。Microsoft 製で要件を満たせない場合のみサードパーティを使う。
 - Graph SDK は最初は使わず、`HttpClient` + `Azure.Identity`。
 - IntuneWin 生成は Windows runner + `IntuneWinAppUtil.exe`。
 - validation は JSON Schema より C# model + `FluentValidation`。
