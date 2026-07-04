@@ -1,0 +1,33 @@
+name: Relaypublisher
+version: 1.0.0
+description: APM project for Relaypublisher
+author: Kazushi Kamegawa
+targets:
+- claude
+- copilot
+- agent-skills
+dependencies:
+  apm:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  - MicrosoftDocs/mcp
+  - dotnet/skills/plugins/dotnet
+  - dotnet/skills/plugins/dotnet-test
+  - github/awesome-copilot/plugins/csharp-dotnet-development
+  - github/awesome-copilot/plugins/security-best-practices
+  - github/awesome-copilot/plugins/software-engineering-team
+  mcp:
+  - name: microsoft-learn
+    registry: false
+    transport: http
+    url: https://learn.microsoft.com/api/mcp
+  - name: azure
+    registry: false
+    transport: stdio
+    command: npx
+    args:
+    - -y
+    - '@azure/mcp@latest'
+    - server
+    - start
+includes: auto
+scripts: {}

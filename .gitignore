@@ -115,3 +115,9 @@ out/
 # Local secrets (never commit)
 *.env
 appsettings.*.local.json
+
+# APM dependencies
+apm_modules/
+
+# Local agent settings
+.claude/settings.local.json

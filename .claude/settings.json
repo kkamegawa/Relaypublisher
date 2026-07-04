@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \".claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh\""
+          }
+        ]
+      },
+      {
+        "type": "command",
+        "windows": ".claude/hooks/azure-skills/hooks/scripts/track-telemetry.ps1",
+        "osx": ".claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh",
+        "linux": ".claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh",
+        "bash": ".claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh",
+        "powershell": ".claude/hooks/azure-skills/hooks/scripts/track-telemetry.ps1"
+      }
+    ]
+  }
+}
