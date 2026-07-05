@@ -78,6 +78,20 @@ public sealed class ChecksumMismatchException : PublisherException
     }
 }
 
+/// <summary>.intunewin generation failed (tool missing, tool download failed, non-zero exit, missing output).</summary>
+public sealed class PackagingException : PublisherException
+{
+    public PackagingException(string message)
+        : base(message)
+    {
+    }
+
+    public PackagingException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}
+
 /// <summary>A manifest-supplied path is absolute or escapes its allowed root.</summary>
 public sealed class UnsafePathException : PublisherException
 {

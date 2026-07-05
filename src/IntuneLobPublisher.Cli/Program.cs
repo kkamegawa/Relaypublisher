@@ -1,6 +1,7 @@
 using System.CommandLine;
 using IntuneLobPublisher.Cli.Commands;
 using IntuneLobPublisher.Core.Manifests;
+using IntuneLobPublisher.Core.Packaging;
 using IntuneLobPublisher.Core.Planning;
 using IntuneLobPublisher.Core.Sources;
 using IntuneLobPublisher.Core.Staging;
@@ -26,6 +27,10 @@ services.AddSingleton<HttpClient>();
 services.AddSingleton<ISourceProvider, PublicHttpSourceProvider>();
 services.AddSingleton<SourceProviderRegistry>();
 services.AddSingleton<IWindowsStagingService, WindowsStagingService>();
+services.AddSingleton<IIntuneWinToolDownloader, GitHubIntuneWinToolDownloader>();
+services.AddSingleton<IIntuneWinToolResolver, IntuneWinToolResolver>();
+services.AddSingleton<IProcessRunner, ProcessRunner>();
+services.AddSingleton<IIntuneWinPackager, IntuneWinPackager>();
 services.AddSingleton<IGitDiffRunner, GitDiffRunner>();
 services.AddSingleton<PlanService>();
 
