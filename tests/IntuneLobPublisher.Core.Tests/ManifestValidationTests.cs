@@ -242,6 +242,31 @@ public sealed class ManifestValidationTests
     }
 
     [TestMethod]
+    [DataRow(null)]
+    [DataRow("pkg")]
+    public void Validate_MacOsPkgWithUninstallIntent_Fails(string? appType)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Platform = "macos";
+        manifest.Apps[0].AppType = appType;
+        manifest.Apps[0].Assignments[0].Intent = "uninstall";
+        AssertInvalid(manifest, "Intent 'uninstall' is not supported for macOS AppType 'pkg'");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsLobWithUninstallIntent_HasNoPkgUninstallError()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Platform = "macos";
+        manifest.Apps[0].AppType = "lob";
+        manifest.Apps[0].Assignments[0].Intent = "uninstall";
+        var result = _validator.Validate(manifest);
+        Assert.IsFalse(
+            result.Errors.Any(e => e.ErrorMessage.Contains("uninstall", StringComparison.OrdinalIgnoreCase)),
+            "AppType 'lob' must not trigger the pkg uninstall rule.");
+    }
+
+    [TestMethod]
     public void Validate_InvalidSha256Format_Fails()
     {
         var manifest = TestManifests.CreateValid();

@@ -210,6 +210,19 @@ public sealed class ContentUploadTimedOutException : PublisherException
     public TimeSpan Timeout { get; }
 }
 
+/// <summary>
+/// Assignment plan computation received input it cannot plan against: malformed manifest values
+/// that slipped past validation, duplicate targets on the Intune side, or an intent the app type
+/// does not support. Thrown before any write.
+/// </summary>
+public sealed class AssignmentPlanningException : PublisherException
+{
+    public AssignmentPlanningException(string message)
+        : base(message)
+    {
+    }
+}
+
 /// <summary>A Microsoft Graph call failed after retries. Carries the request ids Graph returns for support/troubleshooting.</summary>
 public sealed class GraphRequestException : PublisherException
 {
