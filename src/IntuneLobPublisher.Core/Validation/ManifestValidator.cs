@@ -104,12 +104,22 @@ internal sealed class AppManifestValidator : AbstractValidator<AppManifest>
         RuleFor(a => a.Assignments)
             .Must(HaveUniqueTargets)
             .WithMessage("Assignments contains duplicate targets. Each group or built-in target may appear only once per app entry.");
+
+        // macOSPkgApp cannot uninstall (doc/issues/issue-004-assignment-merge.md). AppType defaults to pkg on macOS.
+        RuleFor(a => a.Assignments)
+            .Must((app, assignments) => !IsMacOsPkg(app) || assignments.TrueForAll(x => x.Intent != "uninstall"))
+            .WithMessage("Intent 'uninstall' is not supported for macOS AppType 'pkg' apps.");
     }
+
+    private static bool IsMacOsPkg(AppManifest app)
+        => app.Platform == "macos" && (app.AppType ?? "pkg") == "pkg";
 
     private static bool HaveUniqueTargets(List<AssignmentManifest> assignments)
     {
+        // Include and exclude assignments for the same group are different Graph targets
+        // (groupAssignmentTarget vs exclusionGroupAssignmentTarget), so Mode is part of the key.
         var keys = assignments.Select(a =>
-            $"{a.Target ?? ManifestValues.DefaultAssignmentTarget}|{a.GroupId?.ToLowerInvariant()}");
+            $"{a.Target ?? ManifestValues.DefaultAssignmentTarget}|{a.GroupId?.ToLowerInvariant()}|{a.Mode ?? ManifestValues.DefaultAssignmentMode}");
         return keys.Distinct(StringComparer.Ordinal).Count() == assignments.Count;
     }
 }

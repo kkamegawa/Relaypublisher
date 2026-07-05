@@ -233,12 +233,55 @@ public sealed class ManifestValidationTests
     }
 
     [TestMethod]
+    public void Validate_SameGroupIncludeAndExclude_IsNotADuplicate()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Assignments.Add(new AssignmentManifest
+        {
+            Target = "group",
+            GroupId = manifest.Apps[0].Assignments[0].GroupId,
+            Mode = "exclude",
+        });
+
+        var result = _validator.Validate(manifest);
+
+        Assert.IsFalse(
+            result.Errors.Any(e => e.ErrorMessage.Contains("duplicate targets", StringComparison.OrdinalIgnoreCase)),
+            "Include and exclude assignments for the same group are distinct Graph targets, not duplicates.");
+    }
+
+    [TestMethod]
     public void Validate_FilterIdWithoutFilterMode_Fails()
     {
         var manifest = TestManifests.CreateValid();
         manifest.Apps[0].Assignments[0].FilterId = "00000000-0000-0000-0000-00000000000f";
         manifest.Apps[0].Assignments[0].FilterMode = null;
         AssertInvalid(manifest, "FilterMode");
+    }
+
+    [TestMethod]
+    [DataRow(null)]
+    [DataRow("pkg")]
+    public void Validate_MacOsPkgWithUninstallIntent_Fails(string? appType)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Platform = "macos";
+        manifest.Apps[0].AppType = appType;
+        manifest.Apps[0].Assignments[0].Intent = "uninstall";
+        AssertInvalid(manifest, "Intent 'uninstall' is not supported for macOS AppType 'pkg'");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsLobWithUninstallIntent_HasNoPkgUninstallError()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Platform = "macos";
+        manifest.Apps[0].AppType = "lob";
+        manifest.Apps[0].Assignments[0].Intent = "uninstall";
+        var result = _validator.Validate(manifest);
+        Assert.IsFalse(
+            result.Errors.Any(e => e.ErrorMessage.Contains("uninstall", StringComparison.OrdinalIgnoreCase)),
+            "AppType 'lob' must not trigger the pkg uninstall rule.");
     }
 
     [TestMethod]
