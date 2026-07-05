@@ -34,9 +34,17 @@ public static class ManifestFileResolver
             var matcher = new Matcher(StringComparison.OrdinalIgnoreCase);
             matcher.AddInclude(pattern.Replace('\\', '/'));
             var matches = matcher.Execute(new DirectoryInfoWrapper(new DirectoryInfo(rootDirectory)));
+
+            var matchedAny = false;
             foreach (var match in matches.Files)
             {
+                matchedAny = true;
                 results.Add(Path.GetFullPath(Path.Combine(rootDirectory, match.Path)));
+            }
+
+            if (!matchedAny)
+            {
+                throw new ManifestLoadException($"Manifest pattern '{pattern}' did not match any files under '{rootDirectory}'.");
             }
         }
 
