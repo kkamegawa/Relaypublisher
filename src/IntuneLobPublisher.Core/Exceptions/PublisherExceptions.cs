@@ -100,3 +100,44 @@ public sealed class UnsafePathException : PublisherException
     {
     }
 }
+
+/// <summary>The acquired Graph token's `tid` claim does not match `--expected-tenant`. Thrown before any write.</summary>
+public sealed class TenantMismatchException : PublisherException
+{
+    public TenantMismatchException(string expectedTenantId, string actualTenantId)
+        : base($"Graph token tenant '{actualTenantId}' does not match --expected-tenant '{expectedTenantId}'.")
+    {
+        ExpectedTenantId = expectedTenantId;
+        ActualTenantId = actualTenantId;
+    }
+
+    public string ExpectedTenantId { get; }
+
+    public string ActualTenantId { get; }
+}
+
+/// <summary>A Microsoft Graph call failed after retries. Carries the request ids Graph returns for support/troubleshooting.</summary>
+public sealed class GraphRequestException : PublisherException
+{
+    public GraphRequestException(string message, int? statusCode, string? clientRequestId, string? requestId)
+        : base(message)
+    {
+        StatusCode = statusCode;
+        ClientRequestId = clientRequestId;
+        RequestId = requestId;
+    }
+
+    public GraphRequestException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+
+    /// <summary>HTTP status code of the final failing response, when available.</summary>
+    public int? StatusCode { get; }
+
+    /// <summary>The `client-request-id` header Graph echoes back, for support correlation. Never a secret.</summary>
+    public string? ClientRequestId { get; }
+
+    /// <summary>The `request-id` header Graph returns, for support correlation. Never a secret.</summary>
+    public string? RequestId { get; }
+}
