@@ -37,8 +37,10 @@ public sealed class Win32LobAppPayload
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public MimeContentPayload? LargeIcon { get; init; }
 
+    /// <summary>Null when the manifest specifies no scope tags, so update requests never clear existing tags by omission.</summary>
     [JsonPropertyName("roleScopeTagIds")]
-    public List<string> RoleScopeTagIds { get; init; } = [];
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? RoleScopeTagIds { get; init; }
 
     [JsonPropertyName("installCommandLine")]
     public required string InstallCommandLine { get; init; }

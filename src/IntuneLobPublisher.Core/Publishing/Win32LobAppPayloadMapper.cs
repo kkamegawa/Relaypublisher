@@ -45,7 +45,7 @@ public static class Win32LobAppPayloadMapper
             Developer = manifest.Developer,
             InformationUrl = manifest.InformationUrl,
             LargeIcon = MapLargeIcon(manifest.Icon, iconBytes),
-            RoleScopeTagIds = manifest.RoleScopeTagIds,
+            RoleScopeTagIds = manifest.RoleScopeTagIds is { Count: > 0 } ? manifest.RoleScopeTagIds : null,
             InstallCommandLine = install.CommandLine!,
             UninstallCommandLine = install.UninstallCommandLine!,
             AllowedArchitectures = app.Architecture!,

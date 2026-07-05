@@ -33,7 +33,7 @@ public static class WindowsReleaseTable
 
     /// <exception cref="UnsupportedWindowsBuildException">The build number has no known mapping.</exception>
     public static string Map(string minimumOsVersion)
-        => BuildToRelease.TryGetValue(minimumOsVersion, out var release)
+        => BuildToRelease.TryGetValue(minimumOsVersion.Trim(), out var release)
             ? release
             : throw new UnsupportedWindowsBuildException(minimumOsVersion);
 }

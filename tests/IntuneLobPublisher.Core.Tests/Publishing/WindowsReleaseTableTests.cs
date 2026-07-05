@@ -33,6 +33,16 @@ public sealed class WindowsReleaseTableTests
     }
 
     [TestMethod]
+    [DataRow(" 10.0.19045 ")]
+    [DataRow("\t10.0.19045")]
+    public void Map_BuildWithSurroundingWhitespace_IsTrimmedBeforeLookup(string minimumOsVersion)
+    {
+        var release = WindowsReleaseTable.Map(minimumOsVersion);
+
+        Assert.AreEqual("Windows10_22H2", release);
+    }
+
+    [TestMethod]
     [DataRow("10.0.99999")]
     [DataRow("")]
     [DataRow("not-a-build")]

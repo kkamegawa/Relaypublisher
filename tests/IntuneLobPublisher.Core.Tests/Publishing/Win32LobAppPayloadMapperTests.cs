@@ -172,6 +172,18 @@ public sealed class Win32LobAppPayloadMapperTests
     }
 
     [TestMethod]
+    public void Map_RoleScopeTagIdsEmptyList_IsNull()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.RoleScopeTagIds = [];
+        var app = manifest.Apps[0];
+
+        var payload = Win32LobAppPayloadMapper.Map(manifest, app, DetectionScript, iconBytes: null);
+
+        Assert.IsNull(payload.RoleScopeTagIds);
+    }
+
+    [TestMethod]
     public void Map_OptionalAppInfoAbsent_IsNullOrEmpty()
     {
         var manifest = TestManifests.CreateValid();
@@ -183,7 +195,7 @@ public sealed class Win32LobAppPayloadMapperTests
         Assert.IsNull(payload.Developer);
         Assert.IsNull(payload.InformationUrl);
         Assert.IsNull(payload.LargeIcon);
-        Assert.HasCount(0, payload.RoleScopeTagIds);
+        Assert.IsNull(payload.RoleScopeTagIds);
     }
 
     [TestMethod]
