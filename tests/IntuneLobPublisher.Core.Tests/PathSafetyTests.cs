@@ -37,6 +37,25 @@ public sealed class PathSafetyTests
     }
 
     [TestMethod]
+    [DataRow("../evil.ps1")]
+    [DataRow("..\\evil.ps1")]
+    [DataRow("bin/../../evil.ps1")]
+    [DataRow("C:\\evil.ps1")]
+    [DataRow("c:/evil.ps1")]
+    [DataRow("/evil.ps1")]
+    [DataRow("\\evil.ps1")]
+    [DataRow("")]
+    public void IsSafeRelativePath_UnsafeInput_ReturnsFalse(string value)
+        => Assert.IsFalse(PathSafety.IsSafeRelativePath(value));
+
+    [TestMethod]
+    [DataRow("install.ps1")]
+    [DataRow("bin/app.exe")]
+    [DataRow("bin\\nested\\app.exe")]
+    public void IsSafeRelativePath_SafeInput_ReturnsTrue(string value)
+        => Assert.IsTrue(PathSafety.IsSafeRelativePath(value));
+
+    [TestMethod]
     public void ResolveWithin_NestedPath_ReturnsPathUnderRoot()
     {
         var root = Path.Combine(Path.GetTempPath(), "staging-root");

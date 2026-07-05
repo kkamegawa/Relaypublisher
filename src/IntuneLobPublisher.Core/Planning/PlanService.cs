@@ -163,6 +163,13 @@ public sealed class PlanService
     private static string NormalizeRelative(string repositoryRoot, string path)
     {
         var fullPath = Path.IsPathRooted(path) ? path : Path.Combine(repositoryRoot, path);
-        return Path.GetRelativePath(repositoryRoot, Path.GetFullPath(fullPath)).Replace('\\', '/');
+        var relative = Path.GetRelativePath(repositoryRoot, Path.GetFullPath(fullPath)).Replace('\\', '/');
+
+        if (relative == ".." || relative.StartsWith("../", StringComparison.Ordinal) || Path.IsPathRooted(relative))
+        {
+            throw new UnsafePathException($"Manifest path '{path}' resolves outside the repository root '{repositoryRoot}'.");
+        }
+
+        return relative;
     }
 }

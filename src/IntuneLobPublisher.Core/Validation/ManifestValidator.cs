@@ -1,6 +1,7 @@
 using FluentValidation;
 using FluentValidation.Results;
 using IntuneLobPublisher.Core.Manifests;
+using IntuneLobPublisher.Core.Staging;
 
 namespace IntuneLobPublisher.Core.Validation;
 
@@ -41,7 +42,7 @@ internal sealed class IntunePackageManifestValidator : AbstractValidator<IntuneP
             .WithMessage(m => $"AssignmentSync '{m.AssignmentSync}' is not supported. Allowed values: {string.Join(", ", ManifestValues.AssignmentSyncModes)}.");
 
         RuleFor(m => m.Icon)
-            .Must(v => v is null || IsSafeRelativePath(v))
+            .Must(v => v is null || PathSafety.IsSafeRelativePath(v))
             .WithMessage("Icon must be a repository-relative path without traversal segments.");
 
         RuleFor(m => m.Apps)
@@ -50,10 +51,6 @@ internal sealed class IntunePackageManifestValidator : AbstractValidator<IntuneP
 
         RuleForEach(m => m.Apps).SetValidator(new AppManifestValidator());
     }
-
-    private static bool IsSafeRelativePath(string value)
-        => !Path.IsPathRooted(value)
-           && !value.Split('/', '\\').Contains("..");
 }
 
 internal sealed class AppManifestValidator : AbstractValidator<AppManifest>

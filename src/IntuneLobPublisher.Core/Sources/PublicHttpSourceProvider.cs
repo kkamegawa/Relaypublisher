@@ -31,7 +31,8 @@ public sealed class PublicHttpSourceProvider : ISourceProvider
                 $"publicHttp does not support Auth.Type '{source.Auth.Type}'. Use githubRelease or azureBlob for authenticated sources.");
         }
 
-        _logger.LogInformation("Downloading {Url} to {Destination}", source.Url, request.DestinationPath);
+        var safeUrl = RedactQuery(source.Url);
+        _logger.LogInformation("Downloading {Url} to {Destination}", safeUrl, request.DestinationPath);
 
         try
         {
@@ -47,7 +48,7 @@ public sealed class PublicHttpSourceProvider : ISourceProvider
         }
         catch (HttpRequestException ex)
         {
-            throw new SourceDownloadException($"Failed to download '{source.Url}': {ex.Message}", ex);
+            throw new SourceDownloadException($"Failed to download '{safeUrl}': {ex.Message}", ex);
         }
         catch (IOException ex)
         {
@@ -58,4 +59,11 @@ public sealed class PublicHttpSourceProvider : ISourceProvider
         var sha256 = await ChecksumVerifier.ComputeSha256Async(request.DestinationPath, cancellationToken).ConfigureAwait(false);
         return new DownloadedFile(request.DestinationPath, size, sha256);
     }
+
+    // Drops query string and fragment so signed URLs / embedded tokens never reach logs or
+    // exception messages (AGENTS.md: never log secrets).
+    private static string RedactQuery(string url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var parsed)
+            ? parsed.GetLeftPart(UriPartial.Path)
+            : url;
 }

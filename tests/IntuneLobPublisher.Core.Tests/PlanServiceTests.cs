@@ -1,4 +1,5 @@
 using System.Text.Json;
+using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Planning;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -119,6 +120,13 @@ public sealed class PlanServiceTests
             ["manifests/tool-a.yaml"],
             explicitManifests: ["manifests/tool-b.yaml"]);
         CollectionAssert.AreEqual(new[] { "manifests/tool-b.yaml" }, targets.ToList());
+    }
+
+    [TestMethod]
+    public async Task ResolveTargets_ExplicitManifestOutsideRepoRoot_Throws()
+    {
+        await Assert.ThrowsExactlyAsync<UnsafePathException>(
+            () => ResolveAsync(changedFiles: null, explicitManifests: ["../outside.yaml"]));
     }
 
     [TestMethod]

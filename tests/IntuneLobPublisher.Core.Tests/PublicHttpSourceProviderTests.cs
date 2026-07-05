@@ -76,6 +76,20 @@ public sealed class PublicHttpSourceProviderTests
     }
 
     [TestMethod]
+    public async Task DownloadAsync_HttpError_ExceptionMessageOmitsQueryString()
+    {
+        var provider = CreateProvider(HttpStatusCode.NotFound, []);
+        var destination = Path.Combine(Path.GetTempPath(), $"provider-test-{Guid.NewGuid():N}.exe");
+        var source = CreateSource();
+        source.Url = "https://example.com/downloads/tool.exe?sig=super-secret-token";
+
+        var ex = await Assert.ThrowsExactlyAsync<SourceDownloadException>(
+            () => provider.DownloadAsync(new SourceDownloadRequest(source, destination), CancellationToken.None));
+
+        Assert.DoesNotContain("super-secret-token", ex.Message);
+    }
+
+    [TestMethod]
     public async Task DownloadAsync_TokenAuth_ThrowsSourceDownloadException()
     {
         var provider = CreateProvider(HttpStatusCode.OK, []);

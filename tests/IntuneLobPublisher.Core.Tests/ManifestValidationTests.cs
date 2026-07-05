@@ -35,6 +35,18 @@ public sealed class ManifestValidationTests
     }
 
     [TestMethod]
+    [DataRow("C:\\evil.png")]
+    [DataRow("c:/evil.png")]
+    [DataRow("../evil.png")]
+    [DataRow("/etc/evil.png")]
+    public void Validate_IconEscapesRepository_Fails(string icon)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Icon = icon;
+        AssertInvalid(manifest, "Icon");
+    }
+
+    [TestMethod]
     public void Validate_MissingSchemaVersion_Fails()
     {
         var manifest = TestManifests.CreateValid();
