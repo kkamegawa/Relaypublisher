@@ -489,3 +489,7 @@ $RECYCLE.BIN/
 # APM dependencies
 apm_modules/
 .claude/
+.codex/
+.agents/
+.github/agents/
+.github/hooks/
