@@ -1,0 +1,49 @@
+# Sample macOS PKG app manifest (doc/01-manifest-schema.md 5.3).
+# NOTE: macOS support is not implemented in the CLI yet; `validate` currently
+# accepts Platform 'windows' only. This sample documents the target schema.
+SchemaVersion: "1.0"
+PackageIdentifier: Contoso.Tool
+PackageName: Contoso Tool
+Publisher: Contoso Ltd.
+Description: Internal tool for Contoso employees.
+PackageVersion: 1.2.3
+AssignmentSync: merge
+
+Apps:
+  - Platform: macos
+    Architecture: arm64
+    InstallerType: pkg
+    # pkg (default): unmanaged macOSPkgApp, unsigned allowed, up to 8 GB.
+    # lob: macOSLobApp, requires Developer ID Installer signature and top-level Icon.
+    AppType: pkg
+    DisplayName: Contoso Tool [macOS Arm64]
+
+    # macOS apps take a single Source item (unified source item shape,
+    # doc/01-manifest-schema.md 5.0.1) instead of the Windows Package block.
+    Source:
+      Type: azureBlob
+      AccountName: contosopackages
+      Container: intune-packages
+      BlobName: macos/contoso-tool/1.2.3/contoso-tool-arm64.pkg
+      Destination: contoso-tool-arm64.pkg
+      # Replace with the real SHA256 of the pkg before use.
+      Sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+      Auth:
+        Type: workloadIdentity
+
+    Requirements:
+      MinimumOSVersion: "14.0"
+
+    Detection:
+      # macOS detection is a bundleId + version list (Graph includedApps).
+      # At least one IncludedApps entry is required; the first entry is used
+      # for report display.
+      IgnoreAppVersion: false
+      IncludedApps:
+        - BundleId: com.contoso.tool
+          BundleVersion: 1.2.3
+
+    Assignments:
+      - Target: group
+        GroupId: "00000000-0000-0000-0000-000000000003"
+        Intent: required
