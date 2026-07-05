@@ -52,8 +52,23 @@ internal sealed class IntunePackageManifestValidator : AbstractValidator<IntuneP
     }
 
     private static bool IsSafeRelativePath(string value)
-        => !Path.IsPathRooted(value)
-           && !value.Split('/', '\\').Contains("..");
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        // Reject both separator conventions explicitly: Path.IsPathRooted is platform-dependent.
+        if (value.StartsWith('/')
+            || value.StartsWith('\\')
+            || (value.Length >= 2 && char.IsAsciiLetter(value[0]) && value[1] == ':')
+            || Path.IsPathRooted(value))
+        {
+            return false;
+        }
+
+        return !value.Split('/', '\\').Contains("..");
+    }
 }
 
 internal sealed class AppManifestValidator : AbstractValidator<AppManifest>
