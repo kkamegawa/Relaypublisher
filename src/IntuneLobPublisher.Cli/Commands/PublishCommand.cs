@@ -125,7 +125,7 @@ internal static class PublishCommand
             }
         }
 
-        if (dryRun)
+        if (dryRun && failures == 0)
         {
             Console.WriteLine("Dry run: no changes were applied.");
         }

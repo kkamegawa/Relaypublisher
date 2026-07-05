@@ -12,6 +12,9 @@ public interface IAssignmentService
         AssignmentSyncMode syncMode,
         CancellationToken cancellationToken);
 
-    /// <summary>Applies the plan via Graph: add/update/remove entries in plan order, logging each target.</summary>
+    /// <summary>
+    /// Applies the plan via Graph: add/update/remove entries in plan order, logging each one.
+    /// Keep entries are never sent to Graph and produce no log line.
+    /// </summary>
     Task ApplyAsync(AssignmentPlan plan, AppManifest app, CancellationToken cancellationToken);
 }
