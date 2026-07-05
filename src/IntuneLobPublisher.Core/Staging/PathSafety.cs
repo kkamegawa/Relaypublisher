@@ -17,6 +17,25 @@ public static class PathSafety
             throw new UnsafePathException($"{description} must not be empty.");
         }
 
+        if (!IsSafeRelativePath(value))
+        {
+            throw HasTraversalSegment(value)
+                ? new UnsafePathException($"{description} '{value}' must not contain path traversal segments.")
+                : new UnsafePathException($"{description} '{value}' must be a relative path.");
+        }
+    }
+
+    /// <summary>
+    /// Non-throwing check for use in validators: false when <paramref name="value"/> is
+    /// absolute (on either Windows or Unix conventions) or contains traversal segments.
+    /// </summary>
+    public static bool IsSafeRelativePath(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
         // Check both separator conventions explicitly: Path.IsPathRooted is
         // platform-dependent and would accept "C:\evil" on Unix-like systems.
         if (value.StartsWith('/')
@@ -24,14 +43,14 @@ public static class PathSafety
             || HasDriveLetterPrefix(value)
             || Path.IsPathRooted(value))
         {
-            throw new UnsafePathException($"{description} '{value}' must be a relative path.");
+            return false;
         }
 
-        if (value.Split('/', '\\').Contains(".."))
-        {
-            throw new UnsafePathException($"{description} '{value}' must not contain path traversal segments.");
-        }
+        return !HasTraversalSegment(value);
     }
+
+    private static bool HasTraversalSegment(string value)
+        => value.Split('/', '\\').Contains("..");
 
     /// <summary>
     /// Resolves <paramref name="relativePath"/> under <paramref name="rootDirectory"/> and

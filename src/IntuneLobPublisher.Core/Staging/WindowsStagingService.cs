@@ -136,6 +136,7 @@ public sealed class WindowsStagingService : IWindowsStagingService
 
             stagedExternalFiles.Add(new StagedExternalFile(
                 external.Type!, external.Url, destinationRelative, expectedSha256.ToLowerInvariant(), actualSha256));
+        }
 
         var setupFileFullPath = PathSafety.ResolveWithin(stagingDirectory, setupFile, "Package.IntuneWin.SetupFile");
         if (!File.Exists(setupFileFullPath))

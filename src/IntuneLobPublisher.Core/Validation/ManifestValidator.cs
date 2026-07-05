@@ -1,6 +1,7 @@
 using FluentValidation;
 using FluentValidation.Results;
 using IntuneLobPublisher.Core.Manifests;
+using IntuneLobPublisher.Core.Staging;
 
 namespace IntuneLobPublisher.Core.Validation;
 
@@ -41,7 +42,7 @@ internal sealed class IntunePackageManifestValidator : AbstractValidator<IntuneP
             .WithMessage(m => $"AssignmentSync '{m.AssignmentSync}' is not supported. Allowed values: {string.Join(", ", ManifestValues.AssignmentSyncModes)}.");
 
         RuleFor(m => m.Icon)
-            .Must(v => v is null || IsSafeRelativePath(v))
+            .Must(v => v is null || PathSafety.IsSafeRelativePath(v))
             .WithMessage("Icon must be a repository-relative path without traversal segments.");
 
         RuleFor(m => m.Apps)
@@ -49,25 +50,6 @@ internal sealed class IntunePackageManifestValidator : AbstractValidator<IntuneP
             .WithMessage("Apps is required and must contain at least one app entry.");
 
         RuleForEach(m => m.Apps).SetValidator(new AppManifestValidator());
-    }
-
-    private static bool IsSafeRelativePath(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        // Reject both separator conventions explicitly: Path.IsPathRooted is platform-dependent.
-        if (value.StartsWith('/')
-            || value.StartsWith('\\')
-            || (value.Length >= 2 && char.IsAsciiLetter(value[0]) && value[1] == ':')
-            || Path.IsPathRooted(value))
-        {
-            return false;
-        }
-
-        return !value.Split('/', '\\').Contains("..");
     }
 }
 
