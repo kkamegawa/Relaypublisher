@@ -77,4 +77,16 @@ public sealed class GraphIntuneAppDirectoryTests
 
         Assert.AreEqual(403, ex.StatusCode);
     }
+
+    [TestMethod]
+    public async Task ListAppsAsync_SuccessStatusWithMalformedBody_ThrowsGraphRequestExceptionNotJsonException()
+    {
+        var handler = new QueueHandler(_ => JsonResponse("<html>not json</html>"));
+        var directory = new GraphIntuneAppDirectory(CreateClient(handler));
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(
+            () => directory.ListAppsAsync(CancellationToken.None));
+
+        Assert.AreEqual(200, ex.StatusCode);
+    }
 }

@@ -40,7 +40,7 @@ public static class PublishGuard
             var rightSegment = i < rightSegments.Length ? rightSegments[i] : "0";
 
             int comparison;
-            if (int.TryParse(leftSegment, out var leftNumber) && int.TryParse(rightSegment, out var rightNumber))
+            if (uint.TryParse(leftSegment, out var leftNumber) && uint.TryParse(rightSegment, out var rightNumber))
             {
                 comparison = leftNumber.CompareTo(rightNumber);
             }

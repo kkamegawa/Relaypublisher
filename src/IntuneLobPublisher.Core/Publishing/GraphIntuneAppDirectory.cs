@@ -38,8 +38,20 @@ public sealed class GraphIntuneAppDirectory : IIntuneAppDirectory
             }
 
             var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-            var page = await JsonSerializer.DeserializeAsync<MobileAppListPage>(stream, cancellationToken: cancellationToken).ConfigureAwait(false)
-                ?? throw new GraphRequestException($"Graph returned an empty body for '{requestUri}'.", (int)response.StatusCode, null, null);
+            MobileAppListPage? page;
+            try
+            {
+                page = await JsonSerializer.DeserializeAsync<MobileAppListPage>(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            catch (JsonException)
+            {
+                throw new GraphRequestException($"Graph returned a malformed body for '{requestUri}'.", (int)response.StatusCode, null, null);
+            }
+
+            if (page is null)
+            {
+                throw new GraphRequestException($"Graph returned an empty body for '{requestUri}'.", (int)response.StatusCode, null, null);
+            }
 
             foreach (var app in page.Value)
             {
