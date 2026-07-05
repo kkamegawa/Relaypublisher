@@ -1,0 +1,46 @@
+SchemaVersion: "1.0"
+PackageIdentifier: Contoso.Tool
+PackageName: Contoso Tool
+Publisher: Contoso Ltd.
+Description: Internal tool for Contoso employees.
+PackageVersion: 1.2.3
+AssignmentSync: merge
+
+Apps:
+  - Platform: windows
+    Architecture: arm64
+    InstallerType: win32
+    DisplayName: Contoso Tool [Windows Arm64]
+
+    Package:
+      IntuneWin:
+        SetupFile: install.ps1
+
+      RepositoryFiles:
+        - Source: scripts/windows/arm64/install.ps1
+          Destination: install.ps1
+        - Source: scripts/windows/common/uninstall.ps1
+          Destination: uninstall.ps1
+        - Source: scripts/windows/common/detect.ps1
+          Destination: detect.ps1
+
+    Install:
+      CommandLine: powershell.exe -ExecutionPolicy Bypass -File .\install.ps1
+      UninstallCommandLine: powershell.exe -ExecutionPolicy Bypass -File .\uninstall.ps1
+      InstallExperience: system
+      RestartBehavior: suppress
+
+    Detection:
+      Type: script
+      ScriptFile: scripts/windows/common/detect.ps1
+      RunAs32Bit: false
+      EnforceSignatureCheck: false
+
+    Requirements:
+      MinimumOSVersion: 10.0.22621
+      Architecture: arm64
+
+    Assignments:
+      - Target: group
+        GroupId: "00000000-0000-0000-0000-000000000001"
+        Intent: required

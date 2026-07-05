@@ -1,0 +1,43 @@
+using System.Text.RegularExpressions;
+
+namespace IntuneLobPublisher.Core.Validation;
+
+/// <summary>Allowed manifest field values. Matching is case-sensitive by design.</summary>
+public static partial class ManifestValues
+{
+    /// <summary>Only manifests with this SchemaVersion major are accepted.</summary>
+    public const int SupportedSchemaMajor = 1;
+
+    public const string DefaultAssignmentSync = "merge";
+    public const string DefaultAssignmentTarget = "group";
+    public const string DefaultAssignmentMode = "include";
+
+    public static readonly IReadOnlyList<string> Platforms = ["windows"];
+    public static readonly IReadOnlyList<string> Architectures = ["x64", "arm64"];
+    public static readonly IReadOnlyList<string> WindowsInstallerTypes = ["win32"];
+    public static readonly IReadOnlyList<string> InstallExperiences = ["system", "user"];
+    public static readonly IReadOnlyList<string> RestartBehaviors = ["suppress", "allow", "force"];
+    public static readonly IReadOnlyList<string> DetectionTypes = ["script"];
+    public static readonly IReadOnlyList<string> AssignmentTargets = ["group", "allDevices", "allLicensedUsers"];
+    public static readonly IReadOnlyList<string> AssignmentModes = ["include", "exclude"];
+    public static readonly IReadOnlyList<string> AssignmentIntents = ["required", "available", "uninstall"];
+    public static readonly IReadOnlyList<string> FilterModes = ["include", "exclude"];
+    public static readonly IReadOnlyList<string> SourceTypes = ["publicHttp", "githubRelease", "azureBlob"];
+    public static readonly IReadOnlyList<string> AuthTypes = ["none", "token", "workloadIdentity"];
+    public static readonly IReadOnlyList<string> ReturnCodeTypes = ["success", "softReboot", "hardReboot", "retry", "failed"];
+    public static readonly IReadOnlyList<string> AssignmentSyncModes = ["merge", "replace"];
+    public static readonly IReadOnlyList<string> NotificationValues = ["showAll", "showReboot", "hideAll"];
+
+    [GeneratedRegex("^[0-9a-fA-F]{64}$")]
+    private static partial Regex Sha256Regex();
+
+    public static bool IsValidSha256(string value) => Sha256Regex().IsMatch(value);
+
+    /// <summary>Returns true when the SchemaVersion string has a parsable, supported major version.</summary>
+    public static bool HasSupportedSchemaMajor(string schemaVersion)
+    {
+        var dotIndex = schemaVersion.IndexOf('.');
+        var majorText = dotIndex < 0 ? schemaVersion : schemaVersion[..dotIndex];
+        return int.TryParse(majorText, out var major) && major == SupportedSchemaMajor;
+    }
+}
