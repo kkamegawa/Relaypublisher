@@ -48,6 +48,9 @@ public sealed class ProcessRunner : IProcessRunner
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
         await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        // Guarantees the async output/error readers have drained: without this, trailing
+        // stdout/stderr lines can arrive just after WaitForExitAsync returns.
+        process.WaitForExit();
 
         return new ProcessRunResult(process.ExitCode, stdout.ToString(), stderr.ToString());
     }

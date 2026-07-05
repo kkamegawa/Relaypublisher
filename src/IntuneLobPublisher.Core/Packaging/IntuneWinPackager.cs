@@ -47,6 +47,12 @@ public sealed class IntuneWinPackager : IIntuneWinPackager
             throw new PackagingException("Cannot generate .intunewin from a dry-run staging result.");
         }
 
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PackagingException(
+                ".intunewin generation requires Windows because IntuneWinAppUtil.exe is a Windows executable.");
+        }
+
         var stagingDirectory = Path.GetFullPath(stagingResult.StagingDirectory);
         if (!Directory.Exists(stagingDirectory))
         {
@@ -110,24 +116,17 @@ public sealed class IntuneWinPackager : IIntuneWinPackager
             .ConfigureAwait(false);
 
         var metadataPath = Path.Combine(outputDirectory, "package-metadata.json");
-        var metadata = new
-        {
+        var metadata = new PackageMetadata(
             stagingResult.PackageIdentifier,
             manifest.PackageVersion,
             stagingResult.Platform,
             stagingResult.Architecture,
-            InputHash = inputHash,
-            Tool = new
-            {
-                Name = "IntuneWinAppUtil.exe",
-                tool.Version,
-                Sha256 = tool.Sha256,
-            },
-            IntuneWinFile = intuneWinFileName,
+            inputHash,
+            new ToolMetadata("IntuneWinAppUtil.exe", tool.Version, tool.Sha256),
+            intuneWinFileName,
             // Informational only; a random encryption key makes this hash non-deterministic.
-            IntuneWinSha256 = intuneWinSha256,
-            GeneratedUtc = DateTimeOffset.UtcNow,
-        };
+            intuneWinSha256,
+            DateTimeOffset.UtcNow);
         await File.WriteAllTextAsync(metadataPath, JsonSerializer.Serialize(metadata, MetadataJsonOptions), cancellationToken)
             .ConfigureAwait(false);
         _logger.LogInformation("Package metadata written to {MetadataPath}", metadataPath);
@@ -143,4 +142,23 @@ public sealed class IntuneWinPackager : IIntuneWinPackager
             tool.Sha256,
             metadataPath);
     }
+
+    // Named types (rather than an anonymous object) so [JsonIgnore(Condition = Never)] can force
+    // Tool.Version to always be written, even null - a null version (unpinned local tool) is
+    // itself the auditability signal and must not be silently dropped by DefaultIgnoreCondition.
+    private sealed record PackageMetadata(
+        string PackageIdentifier,
+        string? PackageVersion,
+        string Platform,
+        string Architecture,
+        string InputHash,
+        ToolMetadata Tool,
+        string IntuneWinFile,
+        string IntuneWinSha256,
+        DateTimeOffset GeneratedUtc);
+
+    private sealed record ToolMetadata(
+        string Name,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Version,
+        string Sha256);
 }

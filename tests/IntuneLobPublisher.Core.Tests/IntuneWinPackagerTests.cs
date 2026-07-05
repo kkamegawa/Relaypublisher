@@ -26,9 +26,11 @@ public sealed class IntuneWinPackagerTests
 
     private sealed class FakeToolResolver : IIntuneWinToolResolver
     {
+        public string? Version { get; set; } = "1.8.7";
+
         public Task<ResolvedIntuneWinTool> ResolveAsync(IntuneWinToolOptions options, CancellationToken cancellationToken)
             => Task.FromResult(new ResolvedIntuneWinTool(
-                Path.Combine("tools", "1.8.7", "IntuneWinAppUtil.exe"), "1.8.7", new string('b', 64)));
+                Path.Combine("tools", "1.8.7", "IntuneWinAppUtil.exe"), Version, new string('b', 64)));
     }
 
     /// <summary>Simulates IntuneWinAppUtil.exe: writes the expected .intunewin on success.</summary>
@@ -59,8 +61,8 @@ public sealed class IntuneWinPackagerTests
         }
     }
 
-    private static IntuneWinPackager CreatePackager(FakeProcessRunner runner)
-        => new(new FakeToolResolver(), runner, NullLogger<IntuneWinPackager>.Instance);
+    private static IntuneWinPackager CreatePackager(FakeProcessRunner runner, FakeToolResolver? toolResolver = null)
+        => new(toolResolver ?? new FakeToolResolver(), runner, NullLogger<IntuneWinPackager>.Instance);
 
     private StagingResult CreateStagingResult(string setupFile = "install.ps1", bool dryRun = false)
         => new(
@@ -71,8 +73,8 @@ public sealed class IntuneWinPackagerTests
         => new(null, null, null, Path.Combine(_workspace.FullName, "tools"));
 
     private Task<IntuneWinPackageResult> PackageAsync(
-        FakeProcessRunner runner, StagingResult? stagingResult = null)
-        => CreatePackager(runner).CreatePackageAsync(
+        FakeProcessRunner runner, StagingResult? stagingResult = null, FakeToolResolver? toolResolver = null)
+        => CreatePackager(runner, toolResolver).CreatePackageAsync(
             TestManifests.CreateValid(),
             stagingResult ?? CreateStagingResult(),
             ToolOptions(),
@@ -111,6 +113,21 @@ public sealed class IntuneWinPackagerTests
         Assert.AreEqual("1.8.7", root.GetProperty("tool").GetProperty("version").GetString());
         Assert.AreEqual(new string('b', 64), root.GetProperty("tool").GetProperty("sha256").GetString());
         Assert.AreEqual(result.IntuneWinSha256, root.GetProperty("intuneWinSha256").GetString());
+    }
+
+    [TestMethod]
+    public async Task CreatePackageAsync_UnpinnedLocalTool_MetadataStillContainsNullVersionField()
+    {
+        var result = await PackageAsync(new FakeProcessRunner(), toolResolver: new FakeToolResolver { Version = null });
+
+        Assert.IsNull(result.ToolVersion);
+        using var metadata = JsonDocument.Parse(await File.ReadAllTextAsync(result.MetadataPath));
+        var toolElement = metadata.RootElement.GetProperty("tool");
+        // The version key must be present (as null) rather than dropped, since the field's
+        // absence vs. its explicit null both look like a JSON parse-time no-op but only the
+        // latter tells an auditor that no pinned version was recorded.
+        Assert.IsTrue(toolElement.TryGetProperty("version", out var versionProperty));
+        Assert.AreEqual(JsonValueKind.Null, versionProperty.ValueKind);
     }
 
     [TestMethod]

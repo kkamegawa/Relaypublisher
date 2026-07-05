@@ -1,5 +1,6 @@
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Sources;
+using IntuneLobPublisher.Core.Staging;
 using Microsoft.Extensions.Logging;
 
 namespace IntuneLobPublisher.Core.Packaging;
@@ -54,6 +55,9 @@ public sealed class IntuneWinToolResolver : IIntuneWinToolResolver
 
         var version = options.PinnedVersion
             ?? await _downloader.GetLatestVersionAsync(cancellationToken).ConfigureAwait(false);
+        // version ends up as a single path segment under ToolsDirectory; a pinned version is
+        // user-controlled (--intunewin-tool-version), so reject traversal segments and separators.
+        PathSafety.EnsureSafeDirectoryName(version, "IntuneWinAppUtil version");
         var toolPath = Path.Combine(Path.GetFullPath(options.ToolsDirectory), version, ToolFileName);
 
         if (!File.Exists(toolPath))
@@ -101,6 +105,8 @@ public sealed class IntuneWinToolResolver : IIntuneWinToolResolver
         }
 
         _logger.LogInformation("Using {ToolFileName} from {Origin}: {Path}", ToolFileName, origin, fullPath);
-        return new ResolvedIntuneWinTool(fullPath, options.PinnedVersion, sha256);
+        // The version actually in this file is unknown - a local path always wins over
+        // --intunewin-tool-version, so echoing the pin back here would misreport what ran.
+        return new ResolvedIntuneWinTool(fullPath, Version: null, sha256);
     }
 }

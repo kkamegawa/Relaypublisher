@@ -45,7 +45,7 @@ public sealed class GitHubIntuneWinToolDownloader : IIntuneWinToolDownloader
         // Prefer a release asset when one exists; the repository historically ships the
         // binary committed at the repo root instead, so fall back to the raw file at the tag.
         var downloadUrl = await TryGetAssetUrlAsync(version, cancellationToken).ConfigureAwait(false)
-            ?? $"{RawBaseUrl}/{version}/{ToolFileName}";
+            ?? $"{RawBaseUrl}/{Uri.EscapeDataString(version)}/{ToolFileName}";
 
         _logger.LogInformation("Downloading {ToolFileName} {Version} from {Url}", ToolFileName, version, downloadUrl);
         try

@@ -77,8 +77,22 @@ public sealed class IntuneWinToolResolverTests
 
         Assert.AreEqual(Path.GetFullPath(toolPath), resolved.Path);
         Assert.AreEqual(ToolContentSha256, resolved.Sha256);
+        // Version is unknown for a local path: it always wins over --intunewin-tool-version,
+        // so echoing the pin back would misreport what actually ran.
+        Assert.IsNull(resolved.Version);
         Assert.AreEqual(0, downloader.DownloadCalls);
         Assert.AreEqual(0, downloader.LatestVersionCalls);
+    }
+
+    [TestMethod]
+    public async Task ResolveAsync_ExplicitPathWithPinnedVersion_ReportsVersionAsUnknown()
+    {
+        var toolPath = WriteLocalTool("local/IntuneWinAppUtil.exe");
+
+        var resolved = await CreateResolver(new FakeDownloader()).ResolveAsync(
+            Options(explicitPath: toolPath, pinnedVersion: "v1.8.7"), CancellationToken.None);
+
+        Assert.IsNull(resolved.Version);
     }
 
     [TestMethod]
@@ -163,5 +177,18 @@ public sealed class IntuneWinToolResolverTests
             Options(pinnedVersion: "1.8.7", knownSha256: new string('0', 64)), CancellationToken.None));
 
         Assert.IsFalse(File.Exists(Path.Combine(_toolsDirectory, "1.8.7", "IntuneWinAppUtil.exe")));
+    }
+
+    [TestMethod]
+    [DataRow("../evil")]
+    [DataRow("..\\evil")]
+    [DataRow("/etc/passwd")]
+    [DataRow("a/b")]
+    public async Task ResolveAsync_PinnedVersionWithTraversalSegment_ThrowsUnsafePathException(string version)
+    {
+        var resolver = CreateResolver(new FakeDownloader());
+
+        await Assert.ThrowsExactlyAsync<UnsafePathException>(() => resolver.ResolveAsync(
+            Options(pinnedVersion: version), CancellationToken.None));
     }
 }
