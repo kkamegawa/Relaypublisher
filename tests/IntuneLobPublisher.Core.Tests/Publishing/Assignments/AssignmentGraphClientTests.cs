@@ -35,9 +35,12 @@ public sealed class AssignmentGraphClientTests
     private static HttpResponseMessage EmptyResponse(HttpStatusCode statusCode) => new(statusCode);
 
     private static (AssignmentGraphClient Client, QueueHandler Handler) CreateClient(params Func<HttpRequestMessage, HttpResponseMessage>[] responses)
+        => CreateClient(new Uri("https://graph.microsoft.com/v1.0/"), responses);
+
+    private static (AssignmentGraphClient Client, QueueHandler Handler) CreateClient(Uri baseAddress, params Func<HttpRequestMessage, HttpResponseMessage>[] responses)
     {
         var handler = new QueueHandler(responses);
-        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://graph.microsoft.com/v1.0/") };
+        var httpClient = new HttpClient(handler) { BaseAddress = baseAddress };
         return (new AssignmentGraphClient(httpClient), handler);
     }
 
@@ -132,8 +135,21 @@ public sealed class AssignmentGraphClientTests
         StringAssert.Contains(body, $"\"deviceAndAppManagementAssignmentFilterId\":\"{FilterA}\"");
         StringAssert.Contains(body, "\"deviceAndAppManagementAssignmentFilterType\":\"exclude\"");
         StringAssert.Contains(body, "\"@odata.type\":\"#microsoft.graph.win32LobAppAssignmentSettings\"");
+        StringAssert.Contains(body, "\"@odata.type\":\"#microsoft.graph.win32LobAppRestartSettings\"");
         StringAssert.Contains(body, "\"notifications\":\"showReboot\"");
         StringAssert.Contains(body, "\"gracePeriodInMinutes\":30");
+    }
+
+    [TestMethod]
+    public async Task CreateAssignmentAsync_RoutesFromHostRootWhenBaseAddressDoesNotIncludeGraphVersion()
+    {
+        var (client, handler) = CreateClient(
+            new Uri("https://stub.example.local/custom-prefix"),
+            _ => JsonResponse(HttpStatusCode.Created, """{"id":"assignment-1"}"""));
+
+        await client.CreateAssignmentAsync("app-1", Desired(), CancellationToken.None);
+
+        Assert.AreEqual("https://stub.example.local/v1.0/deviceAppManagement/mobileApps/app-1/assignments", handler.Requests[0].Uri);
     }
 
     [TestMethod]
@@ -183,5 +199,54 @@ public sealed class AssignmentGraphClientTests
         Assert.AreEqual(403, ex.StatusCode);
         Assert.AreEqual("client-id-1", ex.ClientRequestId);
         Assert.AreEqual("request-id-1", ex.RequestId);
+    }
+
+    [TestMethod]
+    public async Task ListAssignmentsAsync_InvalidFilterGuidIncludesAssignmentId()
+    {
+        var (client, _) = CreateClient(_ => JsonResponse(HttpStatusCode.OK, """
+            {
+              "value": [
+                {
+                  "id": "assignment-1",
+                  "intent": "required",
+                  "target": {
+                    "@odata.type": "#microsoft.graph.groupAssignmentTarget",
+                    "groupId": "00000000-0000-0000-0000-00000000000a",
+                    "deviceAndAppManagementAssignmentFilterId": "not-a-guid",
+                    "deviceAndAppManagementAssignmentFilterType": "include"
+                  }
+                }
+              ]
+            }
+            """));
+
+        var ex = await Assert.ThrowsExactlyAsync<AssignmentPlanningException>(
+            () => client.ListAssignmentsAsync("app-1", CancellationToken.None));
+
+        Assert.AreEqual("Graph assignment 'assignment-1' has invalid deviceAndAppManagementAssignmentFilterId 'not-a-guid'.", ex.Message);
+    }
+
+    [TestMethod]
+    public async Task ListAssignmentsAsync_InvalidGroupIdWithoutAssignmentIdOmitsEmptyQuotes()
+    {
+        var (client, _) = CreateClient(_ => JsonResponse(HttpStatusCode.OK, """
+            {
+              "value": [
+                {
+                  "intent": "required",
+                  "target": {
+                    "@odata.type": "#microsoft.graph.groupAssignmentTarget",
+                    "groupId": "not-a-guid"
+                  }
+                }
+              ]
+            }
+            """));
+
+        var ex = await Assert.ThrowsExactlyAsync<AssignmentPlanningException>(
+            () => client.ListAssignmentsAsync("app-1", CancellationToken.None));
+
+        Assert.AreEqual("Graph assignment has invalid groupId 'not-a-guid'.", ex.Message);
     }
 }

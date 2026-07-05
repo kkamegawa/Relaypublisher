@@ -22,9 +22,6 @@ public interface IAssignmentGraphClient
 /// </summary>
 public sealed class AssignmentGraphClient : IAssignmentGraphClient
 {
-    private const string V1Prefix = "";
-    private const string BetaPrefix = "../beta/";
-
     private readonly HttpClient _httpClient;
 
     public AssignmentGraphClient(HttpClient httpClient)
@@ -137,7 +134,7 @@ public sealed class AssignmentGraphClient : IAssignmentGraphClient
             assignment.Id,
             key,
             key.IsExclusion ? "required" : assignment.Intent ?? "required",
-            ToFilter(target),
+            ToFilter(assignment.Id, target),
             ToSettings(assignment.Settings));
     }
 
@@ -160,7 +157,7 @@ public sealed class AssignmentGraphClient : IAssignmentGraphClient
         };
     }
 
-    private static AssignmentFilter? ToFilter(AssignmentTargetPayload target)
+    private static AssignmentFilter? ToFilter(string? assignmentId, AssignmentTargetPayload target)
     {
         if (string.IsNullOrWhiteSpace(target.DeviceAndAppManagementAssignmentFilterId)
             || string.Equals(target.DeviceAndAppManagementAssignmentFilterType, "none", StringComparison.Ordinal))
@@ -175,7 +172,7 @@ public sealed class AssignmentGraphClient : IAssignmentGraphClient
             _ => throw new AssignmentPlanningException($"Graph assignment filter type '{target.DeviceAndAppManagementAssignmentFilterType}' is not supported."),
         };
 
-        return new AssignmentFilter(ParseRequiredGuid(target.DeviceAndAppManagementAssignmentFilterId, "deviceAndAppManagementAssignmentFilterId", null), mode);
+        return new AssignmentFilter(ParseRequiredGuid(target.DeviceAndAppManagementAssignmentFilterId, "deviceAndAppManagementAssignmentFilterId", assignmentId), mode);
     }
 
     private static NormalizedAssignmentSettings ToSettings(Win32LobAppAssignmentSettingsPayload? settings)
@@ -189,7 +186,10 @@ public sealed class AssignmentGraphClient : IAssignmentGraphClient
     {
         if (value is null || !Guid.TryParse(value, out var parsed))
         {
-            throw new AssignmentPlanningException($"Graph assignment '{assignmentId}' has invalid {fieldName} '{value}'.");
+            var assignmentDescription = assignmentId is null
+                ? "Graph assignment"
+                : $"Graph assignment '{assignmentId}'";
+            throw new AssignmentPlanningException($"{assignmentDescription} has invalid {fieldName} '{value}'.");
         }
 
         return parsed;
@@ -202,13 +202,10 @@ public sealed class AssignmentGraphClient : IAssignmentGraphClient
         => value?.TrimStart('#') ?? string.Empty;
 
     private static string AssignmentCollectionPath(string appId, bool useBeta)
-        => $"{Prefix(useBeta)}deviceAppManagement/mobileApps/{Uri.EscapeDataString(appId)}/assignments";
+        => $"deviceAppManagement/mobileApps/{Uri.EscapeDataString(appId)}/assignments".WithGraphVersion(useBeta);
 
     private static string AssignmentItemPath(string appId, string assignmentId, bool useBeta)
         => $"{AssignmentCollectionPath(appId, useBeta)}/{Uri.EscapeDataString(assignmentId)}";
-
-    private static string Prefix(bool useBeta)
-        => useBeta ? BetaPrefix : V1Prefix;
 
     private async Task<T> ReadJsonAsync<T>(HttpResponseMessage response, string requestUri, CancellationToken cancellationToken)
     {
@@ -325,8 +322,14 @@ public sealed class Win32LobAppAssignmentSettingsPayload
 public sealed class Win32LobAppRestartSettingsPayload
 {
     [JsonPropertyName("@odata.type")]
-    public string ODataType { get; init; } = "microsoft.graph.win32LobAppRestartSettings";
+    public string ODataType { get; init; } = "#microsoft.graph.win32LobAppRestartSettings";
 
     [JsonPropertyName("gracePeriodInMinutes")]
     public required int GracePeriodInMinutes { get; init; }
+}
+
+internal static class AssignmentGraphPathExtensions
+{
+    public static string WithGraphVersion(this string path, bool useBeta)
+        => useBeta ? $"/beta/{path}" : $"/v1.0/{path}";
 }
