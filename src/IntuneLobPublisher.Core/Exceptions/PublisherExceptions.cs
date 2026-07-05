@@ -147,6 +147,33 @@ public sealed class ManagementMetadataTooLargeException : PublisherException
     public int MaxLength { get; }
 }
 
+/// <summary>
+/// A manifest's <c>Requirements.MinimumOSVersion</c> build number has no known mapping to a Graph
+/// <c>minimumSupportedWindowsRelease</c> value. Thrown instead of guessing so an unrecognized build fails fast.
+/// </summary>
+public sealed class UnsupportedWindowsBuildException : PublisherException
+{
+    public UnsupportedWindowsBuildException(string minimumOsVersion)
+        : base($"MinimumOSVersion '{minimumOsVersion}' has no known minimumSupportedWindowsRelease mapping.")
+    {
+        MinimumOsVersion = minimumOsVersion;
+    }
+
+    public string MinimumOsVersion { get; }
+}
+
+/// <summary>A manifest's <c>Icon</c> file extension has no known Graph <c>largeIcon</c> MIME type mapping.</summary>
+public sealed class UnsupportedIconFormatException : PublisherException
+{
+    public UnsupportedIconFormatException(string iconPath)
+        : base($"Icon '{iconPath}' has an unsupported file extension. Supported: .png, .jpg, .jpeg.")
+    {
+        IconPath = iconPath;
+    }
+
+    public string IconPath { get; }
+}
+
 /// <summary>A Microsoft Graph call failed after retries. Carries the request ids Graph returns for support/troubleshooting.</summary>
 public sealed class GraphRequestException : PublisherException
 {
