@@ -40,6 +40,6 @@ var rootCommand = new RootCommand("Publishes winget-like YAML manifests as Micro
 rootCommand.Subcommands.Add(ValidateCommand.Create(serviceProvider));
 rootCommand.Subcommands.Add(PackageCommand.Create(serviceProvider));
 rootCommand.Subcommands.Add(PlanCommand.Create(serviceProvider));
-rootCommand.Subcommands.Add(PublishCommand.Create());
+rootCommand.Subcommands.Add(PublishCommand.Create(serviceProvider));
 
 return await rootCommand.Parse(args).InvokeAsync();
