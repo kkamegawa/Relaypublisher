@@ -174,6 +174,42 @@ public sealed class UnsupportedIconFormatException : PublisherException
     public string IconPath { get; }
 }
 
+/// <summary>
+/// Graph reported an explicit failure state for a content upload step (e.g. <c>azureStorageUriRequestFailed</c>,
+/// <c>commitFileFailed</c>), as opposed to a timeout while waiting for a state to be reached.
+/// </summary>
+public sealed class ContentUploadFailedException : PublisherException
+{
+    public ContentUploadFailedException(string stage, string uploadState)
+        : base($"Content upload step '{stage}' failed with Graph uploadState '{uploadState}'.")
+    {
+        Stage = stage;
+        UploadState = uploadState;
+    }
+
+    /// <summary>The content upload step being waited on, e.g. "azureStorageUriRequest" or "commit".</summary>
+    public string Stage { get; }
+
+    /// <summary>The Graph <c>mobileAppContentFileUploadState</c> value that caused the failure.</summary>
+    public string UploadState { get; }
+}
+
+/// <summary>Polling for a content upload step (SAS URI issuance, commit, publishing state) exceeded its configured timeout.</summary>
+public sealed class ContentUploadTimedOutException : PublisherException
+{
+    public ContentUploadTimedOutException(string stage, TimeSpan timeout)
+        : base($"Content upload step '{stage}' did not complete within {timeout}.")
+    {
+        Stage = stage;
+        Timeout = timeout;
+    }
+
+    /// <summary>The content upload step being waited on, e.g. "azureStorageUriRequest", "commit" or "publishingState".</summary>
+    public string Stage { get; }
+
+    public TimeSpan Timeout { get; }
+}
+
 /// <summary>A Microsoft Graph call failed after retries. Carries the request ids Graph returns for support/troubleshooting.</summary>
 public sealed class GraphRequestException : PublisherException
 {
