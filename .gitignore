@@ -485,3 +485,9 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# APM dependencies
+.codex/
+.agents/
+.github/agents/
+.github/hooks/
