@@ -29,13 +29,25 @@ public static class JwtTenantIdReader
             throw new FormatException("Access token payload segment is not valid base64url.", ex);
         }
 
-        using var payload = JsonDocument.Parse(payloadBytes);
-        if (!payload.RootElement.TryGetProperty("tid", out var tidElement) || tidElement.ValueKind != JsonValueKind.String)
+        JsonDocument payload;
+        try
         {
-            throw new FormatException("Access token payload has no 'tid' claim.");
+            payload = JsonDocument.Parse(payloadBytes);
+        }
+        catch (JsonException ex)
+        {
+            throw new FormatException("Access token payload segment is not valid JSON.", ex);
         }
 
-        return tidElement.GetString()!;
+        using (payload)
+        {
+            if (!payload.RootElement.TryGetProperty("tid", out var tidElement) || tidElement.ValueKind != JsonValueKind.String)
+            {
+                throw new FormatException("Access token payload has no 'tid' claim.");
+            }
+
+            return tidElement.GetString()!;
+        }
     }
 
     private static byte[] Base64UrlDecode(string value)

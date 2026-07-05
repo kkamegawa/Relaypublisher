@@ -123,7 +123,6 @@ public sealed class GraphRetryHandlerTests
     [TestMethod]
     public async Task SendAsync_TransientHttpRequestException_RetriesThenSucceeds()
     {
-        var attempts = 0;
         var inner = new QueueHandler(
             _ => throw new HttpRequestException("connection reset"),
             _ => new HttpResponseMessage(HttpStatusCode.OK));
@@ -133,7 +132,6 @@ public sealed class GraphRetryHandlerTests
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual(2, inner.RequestCount);
-        _ = attempts;
     }
 
     [TestMethod]

@@ -28,9 +28,28 @@ public sealed class GraphAuthenticationHandler : DelegatingHandler
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        EnsureRequestTargetsGraph(request);
         var token = await GetTokenAsync(cancellationToken).ConfigureAwait(false);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+    }
+
+    // Guards against attaching the Graph bearer token to a request that (by caller mistake) targets
+    // some other host, which would leak the token to an unintended endpoint.
+    private void EnsureRequestTargetsGraph(HttpRequestMessage request)
+    {
+        if (request.RequestUri is not { IsAbsoluteUri: true } uri)
+        {
+            return;
+        }
+
+        if (!string.Equals(uri.Scheme, _options.BaseAddress.Scheme, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(uri.Host, _options.BaseAddress.Host, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Refusing to attach a Graph bearer token to a request targeting '{uri.Scheme}://{uri.Host}' " +
+                $"(expected '{_options.BaseAddress.Scheme}://{_options.BaseAddress.Host}').");
+        }
     }
 
     private async Task<string> GetTokenAsync(CancellationToken cancellationToken)

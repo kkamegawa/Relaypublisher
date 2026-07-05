@@ -118,6 +118,20 @@ public sealed class GraphAuthenticationHandlerTests
     }
 
     [TestMethod]
+    public async Task SendAsync_RequestTargetsUnexpectedHost_ThrowsWithoutFetchingTokenOrSendingRequest()
+    {
+        var (client, inner, credential) = CreateClient(
+            new GraphClientOptions(),
+            () => new AccessToken(CreateFakeAccessToken(TenantA), DateTimeOffset.UtcNow.AddHours(1)));
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => client.GetAsync("https://evil.example.com/steal-token"));
+
+        Assert.AreEqual(0, credential.CallCount);
+        Assert.IsEmpty(inner.Requests);
+    }
+
+    [TestMethod]
     public async Task SendAsync_ExpiringToken_RefetchesOnNextCall()
     {
         var (client, _, credential) = CreateClient(

@@ -68,9 +68,12 @@ public sealed class GraphRetryHandler : DelegatingHandler
                 if (isThrottled)
                 {
                     // Retries exhausted: a raw 429/503 is never a meaningful result for a caller to branch on.
+                    var statusCode = (int)response.StatusCode;
+                    var uri = request.RequestUri;
+                    response.Dispose();
                     throw new GraphRequestException(
-                        $"Graph request to '{request.RequestUri}' was still throttled with {(int)response.StatusCode} after {attempt} retries.",
-                        (int)response.StatusCode, clientRequestId, requestId);
+                        $"Graph request to '{uri}' was still throttled with {statusCode} after {attempt} retries.",
+                        statusCode, clientRequestId, requestId);
                 }
             }
 

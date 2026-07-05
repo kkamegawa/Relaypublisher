@@ -46,4 +46,14 @@ public sealed class JwtTenantIdReaderTests
     {
         Assert.ThrowsExactly<FormatException>(() => JwtTenantIdReader.ReadTenantId("header.not!!valid==base64url.signature"));
     }
+
+    [TestMethod]
+    public void ReadTenantId_ValidBase64ButNotJsonPayload_ThrowsFormatException()
+    {
+        var header = Base64UrlEncode(Encoding.UTF8.GetBytes("""{"alg":"none","typ":"JWT"}"""));
+        var body = Base64UrlEncode(Encoding.UTF8.GetBytes("not-json-content"));
+        var token = $"{header}.{body}.";
+
+        Assert.ThrowsExactly<FormatException>(() => JwtTenantIdReader.ReadTenantId(token));
+    }
 }
