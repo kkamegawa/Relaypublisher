@@ -122,17 +122,20 @@ public sealed class WindowsStagingService : IWindowsStagingService
             var downloaded = await provider.DownloadAsync(new SourceDownloadRequest(external, destinationFullPath), cancellationToken)
                 .ConfigureAwait(false);
 
-            string? actualSha256 = downloaded.Sha256;
-            if (external.Sha256 is { } expectedSha256)
+            var expectedSha256 = external.Sha256
+                ?? throw new StagingException($"ExternalFiles item '{destinationRelative}' has no Sha256.");
+
+            var actualSha256 = downloaded.Sha256;
+            if (!string.Equals(actualSha256, expectedSha256, StringComparison.OrdinalIgnoreCase))
             {
-                actualSha256 = await ChecksumVerifier.VerifyFileAsync(destinationFullPath, expectedSha256, cancellationToken)
-                    .ConfigureAwait(false);
-                _logger.LogInformation("SHA256 verified for {Destination}", destinationRelative);
+                throw new ChecksumMismatchException(
+                    $"SHA256 mismatch for '{destinationFullPath}'. Expected {expectedSha256.ToLowerInvariant()}, got {actualSha256}.");
             }
 
+            _logger.LogInformation("SHA256 verified for {Destination}", destinationRelative);
+
             stagedExternalFiles.Add(new StagedExternalFile(
-                external.Type!, external.Url, destinationRelative, external.Sha256?.ToLowerInvariant(), actualSha256));
-        }
+                external.Type!, external.Url, destinationRelative, expectedSha256.ToLowerInvariant(), actualSha256));
 
         var setupFileFullPath = PathSafety.ResolveWithin(stagingDirectory, setupFile, "Package.IntuneWin.SetupFile");
         if (!File.Exists(setupFileFullPath))
