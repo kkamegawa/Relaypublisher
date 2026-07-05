@@ -74,6 +74,14 @@ public sealed class AssignmentNormalizerTests
     }
 
     [TestMethod]
+    public void Normalize_UnknownMode_Throws()
+    {
+        var app = App(new AssignmentManifest { GroupId = GroupA.ToString(), Intent = "required", Mode = "sometimes" });
+
+        Assert.ThrowsExactly<AssignmentPlanningException>(() => AssignmentNormalizer.Normalize(app));
+    }
+
+    [TestMethod]
     public void Normalize_FilterIsParsed()
     {
         var app = App(new AssignmentManifest
