@@ -24,7 +24,7 @@ internal static class PlanCommand
         {
             Description = "Git ref/sha to diff against. Falls back to all manifests when missing or unresolvable.",
         };
-        var manifestsOption = new Option<string[]>("--manifests")
+        var manifestsOption = new Option<string[]>(new[] { "--manifest", "--manifests", "-m" })
         {
             Description = "Explicit manifest paths; overrides diff-based detection.",
             AllowMultipleArgumentsPerToken = true,
