@@ -116,6 +116,37 @@ public sealed class TenantMismatchException : PublisherException
     public string ActualTenantId { get; }
 }
 
+/// <summary>
+/// App resolution matched more than one Intune app for the same identity or DisplayName.
+/// Thrown before any write so an ambiguous match never overwrites the wrong app.
+/// </summary>
+public sealed class AmbiguousAppMatchException : PublisherException
+{
+    public AmbiguousAppMatchException(string message, IReadOnlyList<string> matchedAppIds)
+        : base(message)
+    {
+        MatchedAppIds = matchedAppIds;
+    }
+
+    /// <summary>Ids of every Intune app that matched.</summary>
+    public IReadOnlyList<string> MatchedAppIds { get; }
+}
+
+/// <summary>The serialized management metadata JSON would not fit in the Intune `notes` field.</summary>
+public sealed class ManagementMetadataTooLargeException : PublisherException
+{
+    public ManagementMetadataTooLargeException(int actualLength, int maxLength)
+        : base($"Management metadata JSON is {actualLength} characters, which exceeds the {maxLength} character notes limit.")
+    {
+        ActualLength = actualLength;
+        MaxLength = maxLength;
+    }
+
+    public int ActualLength { get; }
+
+    public int MaxLength { get; }
+}
+
 /// <summary>A Microsoft Graph call failed after retries. Carries the request ids Graph returns for support/troubleshooting.</summary>
 public sealed class GraphRequestException : PublisherException
 {
