@@ -116,8 +116,10 @@ internal sealed class AppManifestValidator : AbstractValidator<AppManifest>
 
     private static bool HaveUniqueTargets(List<AssignmentManifest> assignments)
     {
+        // Include and exclude assignments for the same group are different Graph targets
+        // (groupAssignmentTarget vs exclusionGroupAssignmentTarget), so Mode is part of the key.
         var keys = assignments.Select(a =>
-            $"{a.Target ?? ManifestValues.DefaultAssignmentTarget}|{a.GroupId?.ToLowerInvariant()}");
+            $"{a.Target ?? ManifestValues.DefaultAssignmentTarget}|{a.GroupId?.ToLowerInvariant()}|{a.Mode ?? ManifestValues.DefaultAssignmentMode}");
         return keys.Distinct(StringComparer.Ordinal).Count() == assignments.Count;
     }
 }

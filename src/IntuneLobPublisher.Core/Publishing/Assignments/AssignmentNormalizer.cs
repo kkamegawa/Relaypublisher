@@ -25,7 +25,7 @@ public static class AssignmentNormalizer
     private static DesiredAssignment Normalize(AssignmentManifest assignment)
     {
         var target = assignment.Target ?? "group";
-        var isExclusion = (assignment.Mode ?? "include") == "exclude";
+        var isExclusion = ParseMode(assignment.Mode);
 
         var key = target switch
         {
@@ -66,6 +66,13 @@ public static class AssignmentNormalizer
 
         return new AssignmentFilter(ParseGuid(assignment.FilterId, "FilterId")!.Value, mode);
     }
+
+    private static bool ParseMode(string? mode) => mode switch
+    {
+        null or "include" => false,
+        "exclude" => true,
+        _ => throw new AssignmentPlanningException($"Assignment Mode '{mode}' is not supported. Allowed values: include, exclude."),
+    };
 
     private static NormalizedAssignmentSettings NormalizeSettings(AssignmentSettingsManifest? settings)
     {

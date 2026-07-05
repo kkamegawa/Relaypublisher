@@ -233,6 +233,24 @@ public sealed class ManifestValidationTests
     }
 
     [TestMethod]
+    public void Validate_SameGroupIncludeAndExclude_IsNotADuplicate()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Assignments.Add(new AssignmentManifest
+        {
+            Target = "group",
+            GroupId = manifest.Apps[0].Assignments[0].GroupId,
+            Mode = "exclude",
+        });
+
+        var result = _validator.Validate(manifest);
+
+        Assert.IsFalse(
+            result.Errors.Any(e => e.ErrorMessage.Contains("duplicate targets", StringComparison.OrdinalIgnoreCase)),
+            "Include and exclude assignments for the same group are distinct Graph targets, not duplicates.");
+    }
+
+    [TestMethod]
     public void Validate_FilterIdWithoutFilterMode_Fails()
     {
         var manifest = TestManifests.CreateValid();
