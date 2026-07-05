@@ -106,20 +106,24 @@ public sealed class IntuneWinContentExtractor : IIntuneWinContentExtractor
                 ?? throw new PackagingException(
                     $"'{intuneWinPath}' does not contain content entry '{ContentDirectory}{contentFileName}'.");
 
+            // Fixed lengths per the Graph fileEncryptionInfo resource
+            // (https://learn.microsoft.com/graph/api/resources/intune-apps-fileencryptioninfo): IV must be
+            // 16 bytes, Mac/MacKey must be 32 bytes. EncryptionKey and FileDigest have no declared fixed length.
             var encryptionInfo = new IntuneWinEncryptionInfo(
                 EncryptionKey: RequireBase64(encryptionInfoElement, "EncryptionKey", intuneWinPath),
-                MacKey: RequireBase64(encryptionInfoElement, "MacKey", intuneWinPath),
-                InitializationVector: RequireBase64(encryptionInfoElement, "InitializationVector", intuneWinPath),
-                Mac: RequireBase64(encryptionInfoElement, "Mac", intuneWinPath),
+                MacKey: RequireBase64WithLength(encryptionInfoElement, "MacKey", 32, intuneWinPath),
+                InitializationVector: RequireBase64WithLength(encryptionInfoElement, "InitializationVector", 16, intuneWinPath),
+                Mac: RequireBase64WithLength(encryptionInfoElement, "Mac", 32, intuneWinPath),
                 ProfileIdentifier: RequireElementValue(encryptionInfoElement, "ProfileIdentifier", intuneWinPath),
                 FileDigest: RequireBase64(encryptionInfoElement, "FileDigest", intuneWinPath),
                 FileDigestAlgorithm: RequireElementValue(encryptionInfoElement, "FileDigestAlgorithm", intuneWinPath));
 
             var unencryptedContentSizeText = RequireElementValue(applicationInfo, "UnencryptedContentSize", intuneWinPath);
-            if (!long.TryParse(unencryptedContentSizeText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var unencryptedContentSize))
+            if (!long.TryParse(unencryptedContentSizeText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var unencryptedContentSize)
+                || unencryptedContentSize < 0)
             {
                 throw new PackagingException(
-                    $"'{intuneWinPath}': Detection.xml UnencryptedContentSize '{unencryptedContentSizeText}' is not a valid integer.");
+                    $"'{intuneWinPath}': Detection.xml UnencryptedContentSize '{unencryptedContentSizeText}' is not a valid non-negative integer.");
             }
 
             return new IntuneWinContent(archive, contentEntry, contentFileName, encryptionInfo, unencryptedContentSize);
@@ -146,6 +150,18 @@ public sealed class IntuneWinContentExtractor : IIntuneWinContentExtractor
         {
             throw new PackagingException($"'{intuneWinPath}': Detection.xml '{elementName}' is not valid base64.", ex);
         }
+    }
+
+    private static byte[] RequireBase64WithLength(XElement parent, string elementName, int expectedLength, string intuneWinPath)
+    {
+        var value = RequireBase64(parent, elementName, intuneWinPath);
+        if (value.Length != expectedLength)
+        {
+            throw new PackagingException(
+                $"'{intuneWinPath}': Detection.xml '{elementName}' must be {expectedLength} bytes but was {value.Length}.");
+        }
+
+        return value;
     }
 
     // ZIP entry names are '/'-separated per the ZIP format spec, but tolerate '\' defensively

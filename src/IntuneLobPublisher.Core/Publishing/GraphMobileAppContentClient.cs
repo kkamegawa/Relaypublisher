@@ -138,10 +138,14 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         }
         catch (JsonException)
         {
-            throw new GraphRequestException($"Graph returned a malformed body for '{requestUri}'.", (int)response.StatusCode, null, null);
+            throw new GraphRequestException(
+                $"Graph returned a malformed body for '{requestUri}'.",
+                (int)response.StatusCode, GetHeader(response, "client-request-id"), GetHeader(response, "request-id"));
         }
 
-        return body ?? throw new GraphRequestException($"Graph returned an empty body for '{requestUri}'.", (int)response.StatusCode, null, null);
+        return body ?? throw new GraphRequestException(
+            $"Graph returned an empty body for '{requestUri}'.",
+            (int)response.StatusCode, GetHeader(response, "client-request-id"), GetHeader(response, "request-id"));
     }
 
     private static void EnsureSuccess(HttpResponseMessage response, string requestUri)

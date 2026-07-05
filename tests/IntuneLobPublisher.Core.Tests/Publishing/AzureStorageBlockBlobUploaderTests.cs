@@ -109,4 +109,16 @@ public sealed class AzureStorageBlockBlobUploaderTests
             new ContentUploadOptions { BlockSizeBytes = 1024, RenewalSafetyMargin = TimeSpan.FromMinutes(5) },
             CancellationToken.None);
     }
+
+    [TestMethod]
+    public async Task UploadAsync_NonPositiveBlockSize_ThrowsArgumentOutOfRangeException()
+    {
+        var handler = new RecordingHandler();
+        var uploader = CreateUploader(handler);
+        using var content = new MemoryStream([1, 2, 3, 4]);
+
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => uploader.UploadAsync(
+            SasUri, DateTimeOffset.UtcNow.AddHours(1), content, NoRenewalExpected(),
+            new ContentUploadOptions { BlockSizeBytes = 0 }, CancellationToken.None));
+    }
 }

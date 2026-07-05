@@ -89,7 +89,7 @@ public sealed class Win32LobAppContentUploadOrchestrator : IWin32LobAppContentUp
             .ConfigureAwait(false);
 
         var sasUri = new Uri(RequireAzureStorageUri(readyFile, "azureStorageUriRequestSuccess"));
-        var expiresAt = readyFile.AzureStorageUriExpirationDateTime ?? _timeProvider.GetUtcNow();
+        var expiresAt = RequireAzureStorageUriExpiration(readyFile, "azureStorageUriRequestSuccess");
 
         using (var payloadStream = content.OpenEncryptedContentStream())
         {
@@ -146,12 +146,18 @@ public sealed class Win32LobAppContentUploadOrchestrator : IWin32LobAppContentUp
 
         return new SasUriRenewal(
             new Uri(RequireAzureStorageUri(renewed, "azureStorageUriRenewalSuccess")),
-            renewed.AzureStorageUriExpirationDateTime ?? _timeProvider.GetUtcNow());
+            RequireAzureStorageUriExpiration(renewed, "azureStorageUriRenewalSuccess"));
     }
 
     private static string RequireAzureStorageUri(MobileAppContentFileResponse file, string uploadState)
         => file.AzureStorageUri
             ?? throw new GraphRequestException($"Graph reported '{uploadState}' without an azureStorageUri.", null, null, null);
+
+    // A missing expiry is treated as a Graph contract violation rather than defaulted to "now": defaulting
+    // would silently force an immediate renewUpload call on every upload instead of surfacing the bug.
+    private static DateTimeOffset RequireAzureStorageUriExpiration(MobileAppContentFileResponse file, string uploadState)
+        => file.AzureStorageUriExpirationDateTime
+            ?? throw new GraphRequestException($"Graph reported '{uploadState}' without an azureStorageUriExpirationDateTime.", null, null, null);
 
     private async Task<MobileAppContentFileResponse> PollFileStateAsync(
         string appId, string contentVersionId, string fileId, string stage,

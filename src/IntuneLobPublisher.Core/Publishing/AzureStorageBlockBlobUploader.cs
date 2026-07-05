@@ -50,6 +50,12 @@ public sealed class AzureStorageBlockBlobUploader : IAzureStorageBlockBlobUpload
         ContentUploadOptions options,
         CancellationToken cancellationToken)
     {
+        if (options.BlockSizeBytes <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options), options.BlockSizeBytes, $"{nameof(ContentUploadOptions.BlockSizeBytes)} must be positive.");
+        }
+
         var blockBlobClient = new BlockBlobClient(sasUri, _clientOptions);
         var buffer = new byte[options.BlockSizeBytes];
         var blockIds = new List<string>();

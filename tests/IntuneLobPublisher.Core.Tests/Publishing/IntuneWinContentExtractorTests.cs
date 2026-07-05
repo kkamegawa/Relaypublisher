@@ -113,4 +113,34 @@ public sealed class IntuneWinContentExtractorTests
 
         Assert.ThrowsExactly<PackagingException>(() => extractor.Extract(path));
     }
+
+    [TestMethod]
+    public void Extract_InitializationVectorWrongLength_ThrowsPackagingException()
+    {
+        var invalidXml = ValidDetectionXml().Replace(Convert.ToBase64String(new byte[16]), Convert.ToBase64String(new byte[8]));
+        var path = CreateIntuneWinFile(invalidXml);
+        var extractor = new IntuneWinContentExtractor();
+
+        Assert.ThrowsExactly<PackagingException>(() => extractor.Extract(path));
+    }
+
+    [TestMethod]
+    public void Extract_MacKeyWrongLength_ThrowsPackagingException()
+    {
+        var invalidXml = ValidDetectionXml().Replace(Convert.ToBase64String(new byte[32]), Convert.ToBase64String(new byte[31]));
+        var path = CreateIntuneWinFile(invalidXml);
+        var extractor = new IntuneWinContentExtractor();
+
+        Assert.ThrowsExactly<PackagingException>(() => extractor.Extract(path));
+    }
+
+    [TestMethod]
+    public void Extract_NegativeUnencryptedContentSize_ThrowsPackagingException()
+    {
+        var invalidXml = ValidDetectionXml().Replace("<UnencryptedContentSize>42</UnencryptedContentSize>", "<UnencryptedContentSize>-1</UnencryptedContentSize>");
+        var path = CreateIntuneWinFile(invalidXml);
+        var extractor = new IntuneWinContentExtractor();
+
+        Assert.ThrowsExactly<PackagingException>(() => extractor.Extract(path));
+    }
 }

@@ -129,13 +129,13 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
         SourceCommit = "abc123",
     };
 
-    private static MobileAppContentFileResponse FileState(string uploadState, string? azureStorageUri = null)
+    private static MobileAppContentFileResponse FileState(string uploadState, string? azureStorageUri = null, bool includeExpiration = true)
         => new()
         {
             Id = "file-1",
             UploadState = uploadState,
             AzureStorageUri = azureStorageUri,
-            AzureStorageUriExpirationDateTime = azureStorageUri is null ? null : DateTimeOffset.UtcNow.AddHours(1),
+            AzureStorageUriExpirationDateTime = azureStorageUri is not null && includeExpiration ? DateTimeOffset.UtcNow.AddHours(1) : null,
         };
 
     private string CreateIntuneWinFile()
@@ -251,6 +251,17 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
 
         Assert.AreEqual("azureStorageUriRequest", ex.Stage);
         Assert.AreEqual("azureStorageUriRequestFailed", ex.UploadState);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_SuccessWithoutExpiration_ThrowsGraphRequestExceptionInsteadOfDefaultingToNow()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.FileResponses.Enqueue(FileState("azureStorageUriRequestSuccess", "https://sas.example/blob", includeExpiration: false));
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+
+        await Assert.ThrowsExactlyAsync<GraphRequestException>(() => orchestrator.PublishContentAsync(
+            "app-1", CreatePackage(), storedInputHash: null, CreateMetadata(), FastOptions(), CancellationToken.None));
     }
 
     [TestMethod]
