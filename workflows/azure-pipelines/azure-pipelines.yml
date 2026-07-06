@@ -1,19 +1,6 @@
-# Azure Pipelines Workflow
-
-## 13. Azure Pipelines example
-
-設計上のポイント:
-
-- path filter はディレクトリ名で指定する(`manifests/*` のような wildcard は再帰マッチが保証されない)。
-- Windows パスを YAML の double quote で囲むと `\o` などが不正エスケープになる。single quote または `/` 区切りを使う。
-- changed detection は Validate stage で一度だけ確定し、`manifest-list.json` を artifact で後続 stage に渡す。
-- production environment には **Exclusive Lock** check を設定し、publish を直列化する(並走による app 二重作成防止)。
-- source provider 用 secrets は variable group / secret variable から環境変数として明示的にマップする。
-- publish は Graph REST 呼び出しのみなので ubuntu で動かす。
-
-実際にコピーして使えるサンプルは `workflows/azure-pipelines/azure-pipelines.yml` を参照。
-
-```yaml
+# Reference sample for doc/04-ci-azure-pipelines.md.
+# Copy this file to the repository root (or wherever the pipeline definition is configured)
+# and set up the variable group / service connection / Exclusive Lock check before enabling it.
 trigger:
   branches:
     include:
@@ -118,11 +105,3 @@ stages:
                       --manifest-list '$(Pipeline.Workspace)/manifest-list/manifest-list.json'
                       --package-dir '$(Pipeline.Workspace)/intunewin-packages'
                       --expected-tenant '<tenant-id>'
-```
-
-補足:
-
-- `System.PullRequest.TargetCommitId` は PR ビルドでのみ設定される。push ビルドでは CLI 側で直前コミットとの diff または全件 fallback を使う。
-- `--expected-tenant` の `<tenant-id>` は variable group から渡す(placeholder のまま commit しない)。
-
----
