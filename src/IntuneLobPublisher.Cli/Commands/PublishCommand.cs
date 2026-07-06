@@ -1,4 +1,5 @@
 using System.CommandLine;
+using Azure.Identity;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Publishing;

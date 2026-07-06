@@ -246,6 +246,13 @@ public sealed class PublishOrchestratorTests
         Assert.AreEqual(PublishOutcome.Published, result.Outcome);
     }
 
+    /// <summary>
+    /// Exercises the orchestrator's defense-in-depth platform gate directly. A manifest with
+    /// Platform "macos" is rejected by AppManifestValidator before it ever reaches
+    /// PublishOrchestrator in the CLI pipeline (ManifestValues.Platforms currently allows only
+    /// "windows"); this test builds the manifest by hand to confirm the gate still skips safely
+    /// for callers that construct a PublishRequest without going through that validator.
+    /// </summary>
     [TestMethod]
     public async Task PublishAsync_MacOsEntry_SkipsWithoutAnyCall()
     {
