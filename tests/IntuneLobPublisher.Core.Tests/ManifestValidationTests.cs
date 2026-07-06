@@ -319,6 +319,41 @@ public sealed class ManifestValidationTests
     }
 
     [TestMethod]
+    public void Validate_AzureBlobWithoutWorkloadIdentity_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Package!.ExternalFiles[0] = new SourceManifest
+        {
+            Type = "azureBlob",
+            AccountName = "contosopackages",
+            Container = "intune-packages",
+            BlobName = "windows/tool.exe",
+            Destination = "bin/tool.exe",
+            Sha256 = new string('a', 64),
+        };
+        AssertInvalid(manifest, "workloadIdentity");
+    }
+
+    [TestMethod]
+    public void Validate_AzureBlobWithWorkloadIdentity_Passes()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Package!.ExternalFiles[0] = new SourceManifest
+        {
+            Type = "azureBlob",
+            AccountName = "contosopackages",
+            Container = "intune-packages",
+            BlobName = "windows/tool.exe",
+            Destination = "bin/tool.exe",
+            Sha256 = new string('a', 64),
+            Auth = new AuthManifest { Type = "workloadIdentity" },
+        };
+
+        var result = _validator.Validate(manifest);
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => e.ErrorMessage)));
+    }
+
+    [TestMethod]
     public void Validate_InvalidAssignmentSync_Fails()
     {
         var manifest = TestManifests.CreateValid();

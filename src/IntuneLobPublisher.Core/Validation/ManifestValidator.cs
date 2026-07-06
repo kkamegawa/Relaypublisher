@@ -196,6 +196,12 @@ internal sealed class SourceManifestValidator : AbstractValidator<SourceManifest
             .When(s => s.Type == "githubRelease" && s.Auth is not null)
             .WithMessage("Auth.Type 'workloadIdentity' is not supported for source Type 'githubRelease'. Use 'token' or 'none'.")
             .OverridePropertyName("Auth.Type");
+
+        RuleFor(s => s.Auth)
+            .Must(a => a?.Type == "workloadIdentity")
+            .When(s => s.Type == "azureBlob")
+            .WithMessage("Auth.Type 'workloadIdentity' is required for source Type 'azureBlob'. Use publicHttp for anonymously readable URLs.")
+            .OverridePropertyName("Auth.Type");
     }
 }
 

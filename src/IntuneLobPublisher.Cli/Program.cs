@@ -28,6 +28,8 @@ services.AddSingleton(new SourceRetryOptions());
 services.AddSingleton<DownloadRetryPolicy>();
 services.AddSingleton<ISourceProvider, PublicHttpSourceProvider>();
 services.AddSingleton<ISourceProvider, GitHubReleaseSourceProvider>();
+services.AddSingleton<IAzureBlobDownloader, AzureBlobDownloader>();
+services.AddSingleton<ISourceProvider, AzureBlobSourceProvider>();
 services.AddSingleton<SourceProviderRegistry>();
 services.AddSingleton<IWindowsStagingService, WindowsStagingService>();
 services.AddSingleton<IIntuneWinToolDownloader, GitHubIntuneWinToolDownloader>();
