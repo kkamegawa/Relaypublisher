@@ -78,6 +78,16 @@ public sealed class Win32LobAppPayload
     [JsonPropertyName("displayVersion")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? DisplayVersion { get; init; }
+
+    /// <summary>
+    /// Management metadata JSON for the app's <c>notes</c> field. Set on create so a brand-new app
+    /// never exists without its metadata (a crash before the content upload's notes PATCH would
+    /// otherwise leave an app only recoverable through the DisplayName-adopt path). Null on update,
+    /// where the content upload flow refreshes notes and omission must not clear the field.
+    /// </summary>
+    [JsonPropertyName("notes")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Notes { get; init; }
 }
 
 public sealed class Win32LobAppInstallExperiencePayload
