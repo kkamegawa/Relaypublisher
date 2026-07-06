@@ -66,8 +66,9 @@ public sealed class AzureBlobSourceProvider : ISourceProvider
                 404 => " Check that the container and blob path exist.",
                 _ => string.Empty,
             };
+            var errorCode = string.IsNullOrEmpty(ex.ErrorCode) ? "unknown" : ex.ErrorCode;
             throw new SourceDownloadException(
-                $"Failed to download {blobDescription} (status {ex.Status}, code {ex.ErrorCode}).{hint}", ex);
+                $"Failed to download {blobDescription} (status {ex.Status}, code {errorCode}).{hint}", ex);
         }
         catch (CredentialUnavailableException ex)
         {
@@ -79,7 +80,8 @@ public sealed class AzureBlobSourceProvider : ISourceProvider
         {
             throw new SourceDownloadException(
                 $"Azure authentication failed while downloading {blobDescription}. "
-                + "Verify the federated credential configuration of the CI identity.", ex);
+                + "The CI job needs an Azure login with workload identity (e.g. azure/login with id-token: write); "
+                + "verify the federated credential configuration of the CI identity.", ex);
         }
         catch (IOException ex)
         {

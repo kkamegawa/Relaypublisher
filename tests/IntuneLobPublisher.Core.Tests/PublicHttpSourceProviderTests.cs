@@ -17,6 +17,11 @@ public sealed class PublicHttpSourceProviderTests
 
         public StubHandler(params (HttpStatusCode StatusCode, byte[] Content)[] responses)
         {
+            if (responses.Length == 0)
+            {
+                throw new ArgumentException("At least one response must be provided.", nameof(responses));
+            }
+
             _responses = new Queue<(HttpStatusCode, byte[])>(responses);
             _lastResponse = responses[^1];
         }
@@ -70,7 +75,11 @@ public sealed class PublicHttpSourceProviderTests
         }
         finally
         {
-            Directory.Delete(Path.GetDirectoryName(Path.GetDirectoryName(destination))!, recursive: true);
+            var root = Path.GetDirectoryName(Path.GetDirectoryName(destination))!;
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
         }
     }
 
@@ -116,7 +125,11 @@ public sealed class PublicHttpSourceProviderTests
         }
         finally
         {
-            Directory.Delete(Path.GetDirectoryName(Path.GetDirectoryName(destination))!, recursive: true);
+            var root = Path.GetDirectoryName(Path.GetDirectoryName(destination))!;
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
         }
     }
 
