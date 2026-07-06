@@ -19,7 +19,7 @@ public sealed class GraphWin32LobAppClientTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
-            Requests.Add((request.Method.Method, request.RequestUri!.ToString(), body));
+            Requests.Add((request.Method.Method, request.RequestUri!.AbsoluteUri, body));
             return _responses.Dequeue()(request);
         }
     }
