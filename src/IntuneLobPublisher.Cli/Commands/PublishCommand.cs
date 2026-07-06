@@ -1,5 +1,4 @@
 using System.CommandLine;
-using Azure.Identity;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Publishing;
@@ -131,9 +130,21 @@ internal static class PublishCommand
                 }
 
                 var candidate = new PublishEntry(loaded, app);
-                var keepCandidate = PublishGuard.CompareVersions(
-                    loaded.Manifest.PackageVersion!, existing.Loaded.Manifest.PackageVersion!) > 0;
-                var (winner, loser) = keepCandidate ? (candidate, existing) : (existing, candidate);
+                var comparison = PublishGuard.CompareVersions(
+                    loaded.Manifest.PackageVersion!, existing.Loaded.Manifest.PackageVersion!);
+                if (comparison == 0)
+                {
+                    // Equal versions for the same identity: keep whichever was seen first so
+                    // selection does not depend on dictionary iteration order, and say so plainly
+                    // instead of the misleading "superseded" wording.
+                    Console.WriteLine(
+                        $"Skipping {identity.PackageIdentifier} {identity.Platform}-{identity.Architecture} " +
+                        $"duplicate version {loaded.Manifest.PackageVersion} from '{loaded.Path}' " +
+                        $"(version {existing.Loaded.Manifest.PackageVersion} from '{existing.Loaded.Path}' was already selected).");
+                    continue;
+                }
+
+                var (winner, loser) = comparison > 0 ? (candidate, existing) : (existing, candidate);
                 byIdentity[identity] = winner;
                 Console.WriteLine(
                     $"Skipping {identity.PackageIdentifier} {identity.Platform}-{identity.Architecture} " +
