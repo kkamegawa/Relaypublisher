@@ -61,30 +61,35 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
     {
         var manifest = request.Manifest;
         var app = request.App;
+        var packageIdentifier = Require(manifest.PackageIdentifier, nameof(manifest.PackageIdentifier));
+        var packageVersion = Require(manifest.PackageVersion, nameof(manifest.PackageVersion));
+        var platform = Require(app.Platform, nameof(app.Platform));
+        var architecture = Require(app.Architecture, nameof(app.Architecture));
+        var displayName = Require(app.DisplayName, nameof(app.DisplayName));
 
         // Defense-in-depth, not currently reachable via the CLI: ManifestValues.Platforms only
         // allows "windows" today, so AppManifestValidator rejects non-windows entries before this
         // code runs. This guard exists for callers that build a PublishRequest without going
         // through that validator, and to fail safely once macOS is added to the schema
         // (doc/00-overview.md section 16, roadmap item 12) before its publish flow is implemented.
-        if (!string.Equals(app.Platform, "windows", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(platform, "windows", StringComparison.OrdinalIgnoreCase))
         {
-            var reason = $"Platform '{app.Platform}' has no publish flow yet; only windows is supported.";
+            var reason = $"Platform '{platform}' has no publish flow yet; only windows is supported.";
             _logger.LogWarning(
                 "Skipping {PackageIdentifier} {Platform}-{Architecture}: {Reason}",
-                manifest.PackageIdentifier, app.Platform, app.Architecture, reason);
+                packageIdentifier, platform, architecture, reason);
             return new PublishResult(PublishOutcome.SkippedPlatformNotSupported, null, false, null, null, reason);
         }
 
-        var identity = new AppIdentity(manifest.PackageIdentifier!, app.Platform!, app.Architecture!);
-        var resolution = await _resolver.ResolveAsync(identity, app.DisplayName!, cancellationToken).ConfigureAwait(false);
+        var identity = new AppIdentity(packageIdentifier, platform, architecture);
+        var resolution = await _resolver.ResolveAsync(identity, displayName, cancellationToken).ConfigureAwait(false);
 
-        if (PublishGuard.EvaluateVersion(resolution.Metadata?.PackageVersion, manifest.PackageVersion!, request.AllowDowngrade)
+        if (PublishGuard.EvaluateVersion(resolution.Metadata?.PackageVersion, packageVersion, request.AllowDowngrade)
             == VersionGuardResult.SkipDowngrade)
         {
             // The whole manifest entry is stale, so assignments are not applied either.
             var reason =
-                $"Manifest version '{manifest.PackageVersion}' is lower than the published version " +
+                $"Manifest version '{packageVersion}' is lower than the published version " +
                 $"'{resolution.Metadata!.PackageVersion}'. Use --allow-downgrade to publish anyway.";
             _logger.LogWarning(
                 "Skipping {PackageIdentifier} {Platform}-{Architecture}: {Reason}",
@@ -98,7 +103,7 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         var managementMetadata = new ManagementMetadata
         {
             PackageIdentifier = identity.PackageIdentifier,
-            PackageVersion = manifest.PackageVersion!,
+            PackageVersion = packageVersion,
             Platform = identity.Platform,
             Architecture = identity.Architecture,
             ManifestPath = request.ManifestRepoRelativePath,
@@ -199,6 +204,11 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
             artifacts.Metadata.Tool.Version,
             artifacts.Metadata.Tool.Sha256,
             Path.Combine(Path.GetDirectoryName(artifacts.IntuneWinPath)!, PackageMetadataJson.FileName));
+
+    private static string Require(string? value, string fieldName)
+        => string.IsNullOrWhiteSpace(value)
+            ? throw new ManifestLoadException($"Manifest field '{fieldName}' is required for publish.")
+            : value;
 
     private static async Task<string> ReadDetectionScriptAsync(
         PublishRequest request, Manifests.AppManifest app, CancellationToken cancellationToken)

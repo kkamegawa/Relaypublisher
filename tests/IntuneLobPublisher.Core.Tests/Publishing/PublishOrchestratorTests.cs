@@ -1,4 +1,5 @@
 using System.Text.Json;
+using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Packaging;
 using IntuneLobPublisher.Core.Publishing;
@@ -244,6 +245,45 @@ public sealed class PublishOrchestratorTests
             CreateRequest(allowDowngrade: true), null, CancellationToken.None);
 
         Assert.AreEqual(PublishOutcome.Published, result.Outcome);
+    }
+
+    [TestMethod]
+    [DataRow("PackageIdentifier")]
+    [DataRow("PackageVersion")]
+    [DataRow("Platform")]
+    [DataRow("Architecture")]
+    [DataRow("DisplayName")]
+    public async Task PublishAsync_MissingRequiredValue_ThrowsManifestLoadException(string fieldName)
+    {
+        var manifest = TestManifests.CreateValid();
+        switch (fieldName)
+        {
+            case "PackageIdentifier":
+                manifest.PackageIdentifier = null;
+                break;
+            case "PackageVersion":
+                manifest.PackageVersion = null;
+                break;
+            case "Platform":
+                manifest.Apps[0].Platform = null;
+                break;
+            case "Architecture":
+                manifest.Apps[0].Architecture = null;
+                break;
+            case "DisplayName":
+                manifest.Apps[0].DisplayName = null;
+                break;
+        }
+
+        var harness = CreateHarness();
+
+        var exception = await Assert.ThrowsExactlyAsync<ManifestLoadException>(
+            () => harness.Orchestrator.PublishAsync(CreateRequest(manifest), null, CancellationToken.None));
+
+        StringAssert.Contains(exception.Message, fieldName);
+        Assert.IsEmpty(harness.AppClient.Calls);
+        Assert.IsEmpty(harness.ContentOrchestrator.Calls);
+        Assert.IsEmpty(harness.AssignmentService.Calls);
     }
 
     /// <summary>

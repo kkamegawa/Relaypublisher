@@ -1,10 +1,8 @@
 using System.CommandLine;
-using Azure.Identity;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Publishing;
 using IntuneLobPublisher.Core.Publishing.Assignments;
-using IntuneLobPublisher.Core.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -109,13 +107,14 @@ internal static class PublishCommand
         return command;
     }
 
-    private sealed record PublishEntry(LoadedManifest Loaded, AppManifest App);
+    private sealed record PublishEntry(IntuneLobPublisher.Core.Validation.LoadedManifest Loaded, AppManifest App);
 
     /// <summary>
     /// When several manifests target the same app identity, only the highest PackageVersion is
     /// published (doc/00-overview.md 6.8); the rest are reported as skipped.
     /// </summary>
-    private static List<PublishEntry> SelectHighestVersions(IReadOnlyList<LoadedManifest> manifests)
+    private static List<PublishEntry> SelectHighestVersions(
+        IReadOnlyList<IntuneLobPublisher.Core.Validation.LoadedManifest> manifests)
     {
         var byIdentity = new Dictionary<AppIdentity, PublishEntry>();
         foreach (var loaded in manifests)
@@ -180,10 +179,11 @@ internal static class PublishCommand
         foreach (var entry in entries)
         {
             var label = $"{entry.Loaded.Manifest.PackageIdentifier} {entry.App.Platform}-{entry.App.Architecture}";
+            var manifestRepoRelativePath = GetManifestRepoRelativePath(repoRoot, entry.Loaded.Path);
             var request = new PublishRequest(
                 entry.Loaded.Manifest,
                 entry.App,
-                Path.GetRelativePath(repoRoot, entry.Loaded.Path).Replace('\\', '/'),
+                manifestRepoRelativePath,
                 repoRoot,
                 packageDirectory,
                 sourceCommit,
@@ -221,7 +221,7 @@ internal static class PublishCommand
                 Console.Error.WriteLine($"error: {ex.Message}");
                 return ExitCodes.Failure;
             }
-            catch (AuthenticationFailedException ex)
+            catch (Azure.Identity.AuthenticationFailedException ex)
             {
                 Console.Error.WriteLine($"error: Graph authentication failed: {ex.Message}");
                 return ExitCodes.Failure;
@@ -237,5 +237,22 @@ internal static class PublishCommand
             $"{published} published, {skippedDowngrade} skipped (downgrade), " +
             $"{skippedPlatform} skipped (platform), {failed} failed.");
         return failed == 0 ? ExitCodes.Success : ExitCodes.Failure;
+    }
+
+    private static string GetManifestRepoRelativePath(string repoRoot, string manifestPath)
+    {
+        var relativePath = Path.GetRelativePath(
+            Path.GetFullPath(repoRoot),
+            Path.GetFullPath(manifestPath));
+        if (Path.IsPathRooted(relativePath) ||
+            relativePath == ".." ||
+            relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
+            relativePath.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            throw new ManifestLoadException(
+                $"Manifest '{manifestPath}' must be under --repo-root '{repoRoot}' to record repository-relative metadata.");
+        }
+
+        return relativePath.Replace('\\', '/');
     }
 }
