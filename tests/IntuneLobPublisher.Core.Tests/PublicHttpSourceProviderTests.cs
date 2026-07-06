@@ -12,27 +12,41 @@ public sealed class PublicHttpSourceProviderTests
 {
     private sealed class StubHandler : HttpMessageHandler
     {
-        private readonly HttpStatusCode _statusCode;
-        private readonly byte[] _content;
+        private readonly Queue<(HttpStatusCode StatusCode, byte[] Content)> _responses;
+        private (HttpStatusCode StatusCode, byte[] Content) _lastResponse;
 
-        public StubHandler(HttpStatusCode statusCode, byte[] content)
+        public StubHandler(params (HttpStatusCode StatusCode, byte[] Content)[] responses)
         {
-            _statusCode = statusCode;
-            _content = content;
+            if (responses.Length == 0)
+            {
+                throw new ArgumentException("At least one response must be provided.", nameof(responses));
+            }
+
+            _responses = new Queue<(HttpStatusCode, byte[])>(responses);
+            _lastResponse = responses[^1];
         }
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
-            => Task.FromResult(new HttpResponseMessage(_statusCode)
+        {
+            var (statusCode, content) = _responses.Count > 0 ? _responses.Dequeue() : _lastResponse;
+            return Task.FromResult(new HttpResponseMessage(statusCode)
             {
-                Content = new ByteArrayContent(_content),
+                Content = new ByteArrayContent(content),
             });
+        }
     }
 
-    private static PublicHttpSourceProvider CreateProvider(HttpStatusCode statusCode, byte[] content)
+    private static PublicHttpSourceProvider CreateProvider(params (HttpStatusCode, byte[])[] responses)
         => new(
-            new HttpClient(new StubHandler(statusCode, content)),
+            new HttpClient(new StubHandler(responses)),
+            new DownloadRetryPolicy(
+                new SourceRetryOptions { BaseRetryDelay = TimeSpan.Zero },
+                NullLogger<DownloadRetryPolicy>.Instance),
             NullLogger<PublicHttpSourceProvider>.Instance);
+
+    private static PublicHttpSourceProvider CreateProvider(HttpStatusCode statusCode, byte[] content)
+        => CreateProvider(responses: (statusCode, content));
 
     private static SourceManifest CreateSource(AuthManifest? auth = null) => new()
     {
@@ -61,7 +75,11 @@ public sealed class PublicHttpSourceProviderTests
         }
         finally
         {
-            Directory.Delete(Path.GetDirectoryName(Path.GetDirectoryName(destination))!, recursive: true);
+            var root = Path.GetDirectoryName(Path.GetDirectoryName(destination))!;
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
         }
     }
 
@@ -87,6 +105,32 @@ public sealed class PublicHttpSourceProviderTests
             () => provider.DownloadAsync(new SourceDownloadRequest(source, destination), CancellationToken.None));
 
         Assert.DoesNotContain("super-secret-token", ex.Message);
+    }
+
+    [TestMethod]
+    public async Task DownloadAsync_TransientFailureThenSuccess_IsRetried()
+    {
+        var content = "binary-content"u8.ToArray();
+        var provider = CreateProvider(
+            (HttpStatusCode.ServiceUnavailable, []),
+            (HttpStatusCode.OK, content));
+        var destination = Path.Combine(Path.GetTempPath(), $"provider-test-{Guid.NewGuid():N}", "bin", "tool.exe");
+
+        try
+        {
+            var result = await provider.DownloadAsync(
+                new SourceDownloadRequest(CreateSource(), destination), CancellationToken.None);
+
+            Assert.AreEqual(content.Length, result.SizeBytes);
+        }
+        finally
+        {
+            var root = Path.GetDirectoryName(Path.GetDirectoryName(destination))!;
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
     }
 
     [TestMethod]

@@ -301,6 +301,24 @@ public sealed class ManifestValidationTests
     }
 
     [TestMethod]
+    public void Validate_GitHubReleaseWithWorkloadIdentity_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Package!.ExternalFiles[0] = new SourceManifest
+        {
+            Type = "githubRelease",
+            Owner = "contoso",
+            Repository = "tools",
+            Tag = "v1.0.0",
+            AssetName = "tool.exe",
+            Destination = "bin/tool.exe",
+            Sha256 = new string('a', 64),
+            Auth = new AuthManifest { Type = "workloadIdentity" },
+        };
+        AssertInvalid(manifest, "workloadIdentity");
+    }
+
+    [TestMethod]
     public void Validate_InvalidAssignmentSync_Fails()
     {
         var manifest = TestManifests.CreateValid();
