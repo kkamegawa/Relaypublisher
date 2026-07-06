@@ -190,6 +190,12 @@ internal sealed class SourceManifestValidator : AbstractValidator<SourceManifest
             .When(s => s.Auth?.Type == "token")
             .WithMessage("Auth.SecretName is required when Auth.Type is 'token'.")
             .OverridePropertyName("Auth.SecretName");
+
+        RuleFor(s => s.Auth!.Type)
+            .Must(v => v != "workloadIdentity")
+            .When(s => s.Type == "githubRelease" && s.Auth is not null)
+            .WithMessage("Auth.Type 'workloadIdentity' is not supported for source Type 'githubRelease'. Use 'token' or 'none'.")
+            .OverridePropertyName("Auth.Type");
     }
 }
 

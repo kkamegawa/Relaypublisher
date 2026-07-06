@@ -7,11 +7,14 @@ namespace IntuneLobPublisher.Core.Sources;
 public sealed class PublicHttpSourceProvider : ISourceProvider
 {
     private readonly HttpClient _httpClient;
+    private readonly DownloadRetryPolicy _retryPolicy;
     private readonly ILogger<PublicHttpSourceProvider> _logger;
 
-    public PublicHttpSourceProvider(HttpClient httpClient, ILogger<PublicHttpSourceProvider> logger)
+    public PublicHttpSourceProvider(
+        HttpClient httpClient, DownloadRetryPolicy retryPolicy, ILogger<PublicHttpSourceProvider> logger)
     {
         _httpClient = httpClient;
+        _retryPolicy = retryPolicy;
         _logger = logger;
     }
 
@@ -36,15 +39,20 @@ public sealed class PublicHttpSourceProvider : ISourceProvider
 
         try
         {
-            using var response = await _httpClient.GetAsync(
-                source.Url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-
-            Directory.CreateDirectory(Path.GetDirectoryName(request.DestinationPath)!);
-            await using (var file = File.Create(request.DestinationPath))
+            await _retryPolicy.ExecuteAsync(safeUrl, async ct =>
             {
-                await response.Content.CopyToAsync(file, cancellationToken).ConfigureAwait(false);
-            }
+                using var response = await _httpClient.GetAsync(
+                    source.Url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+
+                Directory.CreateDirectory(Path.GetDirectoryName(request.DestinationPath)!);
+                await using (var file = File.Create(request.DestinationPath))
+                {
+                    await response.Content.CopyToAsync(file, ct).ConfigureAwait(false);
+                }
+
+                return true;
+            }, cancellationToken).ConfigureAwait(false);
         }
         catch (HttpRequestException ex)
         {
