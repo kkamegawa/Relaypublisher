@@ -10,6 +10,9 @@ namespace IntuneLobPublisher.Core.Publishing;
 /// Runs the per-app publish flow in the doc/00-overview.md 6.10 order: resolve the app, evaluate
 /// the version guard, create/update the win32LobApp, upload content, then plan and apply
 /// assignments. Dry-run computes and reports the same information without any Graph write.
+/// The non-windows platform skip is defense-in-depth: today <c>AppManifestValidator</c> rejects
+/// non-windows entries before a request reaches here, so it is only reachable via callers that
+/// bypass that validator or once a future platform (e.g. macOS) is added to the manifest schema.
 /// </summary>
 public interface IPublishOrchestrator
 {
@@ -59,6 +62,11 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         var manifest = request.Manifest;
         var app = request.App;
 
+        // Defense-in-depth, not currently reachable via the CLI: ManifestValues.Platforms only
+        // allows "windows" today, so AppManifestValidator rejects non-windows entries before this
+        // code runs. This guard exists for callers that build a PublishRequest without going
+        // through that validator, and to fail safely once macOS is added to the schema
+        // (doc/00-overview.md section 16, roadmap item 12) before its publish flow is implemented.
         if (!string.Equals(app.Platform, "windows", StringComparison.OrdinalIgnoreCase))
         {
             var reason = $"Platform '{app.Platform}' has no publish flow yet; only windows is supported.";
