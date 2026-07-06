@@ -1,6 +1,7 @@
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Publishing.Assignments;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IntuneLobPublisher.Core.Tests.Publishing.Assignments;
@@ -24,11 +25,18 @@ public sealed class AssignmentServiceTests
 
         public List<string> Deleted { get; } = [];
 
+        public Exception? CreateException { get; set; }
+
         public Task<IReadOnlyList<CurrentAssignment>> ListAssignmentsAsync(string appId, CancellationToken cancellationToken)
             => Task.FromResult(CurrentAssignments);
 
         public Task<string> CreateAssignmentAsync(string appId, DesiredAssignment assignment, CancellationToken cancellationToken)
         {
+            if (CreateException is not null)
+            {
+                throw CreateException;
+            }
+
             Created.Add(assignment);
             return Task.FromResult("created-assignment");
         }
@@ -46,8 +54,26 @@ public sealed class AssignmentServiceTests
         }
     }
 
-    private static AssignmentService Service(FakeAssignmentGraphClient client)
-        => new(client, NullLogger<AssignmentService>.Instance);
+    /// <summary>Captures formatted log messages so tests can assert on apply-result logging.</summary>
+    private sealed class CapturingLogger : ILogger<AssignmentService>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Messages.Add(formatter(state, exception));
+    }
+
+    private static AssignmentService Service(FakeAssignmentGraphClient client, ILogger<AssignmentService>? logger = null)
+        => new(client, logger ?? NullLogger<AssignmentService>.Instance);
 
     private static AppManifest App(params AssignmentManifest[] assignments)
     {
@@ -169,5 +195,63 @@ public sealed class AssignmentServiceTests
             () => Service(client).ApplyAsync(plan, app, CancellationToken.None));
 
         Assert.HasCount(0, client.Created);
+    }
+
+    [TestMethod]
+    public async Task ApplyAsync_AddLogsAppliedResultWithNewAssignmentIdPerGroup()
+    {
+        var client = new FakeAssignmentGraphClient();
+        var logger = new CapturingLogger();
+        var app = App(GroupAssignment(GroupA));
+        var plan = AssignmentPlanner.CreatePlan(AppId, app, AssignmentSyncMode.Merge, []);
+
+        await Service(client, logger).ApplyAsync(plan, app, CancellationToken.None);
+
+        var applied = logger.Messages.Where(m => m.Contains("applied")).ToArray();
+        Assert.HasCount(1, applied);
+        Assert.Contains($"group {GroupA}", applied[0]);
+        Assert.Contains("assignmentId=created-assignment", applied[0]);
+    }
+
+    [TestMethod]
+    public async Task ApplyAsync_UpdateAndRemoveLogAppliedResultWithAssignmentIdPerGroup()
+    {
+        var client = new FakeAssignmentGraphClient();
+        var logger = new CapturingLogger();
+        var app = App(GroupAssignment(GroupA, intent: "available"));
+        var plan = AssignmentPlanner.CreatePlan(
+            AppId,
+            app,
+            AssignmentSyncMode.Replace,
+            [
+                ExistingGroup(GroupA, intent: "required", id: "assignment-a"),
+                ExistingGroup(GroupB, id: "assignment-b"),
+            ]);
+
+        await Service(client, logger).ApplyAsync(plan, app, CancellationToken.None);
+
+        var applied = logger.Messages.Where(m => m.Contains("applied")).ToArray();
+        Assert.HasCount(2, applied);
+        Assert.IsTrue(applied.Any(m =>
+            m.Contains("update applied") && m.Contains($"group {GroupA}") && m.Contains("assignmentId=assignment-a")));
+        Assert.IsTrue(applied.Any(m =>
+            m.Contains("remove applied") && m.Contains($"group {GroupB}") && m.Contains("assignmentId=assignment-b")));
+    }
+
+    [TestMethod]
+    public async Task ApplyAsync_CreateFailureDoesNotLogAppliedResult()
+    {
+        var client = new FakeAssignmentGraphClient
+        {
+            CreateException = new GraphRequestException("Graph request failed.", 500, null, null),
+        };
+        var logger = new CapturingLogger();
+        var app = App(GroupAssignment(GroupA));
+        var plan = AssignmentPlanner.CreatePlan(AppId, app, AssignmentSyncMode.Merge, []);
+
+        await Assert.ThrowsExactlyAsync<GraphRequestException>(
+            () => Service(client, logger).ApplyAsync(plan, app, CancellationToken.None));
+
+        Assert.HasCount(0, logger.Messages.Where(m => m.Contains("applied")).ToArray());
     }
 }
