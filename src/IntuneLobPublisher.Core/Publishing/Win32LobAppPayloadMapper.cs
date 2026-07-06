@@ -25,13 +25,15 @@ public static class Win32LobAppPayloadMapper
     /// <param name="app">The platform/architecture-specific entry being published.</param>
     /// <param name="detectionScriptContent">Raw (not base64) content of `Detection.ScriptFile`, already read from the repository.</param>
     /// <param name="iconBytes">Raw icon bytes read from the repository, or null when the manifest has no `Icon` / it was not supplied.</param>
+    /// <param name="notes">Management metadata JSON for the `notes` field, set only on create requests (see <see cref="Win32LobAppPayload.Notes"/>).</param>
     /// <exception cref="UnsupportedWindowsBuildException">`Requirements.MinimumOSVersion` has no known release mapping.</exception>
     /// <exception cref="UnsupportedIconFormatException">`iconBytes` was supplied but `Icon`'s extension is not recognized.</exception>
     public static Win32LobAppPayload Map(
         IntunePackageManifest manifest,
         AppManifest app,
         string detectionScriptContent,
-        byte[]? iconBytes)
+        byte[]? iconBytes,
+        string? notes = null)
     {
         var install = app.Install!;
         var detection = app.Detection;
@@ -58,6 +60,7 @@ public static class Win32LobAppPayloadMapper
             ReturnCodes = MapReturnCodes(install.ReturnCodes),
             Rules = [MapDetectionRule(detection, detectionScriptContent)],
             DisplayVersion = manifest.PackageVersion,
+            Notes = notes,
         };
     }
 

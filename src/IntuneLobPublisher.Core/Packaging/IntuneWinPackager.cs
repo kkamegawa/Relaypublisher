@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Sources;
@@ -15,13 +14,6 @@ namespace IntuneLobPublisher.Core.Packaging;
 /// </summary>
 public sealed class IntuneWinPackager : IIntuneWinPackager
 {
-    private static readonly JsonSerializerOptions MetadataJsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = true,
-    };
-
     private readonly IIntuneWinToolResolver _toolResolver;
     private readonly IProcessRunner _processRunner;
     private readonly ILogger<IntuneWinPackager> _logger;
@@ -115,20 +107,22 @@ public sealed class IntuneWinPackager : IIntuneWinPackager
         var intuneWinSha256 = await ChecksumVerifier.ComputeSha256Async(intuneWinPath, cancellationToken)
             .ConfigureAwait(false);
 
-        var metadataPath = Path.Combine(outputDirectory, "package-metadata.json");
+        var metadataPath = Path.Combine(outputDirectory, PackageMetadataJson.FileName);
         var metadata = new PackageMetadata(
             stagingResult.PackageIdentifier,
             manifest.PackageVersion,
             stagingResult.Platform,
             stagingResult.Architecture,
             inputHash,
-            new ToolMetadata("IntuneWinAppUtil.exe", tool.Version, tool.Sha256),
+            new PackageToolMetadata("IntuneWinAppUtil.exe", tool.Version, tool.Sha256),
             intuneWinFileName,
             // Informational only; a random encryption key makes this hash non-deterministic.
             intuneWinSha256,
             DateTimeOffset.UtcNow);
-        await File.WriteAllTextAsync(metadataPath, JsonSerializer.Serialize(metadata, MetadataJsonOptions), cancellationToken)
-            .ConfigureAwait(false);
+        await File.WriteAllTextAsync(
+            metadataPath,
+            JsonSerializer.Serialize(metadata, PackageMetadataJson.SerializerOptions),
+            cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("Package metadata written to {MetadataPath}", metadataPath);
 
         return new IntuneWinPackageResult(
@@ -142,23 +136,4 @@ public sealed class IntuneWinPackager : IIntuneWinPackager
             tool.Sha256,
             metadataPath);
     }
-
-    // Named types (rather than an anonymous object) so [JsonIgnore(Condition = Never)] can force
-    // Tool.Version to always be written, even null - a null version (unpinned local tool) is
-    // itself the auditability signal and must not be silently dropped by DefaultIgnoreCondition.
-    private sealed record PackageMetadata(
-        string PackageIdentifier,
-        string? PackageVersion,
-        string Platform,
-        string Architecture,
-        string InputHash,
-        ToolMetadata Tool,
-        string IntuneWinFile,
-        string IntuneWinSha256,
-        DateTimeOffset GeneratedUtc);
-
-    private sealed record ToolMetadata(
-        string Name,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Version,
-        string Sha256);
 }
