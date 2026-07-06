@@ -60,6 +60,8 @@ stages:
 
   - stage: Package
     dependsOn: Validate
+    # PR ビルドは secrets を持つ variable group を読ませない(認証が必要な download は本番ブランチでのみ実行する)。
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
     jobs:
       - job: PackageWindows
         pool:

@@ -66,12 +66,29 @@ jobs:
       # changed detection をここで一度だけ確定する。
       # PR: merge-base / push: event.before / dispatch: 明示指定または全件
       - name: Resolve changed manifests
-        run: >
-          dotnet run --project src/IntuneLobPublisher.Cli --no-build --configuration Release --
-          plan
-          --base-ref "${{ github.event.pull_request.base.sha || github.event.before }}"
-          --manifests "${{ inputs.manifests }}"
-          --output manifest-list.json
+        shell: bash
+        run: |
+          case "${{ github.event_name }}" in
+            pull_request)
+              BASE_REF=$(git merge-base "${{ github.event.pull_request.base.sha }}" HEAD)
+              ;;
+            push)
+              BASE_REF="${{ github.event.before }}"
+              ;;
+            *)
+              BASE_REF=""
+              ;;
+          esac
+
+          ARGS=(plan --output manifest-list.json)
+          if [ -n "$BASE_REF" ]; then
+            ARGS+=(--base-ref "$BASE_REF")
+          fi
+          if [ -n "${{ inputs.manifests }}" ]; then
+            ARGS+=(--manifests ${{ inputs.manifests }})
+          fi
+
+          dotnet run --project src/IntuneLobPublisher.Cli --no-build --configuration Release -- "${ARGS[@]}"
 
       - name: Validate
         run: >
@@ -85,13 +102,15 @@ jobs:
 
   package-windows:
     needs: validate
+    # PR は認証が必要な download や id-token/secrets を伴う job を実行しない。
+    # PR での package 検証が必要な場合は、secrets/OIDC を持たない別 job を dry-run で用意すること。
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     permissions:
       contents: read
       id-token: write   # ExternalFiles に azureBlob を使う場合のみ必要
     env:
       # githubRelease provider 用。manifest の Auth.SecretName と対応させる。
-      # fork からの PR では secrets が渡らないため download は失敗する(dry-run 推奨)。
       GH_RELEASE_PAT: ${{ secrets.GH_RELEASE_PAT }}
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +125,6 @@ jobs:
 
       # ExternalFiles に azureBlob を使う場合のみ必要
       - name: Azure login
-        if: github.event_name != 'pull_request'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
