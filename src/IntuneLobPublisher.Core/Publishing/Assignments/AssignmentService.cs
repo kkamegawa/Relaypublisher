@@ -53,13 +53,17 @@ public sealed class AssignmentService : IAssignmentService
             switch (entry.Action)
             {
                 case AssignmentPlanAction.Add:
-                    await _graphClient.CreateAssignmentAsync(plan.AppId, RequireDesired(entry), cancellationToken).ConfigureAwait(false);
+                    var createdId = await _graphClient.CreateAssignmentAsync(plan.AppId, RequireDesired(entry), cancellationToken).ConfigureAwait(false);
+                    LogApplied(plan.AppId, entry, createdId);
                     break;
                 case AssignmentPlanAction.Update:
                     await _graphClient.UpdateAssignmentAsync(plan.AppId, RequireCurrent(entry), RequireDesired(entry), cancellationToken).ConfigureAwait(false);
+                    LogApplied(plan.AppId, entry, RequireCurrentId(entry));
                     break;
                 case AssignmentPlanAction.Remove:
-                    await _graphClient.DeleteAssignmentAsync(plan.AppId, RequireCurrentId(entry), cancellationToken).ConfigureAwait(false);
+                    var removedId = RequireCurrentId(entry);
+                    await _graphClient.DeleteAssignmentAsync(plan.AppId, removedId, cancellationToken).ConfigureAwait(false);
+                    LogApplied(plan.AppId, entry, removedId);
                     break;
                 case AssignmentPlanAction.Keep:
                     break;
@@ -86,6 +90,17 @@ public sealed class AssignmentService : IAssignmentService
 
     private static string RequireCurrentId(AssignmentPlanEntry entry)
         => RequireCurrent(entry).Id ?? throw new AssignmentPlanningException($"Assignment plan entry '{entry.Action}' for target '{entry.Key}' has no current assignment id.");
+
+    /// <summary>Logs the outcome of a successful Graph write, keyed by target (group id or built-in target).</summary>
+    private void LogApplied(string appId, AssignmentPlanEntry entry, string assignmentId)
+    {
+        _logger.LogInformation(
+            "Assignment {Action} applied for app {AppId}: target={Target} assignmentId={AssignmentId}",
+            entry.Action.ToString().ToLowerInvariant(),
+            appId,
+            entry.Key,
+            assignmentId);
+    }
 
     private void LogPlanEntry(string appId, AssignmentPlanEntry entry)
     {
