@@ -1,4 +1,4 @@
-# Troubleshooting guide
+# トラブルシューティングガイド
 
 このガイドは、Relaypublisher の production failure と recovery path をまとめたものです。
 
@@ -11,8 +11,8 @@ Relaypublisher は management metadata を JSON として Intune app の `notes`
 期待される recovery path:
 
 1. Manifest の `DisplayName` が同じままであることを確認します。
-2. Repository に対して `validate` を実行し、`DisplayName` が一意であることを確認します。
-3. 対象 manifest に対して `publish --dry-run` を実行します。
+2. Full manifest root に対して `plan` を実行し、続けて `validate --manifest-list` で repository-wide の `DisplayName` 一意性を確認します。
+3. 対象 manifest に対して `publish --dry-run` を実行します。Full batch を確認する場合は同じ manifest list を使います。
 4. `DisplayName` に一致する Intune app が 1 件だけであれば、Relaypublisher は DisplayName fallback で解決します。
 5. 次の実 publish で、Relaypublisher は fresh management metadata を `notes` に書き戻して app を adopt します。
 
@@ -20,7 +20,10 @@ Commands:
 
 ```powershell
 dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  validate --manifest <manifest-path>
+  plan --manifest-root manifests --output manifest-list.json
+
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
+  validate --manifest-list manifest-list.json
 
 dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
   publish --manifest <manifest-path> --package-dir ./out `
@@ -29,7 +32,10 @@ dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
 
 ```bash
 dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  validate --manifest <manifest-path>
+  plan --manifest-root manifests --output manifest-list.json
+
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
+  validate --manifest-list manifest-list.json
 
 dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
   publish --manifest <manifest-path> --package-dir ./out \

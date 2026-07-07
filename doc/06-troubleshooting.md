@@ -11,8 +11,8 @@ Relaypublisher stores management metadata as JSON in the Intune app `notes` fiel
 Expected recovery path:
 
 1. Confirm the manifest still has the same `DisplayName`.
-2. Run `validate` for the repository to confirm `DisplayName` is unique.
-3. Run `publish --dry-run` for the affected manifest.
+2. Run `plan` for the full manifest root and then `validate --manifest-list` to confirm repository-wide `DisplayName` uniqueness.
+3. Run `publish --dry-run` for the affected manifest, or use the same manifest list when checking the full batch.
 4. If exactly one Intune app matches the `DisplayName`, Relaypublisher resolves it through DisplayName fallback.
 5. On the next real `publish`, Relaypublisher adopts the app by writing fresh management metadata back to `notes`.
 
@@ -20,7 +20,10 @@ Commands:
 
 ```powershell
 dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  validate --manifest <manifest-path>
+  plan --manifest-root manifests --output manifest-list.json
+
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
+  validate --manifest-list manifest-list.json
 
 dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
   publish --manifest <manifest-path> --package-dir ./out `
@@ -29,7 +32,10 @@ dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
 
 ```bash
 dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  validate --manifest <manifest-path>
+  plan --manifest-root manifests --output manifest-list.json
+
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
+  validate --manifest-list manifest-list.json
 
 dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
   publish --manifest <manifest-path> --package-dir ./out \
