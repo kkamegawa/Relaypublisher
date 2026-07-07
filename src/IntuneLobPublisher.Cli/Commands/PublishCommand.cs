@@ -128,7 +128,8 @@ internal static class PublishCommand
         string Outcome,
         string? AppId,
         string? ContentOutcome,
-        string? SkipReason);
+        string? SkipReason,
+        string? ErrorMessage);
 
     private static readonly JsonSerializerOptions ResultJsonOptions = new()
     {
@@ -289,16 +290,33 @@ internal static class PublishCommand
             return;
         }
 
-        var directory = Path.GetDirectoryName(Path.GetFullPath(resultFile));
-        if (!string.IsNullOrEmpty(directory))
+        try
         {
-            Directory.CreateDirectory(directory);
-        }
+            var fullPath = Path.GetFullPath(resultFile);
+            if (Directory.Exists(fullPath))
+            {
+                throw new ResultFileException($"--result-file '{resultFile}' points to a directory; specify a JSON file path.");
+            }
 
-        await using var stream = File.Create(resultFile);
-        await JsonSerializer.SerializeAsync(stream, results, ResultJsonOptions, cancellationToken)
-            .ConfigureAwait(false);
-        await stream.WriteAsync("\n"u8.ToArray(), cancellationToken).ConfigureAwait(false);
+            var directory = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            await using var stream = File.Create(fullPath);
+            await JsonSerializer.SerializeAsync(stream, results, ResultJsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            await stream.WriteAsync("\n"u8.ToArray(), cancellationToken).ConfigureAwait(false);
+        }
+        catch (ResultFileException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        {
+            throw new ResultFileException($"Failed to write --result-file '{resultFile}': {ex.Message}", ex);
+        }
     }
 
     private static PublishResultEntry ToResultEntry(
@@ -313,7 +331,8 @@ internal static class PublishCommand
             ToResultOutcome(result.Outcome),
             result.AppId,
             result.ContentOutcome is null ? null : ToResultContentOutcome(result.ContentOutcome.Value),
-            result.SkipReason);
+            result.SkipReason,
+            null);
 
     private static PublishResultEntry FailedResultEntry(
         PublishEntry entry,
@@ -325,6 +344,7 @@ internal static class PublishCommand
             entry.App.Architecture!,
             manifestRepoRelativePath,
             "failed",
+            null,
             null,
             null,
             error);
