@@ -57,6 +57,12 @@ public static class PublishResultOutput
         CancellationToken cancellationToken)
     {
         var fullPath = Path.GetFullPath(resultFilePath);
+        if (Directory.Exists(fullPath))
+        {
+            throw new PublishResultOutputException(
+                $"Result file '{resultFilePath}' points to a directory; specify a JSON file path.");
+        }
+
         var directory = Path.GetDirectoryName(fullPath);
         if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
         {

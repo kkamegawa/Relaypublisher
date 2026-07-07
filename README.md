@@ -1,52 +1,79 @@
 # Relaypublisher
 
-Relaypublisher は、winget 風の YAML manifest を Git に commit すると、CI が Microsoft Intune の LOB アプリを登録・更新するためのプロジェクトです。
+Relaypublisher publishes winget-like YAML manifests as Microsoft Intune LOB apps from CI.
 
-現時点では **設計ドキュメントと実装 Issue が中心**で、実装は `doc/issues/` の順に進める前提になっています。
+The repository now contains the .NET CLI foundation for the normal workflow:
 
-## このリポジトリでできること
+- `validate` checks manifest schema rules and repository-wide identity uniqueness.
+- `plan` resolves the target manifest set once and writes `manifest-list.json` for later CI jobs.
+- `package` stages Windows Win32 app files and creates `.intunewin` packages on Windows.
+- `publish` creates or updates Intune apps, uploads packaged content, and reconciles assignments.
 
-- Intune LOB 配布の要件・設計判断を一元管理
-- YAML manifest schema と Graph mapping の定義
-- .NET 9 / C# 実装方針の明文化
-- GitHub Actions / Azure Pipelines の CI 設計
-- Copilot/Claude/Agent Skills 向け APM 管理設定
+The Japanese translation is available in [README_ja.md](README_ja.md).
 
-## まず読むべきドキュメント
+## What This Repository Provides
 
-- `doc/00-overview.md` - 要件、基本方針、設計判断（最重要）
-- `doc/01-manifest-schema.md` - YAML schema とサンプル
-- `doc/02-dotnet-architecture.md` - .NET solution / interface 設計
-- `doc/03-ci-github-actions.md` - GitHub Actions 案
-- `doc/04-ci-azure-pipelines.md` - Azure Pipelines 案
+- Centralized design decisions for Intune LOB publishing.
+- YAML manifest schema and Microsoft Graph mapping.
+- .NET 10 / C# CLI implementation.
+- GitHub Actions and Azure Pipelines workflow examples.
+- Operational and troubleshooting guidance for production use.
+- APM configuration for Copilot, Claude, Codex, and Agent Skills.
 
-## 実装の進め方
+## Start Here
 
-実装は `doc/issues/` の Issue をこの順で進めます。
+- [doc/00-overview.md](doc/00-overview.md) - requirements, design principles, and major design decisions.
+- [doc/01-manifest-schema.md](doc/01-manifest-schema.md) - YAML schema and examples.
+- [doc/02-dotnet-architecture.md](doc/02-dotnet-architecture.md) - .NET solution and interface design.
+- [doc/03-ci-github-actions.md](doc/03-ci-github-actions.md) - GitHub Actions workflow.
+- [doc/04-ci-azure-pipelines.md](doc/04-ci-azure-pipelines.md) - Azure Pipelines workflow.
+- [doc/05-operation.md](doc/05-operation.md) - operational setup and daily commands.
+- [doc/06-troubleshooting.md](doc/06-troubleshooting.md) - recovery and failure handling.
 
-1. `doc/issues/issue-001-dotnet-cli-foundation.md`
-2. `doc/issues/issue-002-intunewinapputil.md`
-3. `doc/issues/issue-003-intune-graph-win32.md`
-4. `doc/issues/issue-004-assignment-merge.md`
-5. `doc/issues/issue-005-source-providers.md`
+Japanese translations are provided with the `_ja` postfix, for example [doc/05-operation_ja.md](doc/05-operation_ja.md).
 
-## 重要な前提
+## Basic CLI Flow
 
-- 設計の正本は `doc/00`〜`04` と `doc/issues/`
-- `doc/99-full-conversation-summary.md` は歴史的記録（最新設計ではない）
-- `doc/intune-lob-publisher-design-and-copilot-issues.md` は分割版へのポインタ
+```powershell
+dotnet build IntuneLobPublisher.slnx --configuration Release
+dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
 
-## APM 管理（Copilot / Claude / Codex / Agent Skills）
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
+  plan --base-ref <base-ref> --output manifest-list.json
 
-このリポジトリは APM で skill / agent / MCP server を管理しています。
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
+  validate --manifest-list manifest-list.json
+
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
+  package --manifest-list manifest-list.json --output ./out
+
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
+  publish --manifest-list manifest-list.json --package-dir ./out --expected-tenant <tenant-id>
+```
+
+For bash, use the same arguments with line continuations changed to `\`.
+
+## Important Invariants
+
+- The authoritative design sources are `doc/00` through `doc/04` and `doc/issues/`.
+- `doc/99-full-conversation-summary.md` is historical context and can differ from the current design.
+- `doc/intune-lob-publisher-design-and-copilot-issues.md` is only a pointer to split documents.
+- App identity is `PackageIdentifier + Platform + Architecture`.
+- Management metadata is stored in the Intune app `notes` field.
+- Changed manifest detection is resolved once by `plan` and passed through CI as `manifest-list.json`.
+- Publishing should always use `--expected-tenant` in production.
+
+## APM Management
+
+This repository uses APM to manage skills, agents, and MCP server configuration.
 
 - manifest: `apm.yml`
-- lockfile: `apm.lock.yaml`
+- lock file: `apm.lock.yaml`
 - skills: `.agents/skills/`
 - agents: `.claude/agents/`, `.github/agents/`, `.codex/agents/`
-- Codex 設定: `.codex/`（`config.toml`, hooks, agents）
-- MCP config: `.mcp.json`
+- Codex configuration: `.codex/`
+- MCP configuration: `.mcp.json`
 
-## ライセンス
+## License
 
-MIT License. 詳細は [LICENSE](LICENSE) を参照してください。
+MIT License. See [LICENSE](LICENSE) for details.

@@ -40,7 +40,7 @@ internal static class PublishCommand
         };
         var resultFileOption = new Option<string?>("--result-file")
         {
-            Description = "Writes a machine-readable JSON array with one publish result per app entry.",
+            Description = "Writes a machine-readable JSON array with one result entry per published app entry.",
         };
 
         var command = new Command("publish", "Publishes staged packages to Microsoft Intune.");
@@ -194,17 +194,8 @@ internal static class PublishCommand
 
             try
             {
-                var manifestRepoRelativePath = GetManifestRepoRelativePath(repoRoot, entry.Loaded.Path);
-                var request = new PublishRequest(
-                    entry.Loaded.Manifest,
-                    entry.App,
-                    manifestRepoRelativePath,
-                    repoRoot,
-                    packageDirectory,
-                    sourceCommit,
-                    allowDowngrade,
-                    dryRun);
-
+                var request = CreatePublishRequest(
+                    entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun);
                 var result = await orchestrator.PublishAsync(
                     request,
                     plan => Console.Write(AssignmentPlanFormatter.Format(plan)),
@@ -270,10 +261,11 @@ internal static class PublishCommand
         bool dryRun,
         string message)
     {
-        string manifestRepoRelativePath;
         try
         {
-            manifestRepoRelativePath = GetManifestRepoRelativePath(repoRoot, entry.Loaded.Path);
+            var request = CreatePublishRequest(
+                entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun);
+            resultEntries.Add(PublishResultOutput.FromFailure(request, message));
         }
         catch (PublisherException ex)
         {
@@ -287,22 +279,27 @@ internal static class PublishCommand
                 null,
                 null,
                 $"{message}; additionally failed to resolve manifest path: {ex.Message}"));
-            return;
         }
+    }
 
-        var request = new PublishRequest(
+    private static PublishRequest CreatePublishRequest(
+        PublishEntry entry,
+        string repoRoot,
+        string packageDirectory,
+        string sourceCommit,
+        bool allowDowngrade,
+        bool dryRun)
+        => new(
             entry.Loaded.Manifest,
             entry.App,
-            manifestRepoRelativePath,
+            GetManifestRepoRelativePath(repoRoot, entry.Loaded.Path),
             repoRoot,
             packageDirectory,
             sourceCommit,
             allowDowngrade,
             dryRun);
-        resultEntries.Add(PublishResultOutput.FromFailure(request, message));
-    }
 
-    private static Task WriteResultFileAsync(
+    internal static Task WriteResultFileAsync(
         string? resultFile,
         IReadOnlyList<PublishResultEntry> resultEntries,
         CancellationToken cancellationToken)
@@ -318,6 +315,12 @@ internal static class PublishCommand
         }
 
         var fullPath = Path.GetFullPath(resultFile);
+        if (Directory.Exists(fullPath))
+        {
+            throw new PublishResultOutputException(
+                $"Result file '{resultFile}' points to a directory; specify a JSON file path.");
+        }
+
         var directory = Path.GetDirectoryName(fullPath);
         if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
         {

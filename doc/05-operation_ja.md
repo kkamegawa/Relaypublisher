@@ -1,0 +1,182 @@
+# 運用ガイド
+
+このガイドは、Relaypublisher で Intune LOB app を publish するために必要な初期設定と日常運用をまとめたものです。
+
+正式ドキュメントは英語版の [05-operation.md](05-operation.md) です。
+
+## 1. Microsoft Entra app registration
+
+CI publisher identity 用に Microsoft Entra application registration を 1 つ作成します。
+
+必要な設定:
+
+- Account type: 対象 tenant の single tenant。
+- Microsoft Graph application permission: `DeviceManagementApps.ReadWrite.All`。
+- Admin consent: 初回 production publish 前に tenant administrator が付与します。
+- 推奨 CI setup では client secret は不要です。workload identity federation を使います。
+
+運用メモ:
+
+- Application client ID は CI secret または variable `AZURE_CLIENT_ID` に保存します。
+- Tenant ID は `AZURE_TENANT_ID` に保存します。
+- Azure Blob source を使う場合は subscription ID も `AZURE_SUBSCRIPTION_ID` に保存し、CI identity に package storage scope への read access を付与します。
+- `publish --expected-tenant <tenant-id>` を使い、誤った tenant の token では write 前に fail させます。
+
+## 2. Federated credentials
+
+Federated credential により、CI は runner が発行した OIDC token を Microsoft identity platform の access token と交換できます。Graph publishing に使う Entra app registration に設定します。
+
+Federated credential には Microsoft 推奨の token exchange audience を使います。issuer と subject は完全一致が必要で、wildcard matching はサポートされません。
+
+### GitHub Actions
+
+GitHub Actions federated credential は protected production environment に限定します。
+
+推奨 subject 形式:
+
+```text
+repo:<owner>/<repo>:environment:production
+```
+
+必要な workflow 設定:
+
+- publish job に `permissions: id-token: write` を付けます。
+- publish job に `environment: production` を設定します。
+- workflow から Azure login action に `AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、`AZURE_SUBSCRIPTION_ID` を渡します。
+- Pull request job には `id-token: write` や production secrets を渡しません。
+
+Packaging 中に `azureBlob` source を使う場合、Windows package job でも OIDC login と storage reader role が必要です。
+
+### Azure Pipelines
+
+Workload identity federation を設定した Azure Resource Manager service connection を使います。
+
+推奨 setup:
+
+- Service connection を workload identity federation で作成、または変換します。
+- Project policy が要求しない限り、全 pipeline への broad access は付与しません。
+- Intune app を publish する pipeline のみ authorize します。
+- `production` environment に Exclusive Lock check を設定し、publish run を直列化します。
+- Protected variable group から `<tenant-id>` を渡し、`publish --expected-tenant` で使います。
+
+## 3. Source provider environment variables
+
+Source provider の認証は、manifest item ごとの `Auth` block で制御します。
+
+| Source type | `Auth.Type` | 必須 environment variable | Notes |
+|---|---|---|---|
+| `publicHttp` | omitted または `none` | なし | Anonymous download です。 |
+| `githubRelease` | `token` | `Auth.SecretName` の値。通常は `GH_RELEASE_PAT` | 同じ名前の environment variable から token を読みます。 |
+| `azureBlob` | `workloadIdentity` | `AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、CI OIDC variables | Federated CI identity で access します。 |
+
+Manifest fragment の例:
+
+```yaml
+ExternalFiles:
+  - Type: githubRelease
+    Owner: <owner>
+    Repository: <repository>
+    Tag: <tag>
+    AssetName: <asset-name>
+    Destination: bin/app.exe
+    Sha256: "<sha256>"
+    Auth:
+      Type: token
+      SecretName: GH_RELEASE_PAT
+```
+
+CI では secret を正確に同じ environment variable name に map します。
+
+```powershell
+$env:GH_RELEASE_PAT = "<token>"
+```
+
+```bash
+export GH_RELEASE_PAT="<token>"
+```
+
+## 4. 日常コマンド
+
+Publish 前に build と test を実行します。
+
+```powershell
+dotnet build IntuneLobPublisher.slnx --configuration Release
+dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
+```
+
+```bash
+dotnet build IntuneLobPublisher.slnx --configuration Release
+dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
+```
+
+Manifest set を一度だけ確定します。
+
+```powershell
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
+  plan --base-ref <base-ref> --output manifest-list.json
+```
+
+```bash
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
+  plan --base-ref <base-ref> --output manifest-list.json
+```
+
+選択された manifest を validate します。
+
+```powershell
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
+  validate --manifest-list manifest-list.json
+```
+
+```bash
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
+  validate --manifest-list manifest-list.json
+```
+
+Windows 上で Windows Win32 app を package します。
+
+```powershell
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
+  package --manifest-list manifest-list.json --output ./out
+```
+
+Windows 以外の runner では staging validation 用に `--stage-only` を使います。
+
+```bash
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
+  package --manifest-list manifest-list.json --output ./out --stage-only
+```
+
+Intune に write せず publish changes を確認します。
+
+```powershell
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
+  publish --manifest-list manifest-list.json --package-dir ./out `
+  --expected-tenant <tenant-id> --dry-run
+```
+
+Intune に publish します。
+
+```bash
+dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
+  publish --manifest-list manifest-list.json --package-dir ./out \
+  --expected-tenant <tenant-id>
+```
+
+## 5. Exit codes
+
+| Exit code | 意味 | Operator action |
+|---|---|---|
+| `0` | Command が成功しました。 | CI workflow を続行します。 |
+| `1` | Validation、packaging、authentication、tenant、Graph、publish のいずれかが失敗しました。 | Error message を読み、manifest または environment を修正して rerun します。 |
+| `2` | 未実装 command path 用の予約値です。 | Operator retry ではなく tool implementation gap として扱います。 |
+
+## 6. Production checklist
+
+- Full repository で `validate` が成功している。
+- `plan` output を `manifest-list.json` として保存し、後続 job で再利用している。
+- Package job が changed manifests を再計算していない。
+- Publish job が protected environment と serialized execution で実行される。
+- `publish` が常に `--expected-tenant` を使っている。
+- GitHub release token などの source provider secrets は、必要な job にだけ渡している。
+- Authorization header、token、signed package URI、secret value を log や artifact に出していない。
