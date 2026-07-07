@@ -38,6 +38,10 @@ internal static class PublishCommand
         {
             Description = "Commit SHA recorded in management metadata. Defaults to GITHUB_SHA or BUILD_SOURCEVERSION.",
         };
+        var resultFileOption = new Option<string?>("--result-file")
+        {
+            Description = "Writes a machine-readable JSON array with one publish result per app entry.",
+        };
 
         var command = new Command("publish", "Publishes staged packages to Microsoft Intune.");
         command.Options.Add(manifestOption);
@@ -48,6 +52,7 @@ internal static class PublishCommand
         command.Options.Add(allowDowngradeOption);
         command.Options.Add(dryRunOption);
         command.Options.Add(sourceCommitOption);
+        command.Options.Add(resultFileOption);
         command.Options.Add(verboseOption);
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -55,12 +60,14 @@ internal static class PublishCommand
             try
             {
                 var repoRoot = parseResult.GetValue(repoRootOption)!;
+                var resultFile = parseResult.GetValue(resultFileOption);
                 var files = CommandSupport.ResolveManifestInputs(
                     repoRoot,
                     parseResult.GetValue(manifestOption) ?? [],
                     parseResult.GetValue(manifestListOption));
                 if (files.Count == 0)
                 {
+                    await WriteResultFileAsync(resultFile, [], cancellationToken);
                     Console.WriteLine("No manifests to publish.");
                     return ExitCodes.Success;
                 }
@@ -74,9 +81,12 @@ internal static class PublishCommand
                 var entries = SelectHighestVersions(manifests);
                 if (entries.Count == 0)
                 {
+                    await WriteResultFileAsync(resultFile, [], cancellationToken);
                     Console.WriteLine("No app entries to publish.");
                     return ExitCodes.Success;
                 }
+
+                ValidateResultFileDirectory(resultFile);
 
                 var graphOptions = new GraphClientOptions
                 {
@@ -95,7 +105,7 @@ internal static class PublishCommand
 
                 return await PublishEntriesAsync(
                     composition.Orchestrator, entries, repoRoot, packageDirectory,
-                    sourceCommit, allowDowngrade, dryRun, cancellationToken);
+                    sourceCommit, allowDowngrade, dryRun, resultFile, cancellationToken);
             }
             catch (PublisherException ex)
             {
@@ -169,33 +179,37 @@ internal static class PublishCommand
         string sourceCommit,
         bool allowDowngrade,
         bool dryRun,
+        string? resultFile,
         CancellationToken cancellationToken)
     {
         var published = 0;
         var skippedDowngrade = 0;
         var skippedPlatform = 0;
         var failed = 0;
+        var resultEntries = new List<PublishResultEntry>();
 
         foreach (var entry in entries)
         {
             var label = $"{entry.Loaded.Manifest.PackageIdentifier} {entry.App.Platform}-{entry.App.Architecture}";
-            var manifestRepoRelativePath = GetManifestRepoRelativePath(repoRoot, entry.Loaded.Path);
-            var request = new PublishRequest(
-                entry.Loaded.Manifest,
-                entry.App,
-                manifestRepoRelativePath,
-                repoRoot,
-                packageDirectory,
-                sourceCommit,
-                allowDowngrade,
-                dryRun);
 
             try
             {
+                var manifestRepoRelativePath = GetManifestRepoRelativePath(repoRoot, entry.Loaded.Path);
+                var request = new PublishRequest(
+                    entry.Loaded.Manifest,
+                    entry.App,
+                    manifestRepoRelativePath,
+                    repoRoot,
+                    packageDirectory,
+                    sourceCommit,
+                    allowDowngrade,
+                    dryRun);
+
                 var result = await orchestrator.PublishAsync(
                     request,
                     plan => Console.Write(AssignmentPlanFormatter.Format(plan)),
                     cancellationToken);
+                resultEntries.Add(PublishResultOutput.FromResult(request, result));
 
                 switch (result.Outcome)
                 {
@@ -218,25 +232,98 @@ internal static class PublishCommand
             }
             catch (TenantMismatchException ex)
             {
+                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
+                await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
                 Console.Error.WriteLine($"error: {ex.Message}");
                 return ExitCodes.Failure;
             }
             catch (Azure.Identity.AuthenticationFailedException ex)
             {
-                Console.Error.WriteLine($"error: Graph authentication failed: {ex.Message}");
+                var message = $"Graph authentication failed: {ex.Message}";
+                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, message);
+                await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
+                Console.Error.WriteLine($"error: {message}");
                 return ExitCodes.Failure;
             }
             catch (PublisherException ex)
             {
                 failed++;
+                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
                 Console.Error.WriteLine($"error: {label}: {ex.Message}");
             }
         }
 
+        await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
         Console.WriteLine(
             $"{published} published, {skippedDowngrade} skipped (downgrade), " +
             $"{skippedPlatform} skipped (platform), {failed} failed.");
         return failed == 0 ? ExitCodes.Success : ExitCodes.Failure;
+    }
+
+    private static void AddFailureResult(
+        List<PublishResultEntry> resultEntries,
+        PublishEntry entry,
+        string repoRoot,
+        string packageDirectory,
+        string sourceCommit,
+        bool allowDowngrade,
+        bool dryRun,
+        string message)
+    {
+        string manifestRepoRelativePath;
+        try
+        {
+            manifestRepoRelativePath = GetManifestRepoRelativePath(repoRoot, entry.Loaded.Path);
+        }
+        catch (PublisherException ex)
+        {
+            resultEntries.Add(new PublishResultEntry(
+                entry.Loaded.Manifest.PackageIdentifier ?? "",
+                entry.Loaded.Manifest.PackageVersion ?? "",
+                entry.App.Platform ?? "",
+                entry.App.Architecture ?? "",
+                entry.Loaded.Path.Replace('\\', '/'),
+                "failed",
+                null,
+                null,
+                $"{message}; additionally failed to resolve manifest path: {ex.Message}"));
+            return;
+        }
+
+        var request = new PublishRequest(
+            entry.Loaded.Manifest,
+            entry.App,
+            manifestRepoRelativePath,
+            repoRoot,
+            packageDirectory,
+            sourceCommit,
+            allowDowngrade,
+            dryRun);
+        resultEntries.Add(PublishResultOutput.FromFailure(request, message));
+    }
+
+    private static Task WriteResultFileAsync(
+        string? resultFile,
+        IReadOnlyList<PublishResultEntry> resultEntries,
+        CancellationToken cancellationToken)
+        => string.IsNullOrWhiteSpace(resultFile)
+            ? Task.CompletedTask
+            : PublishResultOutput.WriteAsync(resultFile, resultEntries, cancellationToken);
+
+    private static void ValidateResultFileDirectory(string? resultFile)
+    {
+        if (string.IsNullOrWhiteSpace(resultFile))
+        {
+            return;
+        }
+
+        var fullPath = Path.GetFullPath(resultFile);
+        var directory = Path.GetDirectoryName(fullPath);
+        if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
+        {
+            throw new PublishResultOutputException(
+                $"Result file directory '{directory ?? resultFile}' does not exist.");
+        }
     }
 
     private static string GetManifestRepoRelativePath(string repoRoot, string manifestPath)

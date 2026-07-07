@@ -223,6 +223,20 @@ public sealed class AssignmentPlanningException : PublisherException
     }
 }
 
+/// <summary>Writing the publish result JSON file failed before or after publishing entries.</summary>
+public sealed class PublishResultOutputException : PublisherException
+{
+    public PublishResultOutputException(string message)
+        : base(message)
+    {
+    }
+
+    public PublishResultOutputException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}
+
 /// <summary>A Microsoft Graph call failed after retries. Carries the request ids Graph returns for support/troubleshooting.</summary>
 public sealed class GraphRequestException : PublisherException
 {
