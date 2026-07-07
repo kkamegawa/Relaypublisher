@@ -1,4 +1,6 @@
 using System.CommandLine;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Publishing;
@@ -38,6 +40,10 @@ internal static class PublishCommand
         {
             Description = "Commit SHA recorded in management metadata. Defaults to GITHUB_SHA or BUILD_SOURCEVERSION.",
         };
+        var resultFileOption = new Option<string?>("--result-file")
+        {
+            Description = "Writes a machine-readable JSON array with one result entry per published app entry.",
+        };
 
         var command = new Command("publish", "Publishes staged packages to Microsoft Intune.");
         command.Options.Add(manifestOption);
@@ -48,6 +54,7 @@ internal static class PublishCommand
         command.Options.Add(allowDowngradeOption);
         command.Options.Add(dryRunOption);
         command.Options.Add(sourceCommitOption);
+        command.Options.Add(resultFileOption);
         command.Options.Add(verboseOption);
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -59,15 +66,18 @@ internal static class PublishCommand
                     repoRoot,
                     parseResult.GetValue(manifestOption) ?? [],
                     parseResult.GetValue(manifestListOption));
+                var resultFile = parseResult.GetValue(resultFileOption);
                 if (files.Count == 0)
                 {
                     Console.WriteLine("No manifests to publish.");
+                    await WriteResultFileAsync(resultFile, [], cancellationToken);
                     return ExitCodes.Success;
                 }
 
                 var (manifests, errors) = await CommandSupport.LoadAndValidateAsync(services, files, cancellationToken);
                 if (errors.Count > 0)
                 {
+                    await WriteResultFileAsync(resultFile, [], cancellationToken);
                     return CommandSupport.ReportErrors(errors);
                 }
 
@@ -75,6 +85,7 @@ internal static class PublishCommand
                 if (entries.Count == 0)
                 {
                     Console.WriteLine("No app entries to publish.");
+                    await WriteResultFileAsync(resultFile, [], cancellationToken);
                     return ExitCodes.Success;
                 }
 
@@ -95,7 +106,7 @@ internal static class PublishCommand
 
                 return await PublishEntriesAsync(
                     composition.Orchestrator, entries, repoRoot, packageDirectory,
-                    sourceCommit, allowDowngrade, dryRun, cancellationToken);
+                    sourceCommit, allowDowngrade, dryRun, resultFile, cancellationToken);
             }
             catch (PublisherException ex)
             {
@@ -108,6 +119,24 @@ internal static class PublishCommand
     }
 
     private sealed record PublishEntry(IntuneLobPublisher.Core.Validation.LoadedManifest Loaded, AppManifest App);
+
+    internal sealed record PublishResultEntry(
+        string PackageIdentifier,
+        string Platform,
+        string Architecture,
+        string ManifestPath,
+        string Outcome,
+        string? AppId,
+        string? ContentOutcome,
+        string? SkipReason,
+        string? ErrorMessage);
+
+    private static readonly JsonSerializerOptions ResultJsonOptions = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true,
+    };
 
     /// <summary>
     /// When several manifests target the same app identity, only the highest PackageVersion is
@@ -169,12 +198,14 @@ internal static class PublishCommand
         string sourceCommit,
         bool allowDowngrade,
         bool dryRun,
+        string? resultFile,
         CancellationToken cancellationToken)
     {
         var published = 0;
         var skippedDowngrade = 0;
         var skippedPlatform = 0;
         var failed = 0;
+        var results = new List<PublishResultEntry>();
 
         foreach (var entry in entries)
         {
@@ -202,42 +233,139 @@ internal static class PublishCommand
                     case PublishOutcome.Published:
                         published++;
                         Console.WriteLine($"Published {label} -> app {result.AppId} (content: {result.ContentOutcome}).");
+                        results.Add(ToResultEntry(entry, manifestRepoRelativePath, result));
                         break;
                     case PublishOutcome.DryRunCompleted:
                         Console.WriteLine($"[dry-run] {label} -> app {result.AppId ?? PublishOrchestrator.NewAppPlaceholderId}.");
+                        results.Add(ToResultEntry(entry, manifestRepoRelativePath, result));
                         break;
                     case PublishOutcome.SkippedDowngrade:
                         skippedDowngrade++;
                         Console.WriteLine($"Skipped {label}: {result.SkipReason}");
+                        results.Add(ToResultEntry(entry, manifestRepoRelativePath, result));
                         break;
                     case PublishOutcome.SkippedPlatformNotSupported:
                         skippedPlatform++;
                         Console.WriteLine($"Skipped {label}: {result.SkipReason}");
+                        results.Add(ToResultEntry(entry, manifestRepoRelativePath, result));
                         break;
                 }
             }
             catch (TenantMismatchException ex)
             {
                 Console.Error.WriteLine($"error: {ex.Message}");
+                results.Add(FailedResultEntry(entry, manifestRepoRelativePath, ex.Message));
+                await WriteResultFileAsync(resultFile, results, cancellationToken);
                 return ExitCodes.Failure;
             }
             catch (Azure.Identity.AuthenticationFailedException ex)
             {
                 Console.Error.WriteLine($"error: Graph authentication failed: {ex.Message}");
+                results.Add(FailedResultEntry(entry, manifestRepoRelativePath, $"Graph authentication failed: {ex.Message}"));
+                await WriteResultFileAsync(resultFile, results, cancellationToken);
                 return ExitCodes.Failure;
             }
             catch (PublisherException ex)
             {
                 failed++;
                 Console.Error.WriteLine($"error: {label}: {ex.Message}");
+                results.Add(FailedResultEntry(entry, manifestRepoRelativePath, ex.Message));
             }
         }
 
         Console.WriteLine(
             $"{published} published, {skippedDowngrade} skipped (downgrade), " +
             $"{skippedPlatform} skipped (platform), {failed} failed.");
+        await WriteResultFileAsync(resultFile, results, cancellationToken);
         return failed == 0 ? ExitCodes.Success : ExitCodes.Failure;
     }
+
+    internal static async Task WriteResultFileAsync(
+        string? resultFile,
+        IReadOnlyList<PublishResultEntry> results,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(resultFile))
+        {
+            return;
+        }
+
+        try
+        {
+            var fullPath = Path.GetFullPath(resultFile);
+            if (Directory.Exists(fullPath))
+            {
+                throw new ResultFileException($"--result-file '{resultFile}' points to a directory; specify a JSON file path.");
+            }
+
+            var directory = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            await using var stream = File.Create(fullPath);
+            await JsonSerializer.SerializeAsync(stream, results, ResultJsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            await stream.WriteAsync("\n"u8.ToArray(), cancellationToken).ConfigureAwait(false);
+        }
+        catch (ResultFileException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        {
+            throw new ResultFileException($"Failed to write --result-file '{resultFile}': {ex.Message}", ex);
+        }
+    }
+
+    private static PublishResultEntry ToResultEntry(
+        PublishEntry entry,
+        string manifestRepoRelativePath,
+        PublishResult result)
+        => new(
+            entry.Loaded.Manifest.PackageIdentifier!,
+            entry.App.Platform!,
+            entry.App.Architecture!,
+            manifestRepoRelativePath,
+            ToResultOutcome(result.Outcome),
+            result.AppId,
+            result.ContentOutcome is null ? null : ToResultContentOutcome(result.ContentOutcome.Value),
+            result.SkipReason,
+            null);
+
+    private static PublishResultEntry FailedResultEntry(
+        PublishEntry entry,
+        string manifestRepoRelativePath,
+        string error)
+        => new(
+            entry.Loaded.Manifest.PackageIdentifier!,
+            entry.App.Platform!,
+            entry.App.Architecture!,
+            manifestRepoRelativePath,
+            "failed",
+            null,
+            null,
+            null,
+            error);
+
+    private static string ToResultOutcome(PublishOutcome outcome)
+        => outcome switch
+        {
+            PublishOutcome.Published => "published",
+            PublishOutcome.DryRunCompleted => "dry-run",
+            PublishOutcome.SkippedDowngrade => "skipped-downgrade",
+            PublishOutcome.SkippedPlatformNotSupported => "skipped-platform",
+            _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, null),
+        };
+
+    private static string ToResultContentOutcome(ContentUploadOutcome outcome)
+        => outcome switch
+        {
+            ContentUploadOutcome.Uploaded => "uploaded",
+            ContentUploadOutcome.SkippedUnchanged => "skipped-unchanged",
+            _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, null),
+        };
 
     private static string GetManifestRepoRelativePath(string repoRoot, string manifestPath)
     {

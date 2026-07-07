@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\IntuneLobPublisher.Core\IntuneLobPublisher.Core.csproj" />
+    <ProjectReference Include="..\..\src\IntuneLobPublisher.Cli\IntuneLobPublisher.Cli.csproj" />
   </ItemGroup>
 
 </Project>

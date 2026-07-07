@@ -101,6 +101,20 @@ public sealed class UnsafePathException : PublisherException
     }
 }
 
+/// <summary>The CLI could not write a requested machine-readable result file.</summary>
+public sealed class ResultFileException : PublisherException
+{
+    public ResultFileException(string message)
+        : base(message)
+    {
+    }
+
+    public ResultFileException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}
+
 /// <summary>The acquired Graph token's `tid` claim does not match `--expected-tenant`. Thrown before any write.</summary>
 public sealed class TenantMismatchException : PublisherException
 {
