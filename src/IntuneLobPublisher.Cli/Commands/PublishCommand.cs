@@ -1,6 +1,4 @@
 using System.CommandLine;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Publishing;
@@ -62,15 +60,15 @@ internal static class PublishCommand
             try
             {
                 var repoRoot = parseResult.GetValue(repoRootOption)!;
+                var resultFile = parseResult.GetValue(resultFileOption);
                 var files = CommandSupport.ResolveManifestInputs(
                     repoRoot,
                     parseResult.GetValue(manifestOption) ?? [],
                     parseResult.GetValue(manifestListOption));
-                var resultFile = parseResult.GetValue(resultFileOption);
                 if (files.Count == 0)
                 {
-                    Console.WriteLine("No manifests to publish.");
                     await WriteResultFileAsync(resultFile, [], cancellationToken);
+                    Console.WriteLine("No manifests to publish.");
                     return ExitCodes.Success;
                 }
 
@@ -84,10 +82,12 @@ internal static class PublishCommand
                 var entries = SelectHighestVersions(manifests);
                 if (entries.Count == 0)
                 {
-                    Console.WriteLine("No app entries to publish.");
                     await WriteResultFileAsync(resultFile, [], cancellationToken);
+                    Console.WriteLine("No app entries to publish.");
                     return ExitCodes.Success;
                 }
+
+                ValidateResultFileDirectory(resultFile);
 
                 var graphOptions = new GraphClientOptions
                 {
@@ -119,24 +119,6 @@ internal static class PublishCommand
     }
 
     private sealed record PublishEntry(IntuneLobPublisher.Core.Validation.LoadedManifest Loaded, AppManifest App);
-
-    internal sealed record PublishResultEntry(
-        string PackageIdentifier,
-        string Platform,
-        string Architecture,
-        string ManifestPath,
-        string Outcome,
-        string? AppId,
-        string? ContentOutcome,
-        string? SkipReason,
-        string? ErrorMessage);
-
-    private static readonly JsonSerializerOptions ResultJsonOptions = new()
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-    };
 
     /// <summary>
     /// When several manifests target the same app identity, only the highest PackageVersion is
@@ -205,167 +187,136 @@ internal static class PublishCommand
         var skippedDowngrade = 0;
         var skippedPlatform = 0;
         var failed = 0;
-        var results = new List<PublishResultEntry>();
+        var resultEntries = new List<PublishResultEntry>();
 
         foreach (var entry in entries)
         {
             var label = $"{entry.Loaded.Manifest.PackageIdentifier} {entry.App.Platform}-{entry.App.Architecture}";
-            var manifestRepoRelativePath = GetManifestRepoRelativePath(repoRoot, entry.Loaded.Path);
-            var request = new PublishRequest(
-                entry.Loaded.Manifest,
-                entry.App,
-                manifestRepoRelativePath,
-                repoRoot,
-                packageDirectory,
-                sourceCommit,
-                allowDowngrade,
-                dryRun);
 
             try
             {
+                var request = CreatePublishRequest(
+                    entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun);
                 var result = await orchestrator.PublishAsync(
                     request,
                     plan => Console.Write(AssignmentPlanFormatter.Format(plan)),
                     cancellationToken);
+                resultEntries.Add(PublishResultOutput.FromResult(request, result));
 
                 switch (result.Outcome)
                 {
                     case PublishOutcome.Published:
                         published++;
                         Console.WriteLine($"Published {label} -> app {result.AppId} (content: {result.ContentOutcome}).");
-                        results.Add(ToResultEntry(entry, manifestRepoRelativePath, result));
                         break;
                     case PublishOutcome.DryRunCompleted:
                         Console.WriteLine($"[dry-run] {label} -> app {result.AppId ?? PublishOrchestrator.NewAppPlaceholderId}.");
-                        results.Add(ToResultEntry(entry, manifestRepoRelativePath, result));
                         break;
                     case PublishOutcome.SkippedDowngrade:
                         skippedDowngrade++;
                         Console.WriteLine($"Skipped {label}: {result.SkipReason}");
-                        results.Add(ToResultEntry(entry, manifestRepoRelativePath, result));
                         break;
                     case PublishOutcome.SkippedPlatformNotSupported:
                         skippedPlatform++;
                         Console.WriteLine($"Skipped {label}: {result.SkipReason}");
-                        results.Add(ToResultEntry(entry, manifestRepoRelativePath, result));
                         break;
                 }
             }
             catch (TenantMismatchException ex)
             {
+                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
+                await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
                 Console.Error.WriteLine($"error: {ex.Message}");
-                results.Add(FailedResultEntry(entry, manifestRepoRelativePath, ex.Message));
-                await WriteResultFileAsync(resultFile, results, cancellationToken);
                 return ExitCodes.Failure;
             }
             catch (Azure.Identity.AuthenticationFailedException ex)
             {
-                Console.Error.WriteLine($"error: Graph authentication failed: {ex.Message}");
-                results.Add(FailedResultEntry(entry, manifestRepoRelativePath, $"Graph authentication failed: {ex.Message}"));
-                await WriteResultFileAsync(resultFile, results, cancellationToken);
+                var message = $"Graph authentication failed: {ex.Message}";
+                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, message);
+                await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
+                Console.Error.WriteLine($"error: {message}");
                 return ExitCodes.Failure;
             }
             catch (PublisherException ex)
             {
                 failed++;
+                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
                 Console.Error.WriteLine($"error: {label}: {ex.Message}");
-                results.Add(FailedResultEntry(entry, manifestRepoRelativePath, ex.Message));
             }
         }
 
+        await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
         Console.WriteLine(
             $"{published} published, {skippedDowngrade} skipped (downgrade), " +
             $"{skippedPlatform} skipped (platform), {failed} failed.");
-        await WriteResultFileAsync(resultFile, results, cancellationToken);
         return failed == 0 ? ExitCodes.Success : ExitCodes.Failure;
     }
 
-    internal static async Task WriteResultFileAsync(
+    private static void AddFailureResult(
+        List<PublishResultEntry> resultEntries,
+        PublishEntry entry,
+        string repoRoot,
+        string packageDirectory,
+        string sourceCommit,
+        bool allowDowngrade,
+        bool dryRun,
+        string message)
+    {
+        try
+        {
+            var request = CreatePublishRequest(
+                entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun);
+            resultEntries.Add(PublishResultOutput.FromFailure(request, message));
+        }
+        catch (PublisherException ex)
+        {
+            resultEntries.Add(new PublishResultEntry(
+                entry.Loaded.Manifest.PackageIdentifier ?? "",
+                entry.Loaded.Manifest.PackageVersion ?? "",
+                entry.App.Platform ?? "",
+                entry.App.Architecture ?? "",
+                GetBestEffortManifestRepoRelativePath(repoRoot, entry.Loaded.Path),
+                "failed",
+                null,
+                null,
+                $"{message}; additionally failed to resolve manifest path: {ex.Message}"));
+        }
+    }
+
+    private static PublishRequest CreatePublishRequest(
+        PublishEntry entry,
+        string repoRoot,
+        string packageDirectory,
+        string sourceCommit,
+        bool allowDowngrade,
+        bool dryRun)
+        => new(
+            entry.Loaded.Manifest,
+            entry.App,
+            GetManifestRepoRelativePath(repoRoot, entry.Loaded.Path),
+            repoRoot,
+            packageDirectory,
+            sourceCommit,
+            allowDowngrade,
+            dryRun);
+
+    internal static Task WriteResultFileAsync(
         string? resultFile,
-        IReadOnlyList<PublishResultEntry> results,
+        IReadOnlyList<PublishResultEntry> resultEntries,
         CancellationToken cancellationToken)
+        => string.IsNullOrWhiteSpace(resultFile)
+            ? Task.CompletedTask
+            : PublishResultOutput.WriteAsync(resultFile, resultEntries, cancellationToken);
+
+    private static void ValidateResultFileDirectory(string? resultFile)
     {
         if (string.IsNullOrWhiteSpace(resultFile))
         {
             return;
         }
 
-        try
-        {
-            var fullPath = Path.GetFullPath(resultFile);
-            if (Directory.Exists(fullPath))
-            {
-                throw new ResultFileException($"--result-file '{resultFile}' points to a directory; specify a JSON file path.");
-            }
-
-            var directory = Path.GetDirectoryName(fullPath);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            await using var stream = File.Create(fullPath);
-            await JsonSerializer.SerializeAsync(stream, results, ResultJsonOptions, cancellationToken)
-                .ConfigureAwait(false);
-            await stream.WriteAsync("\n"u8.ToArray(), cancellationToken).ConfigureAwait(false);
-        }
-        catch (ResultFileException)
-        {
-            throw;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
-        {
-            throw new ResultFileException($"Failed to write --result-file '{resultFile}': {ex.Message}", ex);
-        }
+        PublishResultOutput.GetValidatedFullPath(resultFile);
     }
-
-    private static PublishResultEntry ToResultEntry(
-        PublishEntry entry,
-        string manifestRepoRelativePath,
-        PublishResult result)
-        => new(
-            entry.Loaded.Manifest.PackageIdentifier!,
-            entry.App.Platform!,
-            entry.App.Architecture!,
-            manifestRepoRelativePath,
-            ToResultOutcome(result.Outcome),
-            result.AppId,
-            result.ContentOutcome is null ? null : ToResultContentOutcome(result.ContentOutcome.Value),
-            result.SkipReason,
-            null);
-
-    private static PublishResultEntry FailedResultEntry(
-        PublishEntry entry,
-        string manifestRepoRelativePath,
-        string error)
-        => new(
-            entry.Loaded.Manifest.PackageIdentifier!,
-            entry.App.Platform!,
-            entry.App.Architecture!,
-            manifestRepoRelativePath,
-            "failed",
-            null,
-            null,
-            null,
-            error);
-
-    private static string ToResultOutcome(PublishOutcome outcome)
-        => outcome switch
-        {
-            PublishOutcome.Published => "published",
-            PublishOutcome.DryRunCompleted => "dry-run",
-            PublishOutcome.SkippedDowngrade => "skipped-downgrade",
-            PublishOutcome.SkippedPlatformNotSupported => "skipped-platform",
-            _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, null),
-        };
-
-    private static string ToResultContentOutcome(ContentUploadOutcome outcome)
-        => outcome switch
-        {
-            ContentUploadOutcome.Uploaded => "uploaded",
-            ContentUploadOutcome.SkippedUnchanged => "skipped-unchanged",
-            _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, null),
-        };
 
     private static string GetManifestRepoRelativePath(string repoRoot, string manifestPath)
     {
@@ -382,5 +333,32 @@ internal static class PublishCommand
         }
 
         return relativePath.Replace('\\', '/');
+    }
+
+    private static string GetBestEffortManifestRepoRelativePath(string repoRoot, string manifestPath)
+    {
+        try
+        {
+            var relativePath = Path.GetRelativePath(
+                    Path.GetFullPath(repoRoot),
+                    Path.GetFullPath(manifestPath));
+            if (!Path.IsPathRooted(relativePath))
+            {
+                return relativePath.Replace('\\', '/');
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+        }
+
+        try
+        {
+            var fileName = Path.GetFileName(manifestPath);
+            return string.IsNullOrWhiteSpace(fileName) ? "unknown" : fileName;
+        }
+        catch (ArgumentException)
+        {
+            return "unknown";
+        }
     }
 }
