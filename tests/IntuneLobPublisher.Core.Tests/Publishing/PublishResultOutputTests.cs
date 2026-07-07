@@ -129,6 +129,15 @@ public sealed class PublishResultOutputTests
         StringAssert.Contains(exception.Message, "does not exist");
     }
 
+    [TestMethod]
+    public async Task WriteAsync_InvalidPath_ThrowsPublisherException()
+    {
+        var exception = await Assert.ThrowsExactlyAsync<PublishResultOutputException>(
+            () => PublishResultOutput.WriteAsync("bad\0path.json", [], CancellationToken.None));
+
+        StringAssert.Contains(exception.Message, "invalid");
+    }
+
     private static PublishRequest CreateRequest()
     {
         var manifest = TestManifests.CreateValid();

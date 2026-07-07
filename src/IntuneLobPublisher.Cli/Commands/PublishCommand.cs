@@ -75,6 +75,7 @@ internal static class PublishCommand
                 var (manifests, errors) = await CommandSupport.LoadAndValidateAsync(services, files, cancellationToken);
                 if (errors.Count > 0)
                 {
+                    await WriteResultFileAsync(resultFile, [], cancellationToken);
                     return CommandSupport.ReportErrors(errors);
                 }
 
@@ -274,7 +275,7 @@ internal static class PublishCommand
                 entry.Loaded.Manifest.PackageVersion ?? "",
                 entry.App.Platform ?? "",
                 entry.App.Architecture ?? "",
-                entry.Loaded.Path.Replace('\\', '/'),
+                GetBestEffortManifestRepoRelativePath(repoRoot, entry.Loaded.Path),
                 "failed",
                 null,
                 null,
@@ -314,19 +315,7 @@ internal static class PublishCommand
             return;
         }
 
-        var fullPath = Path.GetFullPath(resultFile);
-        if (Directory.Exists(fullPath))
-        {
-            throw new PublishResultOutputException(
-                $"Result file '{resultFile}' points to a directory; specify a JSON file path.");
-        }
-
-        var directory = Path.GetDirectoryName(fullPath);
-        if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
-        {
-            throw new PublishResultOutputException(
-                $"Result file directory '{directory ?? resultFile}' does not exist.");
-        }
+        PublishResultOutput.GetValidatedFullPath(resultFile);
     }
 
     private static string GetManifestRepoRelativePath(string repoRoot, string manifestPath)
@@ -344,5 +333,32 @@ internal static class PublishCommand
         }
 
         return relativePath.Replace('\\', '/');
+    }
+
+    private static string GetBestEffortManifestRepoRelativePath(string repoRoot, string manifestPath)
+    {
+        try
+        {
+            var relativePath = Path.GetRelativePath(
+                    Path.GetFullPath(repoRoot),
+                    Path.GetFullPath(manifestPath));
+            if (!Path.IsPathRooted(relativePath))
+            {
+                return relativePath.Replace('\\', '/');
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+        }
+
+        try
+        {
+            var fileName = Path.GetFileName(manifestPath);
+            return string.IsNullOrWhiteSpace(fileName) ? "unknown" : fileName;
+        }
+        catch (ArgumentException)
+        {
+            return "unknown";
+        }
     }
 }

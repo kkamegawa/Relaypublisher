@@ -56,7 +56,30 @@ public static class PublishResultOutput
         IReadOnlyList<PublishResultEntry> entries,
         CancellationToken cancellationToken)
     {
-        var fullPath = Path.GetFullPath(resultFilePath);
+        var fullPath = GetValidatedFullPath(resultFilePath);
+
+        try
+        {
+            await File.WriteAllTextAsync(fullPath, Serialize(entries), cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            throw new PublishResultOutputException($"Failed to write publish result file '{resultFilePath}'.", ex);
+        }
+    }
+
+    public static string GetValidatedFullPath(string resultFilePath)
+    {
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(resultFilePath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            throw new PublishResultOutputException($"Result file path '{resultFilePath}' is invalid.", ex);
+        }
+
         if (Directory.Exists(fullPath))
         {
             throw new PublishResultOutputException(
@@ -70,14 +93,7 @@ public static class PublishResultOutput
                 $"Result file directory '{directory ?? resultFilePath}' does not exist.");
         }
 
-        try
-        {
-            await File.WriteAllTextAsync(fullPath, Serialize(entries), cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            throw new PublishResultOutputException($"Failed to write publish result file '{resultFilePath}'.", ex);
-        }
+        return fullPath;
     }
 
     public static string ToWireValue(PublishOutcome outcome)
