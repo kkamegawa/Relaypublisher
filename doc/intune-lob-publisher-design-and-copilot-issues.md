@@ -17,6 +17,19 @@
 - [issues/issue-003-intune-graph-win32.md](issues/issue-003-intune-graph-win32.md) - Intune Graph create/update flow
 - [issues/issue-004-assignment-merge.md](issues/issue-004-assignment-merge.md) - Assignment merge
 - [issues/issue-005-source-providers.md](issues/issue-005-source-providers.md) - Source providers
+- [issues/issue-006-macos-manifest-foundation.md](issues/issue-006-macos-manifest-foundation.md) - macOS manifest model / validation / staging foundation
+- [issues/issue-007-solution-structure-alignment.md](issues/issue-007-solution-structure-alignment.md) - doc/02 solution structure alignment
+- [issues/issue-008-workflow-sample-installation.md](issues/issue-008-workflow-sample-installation.md) - workflow sample locations and installation flow
+- [issues/issue-009-workflow-slnx-alignment.md](issues/issue-009-workflow-slnx-alignment.md) - workflow build command alignment for `.slnx`
+- [issues/issue-010-cli-command-doc-alignment.md](issues/issue-010-cli-command-doc-alignment.md) - CLI command example alignment
+- [issues/issue-011-operation-guide-oidc-setup.md](issues/issue-011-operation-guide-oidc-setup.md) - OIDC / workload identity operator guide
+- [issues/issue-012-workflow-setup-checklist.md](issues/issue-012-workflow-setup-checklist.md) - workflow setup checklist
+- [issues/issue-013-changed-detection-fallback-observability.md](issues/issue-013-changed-detection-fallback-observability.md) - changed detection fallback visibility
+- [issues/issue-014-workflow-permission-guardrails.md](issues/issue-014-workflow-permission-guardrails.md) - least-privilege workflow guardrails
+- [issues/issue-015-icon-validation.md](issues/issue-015-icon-validation.md) - icon validation before Graph calls
+- [issues/issue-016-management-metadata-notes-observability.md](issues/issue-016-management-metadata-notes-observability.md) - notes-size observability
+- [issues/issue-017-macos-sample-status-clarification.md](issues/issue-017-macos-sample-status-clarification.md) - macOS sample status clarification
+- [issues/issue-018-input-hash-specification.md](issues/issue-018-input-hash-specification.md) - inputHash normalization specification
 
 ## 履歴
 
