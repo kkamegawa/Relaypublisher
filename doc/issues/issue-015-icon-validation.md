@@ -23,9 +23,8 @@ manifest の `Icon` は現在 repository-relative path としてしか検証し�
 ## 対象外
 
 - icon の自動リサイズや変換
-- macOS publish 全体(issue-045)
+- macOS publish 全体(#45)
 
 ## 見積もり
 
 - 実装 + テスト + ドキュメント更新(約 80–140 行)
-
