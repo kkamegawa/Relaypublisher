@@ -6,7 +6,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace IntuneLobPublisher.Cli.Commands;
 
-/// <summary>`package` validates manifests, stages Windows Win32 app packages and generates .intunewin files.</summary>
+/// <summary>
+/// `package` validates manifests, stages app package files and generates the final content artifact:
+/// a `.intunewin` for Windows Win32 apps, or a staged `.pkg` plus its package-metadata.json for macOS
+/// (macOS has no separate content-generation tool, doc/00-overview.md 6.13 / Phase 8).
+/// </summary>
 internal static class PackageCommand
 {
     public static Command Create(IServiceProvider services)
@@ -82,8 +86,12 @@ internal static class PackageCommand
 
                 var dryRun = parseResult.GetValue(dryRunOption);
                 var stageOnly = parseResult.GetValue(stageOnlyOption);
-                var generateIntuneWin = !dryRun && !stageOnly;
-                if (generateIntuneWin && !OperatingSystem.IsWindows())
+                var generatePackageArtifact = !dryRun && !stageOnly;
+
+                // Only Windows entries need IntuneWinAppUtil.exe; a macOS-only manifest list still
+                // packages on Linux/macOS runners, since macOS packaging has no external tool step.
+                var hasWindowsApp = manifests.Any(m => m.Manifest.Apps.Any(a => a.Platform == "windows"));
+                if (generatePackageArtifact && hasWindowsApp && !OperatingSystem.IsWindows())
                 {
                     Console.Error.WriteLine(
                         "error: .intunewin generation requires Windows because IntuneWinAppUtil.exe is a Windows executable. " +
@@ -91,7 +99,8 @@ internal static class PackageCommand
                     return ExitCodes.Failure;
                 }
 
-                var stagingService = services.GetRequiredService<IWindowsStagingService>();
+                var windowsStagingService = services.GetRequiredService<IWindowsStagingService>();
+                var macOsStagingService = services.GetRequiredService<IMacOsStagingService>();
                 var options = new StagingOptions(
                     repoRoot,
                     parseResult.GetValue(outputOption)!,
@@ -101,20 +110,39 @@ internal static class PackageCommand
                     parseResult.GetValue(toolVersionOption),
                     parseResult.GetValue(toolSha256Option),
                     parseResult.GetValue(toolsDirectoryOption) ?? Path.Combine(repoRoot, "tools"));
-                var packager = services.GetRequiredService<IIntuneWinPackager>();
+                var windowsPackager = services.GetRequiredService<IIntuneWinPackager>();
+                var macOsPackager = services.GetRequiredService<IMacOsPackager>();
 
                 foreach (var loaded in manifests)
                 {
                     foreach (var app in loaded.Manifest.Apps)
                     {
-                        var result = await stagingService.StageAsync(loaded.Manifest, app, options, cancellationToken);
+                        if (app.Platform == "macos")
+                        {
+                            var macResult = await macOsStagingService.StageAsync(loaded.Manifest, app, options, cancellationToken);
+                            Console.WriteLine(macResult.DryRun
+                                ? $"[dry-run] {macResult.PackageIdentifier} {macResult.Platform}-{macResult.Architecture} -> {macResult.StagingDirectory}"
+                                : $"Staged {macResult.PackageIdentifier} {macResult.Platform}-{macResult.Architecture} -> {macResult.StagingDirectory}");
+
+                            if (generatePackageArtifact)
+                            {
+                                var macPackage = await macOsPackager.CreatePackageAsync(loaded.Manifest, macResult, cancellationToken);
+                                Console.WriteLine(
+                                    $"Packaged {macPackage.PackageIdentifier} {macPackage.Platform}-{macPackage.Architecture} -> " +
+                                    $"{macPackage.ContentPath} (inputHash {macPackage.InputHash})");
+                            }
+
+                            continue;
+                        }
+
+                        var result = await windowsStagingService.StageAsync(loaded.Manifest, app, options, cancellationToken);
                         Console.WriteLine(result.DryRun
                             ? $"[dry-run] {result.PackageIdentifier} {result.Platform}-{result.Architecture} -> {result.StagingDirectory}"
                             : $"Staged {result.PackageIdentifier} {result.Platform}-{result.Architecture} -> {result.StagingDirectory}");
 
-                        if (generateIntuneWin)
+                        if (generatePackageArtifact)
                         {
-                            var package = await packager.CreatePackageAsync(
+                            var package = await windowsPackager.CreatePackageAsync(
                                 loaded.Manifest, result, toolOptions, cancellationToken);
                             Console.WriteLine(
                                 $"Packaged {package.PackageIdentifier} {package.Platform}-{package.Architecture} -> " +

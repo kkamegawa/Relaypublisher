@@ -81,4 +81,47 @@ internal static class TestManifests
             ],
         };
     }
+
+    /// <summary>A valid macOS app entry with the default AppType ("pkg").</summary>
+    public static AppManifest CreateValidMacOsApp(string architecture = "arm64", string? appType = null, string? displayName = null)
+    {
+        return new AppManifest
+        {
+            Platform = "macos",
+            Architecture = architecture,
+            InstallerType = "pkg",
+            AppType = appType,
+            DisplayName = displayName ?? $"Contoso Tool [macOS {architecture}]",
+            Source = new SourceManifest
+            {
+                Type = "azureBlob",
+                AccountName = "contosopackages",
+                Container = "intune-packages",
+                BlobName = $"macos/contoso-tool/1.2.3/contoso-tool-{architecture}.pkg",
+                Destination = $"contoso-tool-{architecture}.pkg",
+                Sha256 = new string('a', 64),
+                Auth = new AuthManifest { Type = "workloadIdentity" },
+            },
+            Requirements = new RequirementsManifest
+            {
+                MinimumOSVersion = "14.0",
+            },
+            Detection = new DetectionManifest
+            {
+                IncludedApps =
+                [
+                    new IncludedAppManifest { BundleId = "com.contoso.tool", BundleVersion = "1.2.3" },
+                ],
+            },
+            Assignments =
+            [
+                new AssignmentManifest
+                {
+                    Target = "group",
+                    GroupId = "00000000-0000-0000-0000-000000000003",
+                    Intent = "required",
+                },
+            ],
+        };
+    }
 }
