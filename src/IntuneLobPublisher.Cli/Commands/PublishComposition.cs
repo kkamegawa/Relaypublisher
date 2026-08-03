@@ -8,10 +8,12 @@ namespace IntuneLobPublisher.Cli.Commands;
 /// <summary>
 /// Builds the Graph pipeline and publish services after argument parsing:
 /// <see cref="GraphClientOptions"/> depends on <c>--expected-tenant</c>, so this cannot live in the
-/// root service provider. One shared <see cref="HttpClient"/> serves every Graph client — the
-/// directory/content/app clients use relative paths against the v1.0 base address, and
-/// <see cref="AssignmentGraphClient"/>'s absolute <c>/v1.0/</c>-or-<c>/beta/</c> paths replace the
-/// base path segment correctly.
+/// root service provider. One shared <see cref="HttpClient"/> serves every Graph client. Its
+/// <c>/v1.0/</c> base address only matters for calls that build a relative request path; every client
+/// that needs to reach <c>/beta/</c> (app resolution, macOS <c>AppType: pkg</c>, filter-bearing
+/// assignments) builds an absolute path instead, replacing the base path segment correctly
+/// (<see cref="AssignmentGraphClient"/>, <see cref="GraphIntuneAppDirectory"/>,
+/// <see cref="GraphMacOsAppClient"/>, <see cref="GraphMobileAppContentClient"/>).
 /// </summary>
 internal sealed class PublishComposition : IDisposable
 {
@@ -28,13 +30,30 @@ internal sealed class PublishComposition : IDisposable
     public static PublishComposition Create(GraphClientOptions options, ILoggerFactory loggerFactory)
     {
         var httpClient = GraphClientFactory.Create(new DefaultAzureCredential(), options, loggerFactory);
-        var orchestrator = new PublishOrchestrator(
-            new IntuneAppResolver(new GraphIntuneAppDirectory(httpClient)),
+
+        var windowsPublisher = new WindowsAppPublisher(
             new GraphWin32LobAppClient(httpClient),
-            new Win32LobAppContentUploadOrchestrator(
-                new IntuneWinContentExtractor(),
+            new MobileAppContentUploadOrchestrator(
                 new GraphMobileAppContentClient(httpClient),
                 new AzureStorageBlockBlobUploader()),
+            new IntuneWinContentExtractor());
+
+        var macOsPublisher = new MacOsAppPublisher(
+            new GraphMacOsAppClient(httpClient),
+            new MobileAppContentUploadOrchestrator(
+                new GraphMobileAppContentClient(httpClient),
+                new AzureStorageBlockBlobUploader()),
+            new PkgContentPreparer());
+
+        var platformPublishers = new Dictionary<string, IPlatformAppPublisher>(StringComparer.Ordinal)
+        {
+            ["windows"] = windowsPublisher,
+            ["macos"] = macOsPublisher,
+        };
+
+        var orchestrator = new PublishOrchestrator(
+            new IntuneAppResolver(new GraphIntuneAppDirectory(httpClient)),
+            platformPublishers,
             new AssignmentService(
                 new AssignmentGraphClient(httpClient),
                 loggerFactory.CreateLogger<AssignmentService>()),

@@ -6,32 +6,17 @@ using IntuneLobPublisher.Core.Exceptions;
 namespace IntuneLobPublisher.Core.Publishing;
 
 /// <summary>
-/// The Win32 Content Prep Tool's <c>fileEncryptionInfo</c>, read from a <c>.intunewin</c> package's
-/// <c>Detection.xml</c>. Field names and shape mirror the Graph <c>fileEncryptionInfo</c> resource
-/// (https://learn.microsoft.com/graph/api/resources/intune-apps-fileencryptioninfo) so it can be
-/// serialized into <see cref="FileEncryptionInfoPayload"/> without further transformation.
-/// </summary>
-public sealed record IntuneWinEncryptionInfo(
-    byte[] EncryptionKey,
-    byte[] MacKey,
-    byte[] InitializationVector,
-    byte[] Mac,
-    string ProfileIdentifier,
-    byte[] FileDigest,
-    string FileDigestAlgorithm);
-
-/// <summary>
 /// The parsed content of a <c>.intunewin</c> package: the encryption info needed to commit the file
 /// to Graph, and a stream over the still-encrypted payload to upload to Azure Storage. Owns the
 /// underlying <see cref="ZipArchive"/>, so callers must dispose this once the content has been read.
 /// </summary>
-public sealed class IntuneWinContent : IDisposable
+public sealed class IntuneWinContent : IUploadableContent
 {
     private readonly ZipArchive _archive;
     private readonly ZipArchiveEntry _contentEntry;
 
     public IntuneWinContent(
-        ZipArchive archive, ZipArchiveEntry contentEntry, string contentFileName, IntuneWinEncryptionInfo encryptionInfo, long unencryptedContentSize)
+        ZipArchive archive, ZipArchiveEntry contentEntry, string contentFileName, ContentEncryptionInfo encryptionInfo, long unencryptedContentSize)
     {
         _archive = archive;
         _contentEntry = contentEntry;
@@ -43,7 +28,7 @@ public sealed class IntuneWinContent : IDisposable
     /// <summary>The content file name recorded in Detection.xml (conventionally "IntunePackage.intunewin"), used as the Graph <c>mobileAppContentFile.name</c>.</summary>
     public string ContentFileName { get; }
 
-    public IntuneWinEncryptionInfo EncryptionInfo { get; }
+    public ContentEncryptionInfo EncryptionInfo { get; }
 
     /// <summary>Original (unencrypted) size in bytes, as recorded by the Content Prep Tool.</summary>
     public long UnencryptedContentSize { get; }
@@ -57,27 +42,22 @@ public sealed class IntuneWinContent : IDisposable
     public void Dispose() => _archive.Dispose();
 }
 
-public interface IIntuneWinContentExtractor
-{
-    /// <summary>
-    /// Opens a <c>.intunewin</c> file and parses its <c>Detection.xml</c>. The returned
-    /// <see cref="IntuneWinContent"/> keeps the ZIP open; dispose it once the content stream has been read.
-    /// </summary>
-    IntuneWinContent Extract(string intuneWinPath);
-}
-
 /// <summary>
 /// Parses the <c>.intunewin</c> ZIP container produced by IntuneWinAppUtil. The container layout and
 /// <c>Detection.xml</c> schema are not publicly documented by Microsoft (the tool itself is closed-source),
 /// so this follows the widely-used community-reverse-engineered format also referenced by
 /// doc/issues/issue-003-intune-graph-win32.md ("the encrypted payload (IntunePackage.intunewin)").
 /// </summary>
-public sealed class IntuneWinContentExtractor : IIntuneWinContentExtractor
+public sealed class IntuneWinContentExtractor : IUploadableContentExtractor
 {
     private const string MetadataEntryName = "IntuneWinPackage/Metadata/Detection.xml";
     private const string ContentDirectory = "IntuneWinPackage/Contents/";
 
-    public IntuneWinContent Extract(string intuneWinPath)
+    /// <summary>
+    /// Opens a <c>.intunewin</c> file and parses its <c>Detection.xml</c>. The returned
+    /// <see cref="IntuneWinContent"/> keeps the ZIP open; dispose it once the content stream has been read.
+    /// </summary>
+    public IUploadableContent Extract(string intuneWinPath)
     {
         var archive = ZipFile.OpenRead(intuneWinPath);
         try
@@ -109,7 +89,7 @@ public sealed class IntuneWinContentExtractor : IIntuneWinContentExtractor
             // Fixed lengths per the Graph fileEncryptionInfo resource
             // (https://learn.microsoft.com/graph/api/resources/intune-apps-fileencryptioninfo): IV must be
             // 16 bytes, Mac/MacKey must be 32 bytes. EncryptionKey and FileDigest have no declared fixed length.
-            var encryptionInfo = new IntuneWinEncryptionInfo(
+            var encryptionInfo = new ContentEncryptionInfo(
                 EncryptionKey: RequireBase64(encryptionInfoElement, "EncryptionKey", intuneWinPath),
                 MacKey: RequireBase64WithLength(encryptionInfoElement, "MacKey", 32, intuneWinPath),
                 InitializationVector: RequireBase64WithLength(encryptionInfoElement, "InitializationVector", 16, intuneWinPath),

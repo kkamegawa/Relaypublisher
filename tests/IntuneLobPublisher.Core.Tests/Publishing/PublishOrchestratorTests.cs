@@ -52,36 +52,43 @@ public sealed class PublishOrchestratorTests
             => Task.FromResult<IReadOnlyList<IntuneAppSummary>>(apps);
     }
 
-    private sealed class FakeAppClient : IWin32LobAppClient
+    /// <summary>Fake <see cref="IPlatformAppPublisher"/> that records calls instead of touching Graph.</summary>
+    private sealed class FakePlatformAppPublisher : IPlatformAppPublisher
     {
-        public List<string> Calls { get; } = [];
-        public Win32LobAppPayload? CreatedPayload { get; private set; }
-        public Win32LobAppPayload? UpdatedPayload { get; private set; }
+        public List<string> AppCalls { get; } = [];
 
-        public Task<string> CreateAppAsync(Win32LobAppPayload payload, CancellationToken cancellationToken)
-        {
-            Calls.Add("create");
-            CreatedPayload = payload;
-            return Task.FromResult(CreatedAppId);
-        }
+        public List<(string AppId, string? StoredInputHash)> ContentCalls { get; } = [];
 
-        public Task UpdateAppAsync(string appId, Win32LobAppPayload payload, CancellationToken cancellationToken)
+        public int EnsureMappableCallCount { get; private set; }
+
+        public string? CreatedNotes { get; private set; }
+
+        public string CreatedAppIdToReturn { get; set; } = CreatedAppId;
+
+        public Task EnsureMappableAsync(PublishRequest request, CancellationToken cancellationToken)
         {
-            Calls.Add($"update {appId}");
-            UpdatedPayload = payload;
+            EnsureMappableCallCount++;
             return Task.CompletedTask;
         }
-    }
 
-    private sealed class FakeContentOrchestrator : IWin32LobAppContentUploadOrchestrator
-    {
-        public List<(string AppId, string? StoredInputHash)> Calls { get; } = [];
+        public Task<string> CreateAppAsync(PublishRequest request, string notes, CancellationToken cancellationToken)
+        {
+            AppCalls.Add("create");
+            CreatedNotes = notes;
+            return Task.FromResult(CreatedAppIdToReturn);
+        }
+
+        public Task UpdateAppAsync(string appId, PublishRequest request, CancellationToken cancellationToken)
+        {
+            AppCalls.Add($"update {appId}");
+            return Task.CompletedTask;
+        }
 
         public Task<ContentUploadResult> PublishContentAsync(
-            string appId, IntuneWinPackageResult package, string? storedInputHash,
+            string appId, PublishRequest request, PackageArtifacts artifacts, string? storedInputHash,
             ManagementMetadata metadata, ContentUploadOptions options, CancellationToken cancellationToken)
         {
-            Calls.Add((appId, storedInputHash));
+            ContentCalls.Add((appId, storedInputHash));
             return Task.FromResult(new ContentUploadResult(ContentUploadOutcome.Uploaded, "cv-1"));
         }
     }
@@ -106,22 +113,30 @@ public sealed class PublishOrchestratorTests
 
     private sealed record Harness(
         PublishOrchestrator Orchestrator,
-        FakeAppClient AppClient,
-        FakeContentOrchestrator ContentOrchestrator,
+        FakePlatformAppPublisher Publisher,
         FakeAssignmentService AssignmentService);
 
-    private static Harness CreateHarness(params IntuneAppSummary[] existingApps)
+    private static Harness CreateHarness(
+        IntuneAppSummary[]? existingApps = null, IReadOnlyDictionary<string, IPlatformAppPublisher>? extraPublishers = null)
     {
-        var appClient = new FakeAppClient();
-        var contentOrchestrator = new FakeContentOrchestrator();
+        existingApps ??= [];
+        var publisher = new FakePlatformAppPublisher();
         var assignmentService = new FakeAssignmentService();
+        var platformPublishers = new Dictionary<string, IPlatformAppPublisher>(StringComparer.Ordinal) { ["windows"] = publisher };
+        if (extraPublishers is not null)
+        {
+            foreach (var (key, value) in extraPublishers)
+            {
+                platformPublishers[key] = value;
+            }
+        }
+
         var orchestrator = new PublishOrchestrator(
             new IntuneAppResolver(new FakeAppDirectory(existingApps)),
-            appClient,
-            contentOrchestrator,
+            platformPublishers,
             assignmentService,
             NullLogger<PublishOrchestrator>.Instance);
-        return new Harness(orchestrator, appClient, contentOrchestrator, assignmentService);
+        return new Harness(orchestrator, publisher, assignmentService);
     }
 
     private PublishRequest CreateRequest(
@@ -171,11 +186,12 @@ public sealed class PublishOrchestratorTests
         Assert.AreEqual(CreatedAppId, result.AppId);
         Assert.IsTrue(result.AppCreated);
         Assert.AreEqual(ContentUploadOutcome.Uploaded, result.ContentOutcome);
-        CollectionAssert.AreEqual(new[] { "create" }, harness.AppClient.Calls);
-        Assert.AreEqual((CreatedAppId, (string?)null), harness.ContentOrchestrator.Calls.Single());
+        CollectionAssert.AreEqual(new[] { "create" }, harness.Publisher.AppCalls);
+        Assert.AreEqual((CreatedAppId, (string?)null), harness.Publisher.ContentCalls.Single());
         CollectionAssert.AreEqual(
             new[] { $"plan {CreatedAppId}", $"apply {CreatedAppId}" }, harness.AssignmentService.Calls);
         Assert.AreEqual(1, reported.Count);
+        Assert.AreEqual(0, harness.Publisher.EnsureMappableCallCount, "A real (non-dry-run) publish should not need the separate mapping-validation pass.");
     }
 
     [TestMethod]
@@ -185,7 +201,7 @@ public sealed class PublishOrchestratorTests
 
         await harness.Orchestrator.PublishAsync(CreateRequest(), null, CancellationToken.None);
 
-        var notes = harness.AppClient.CreatedPayload!.Notes;
+        var notes = harness.Publisher.CreatedNotes;
         Assert.IsNotNull(notes);
         Assert.IsTrue(ManagementMetadata.TryParse(notes, out var metadata));
         Assert.AreEqual("Contoso.Tool", metadata!.PackageIdentifier);
@@ -194,18 +210,17 @@ public sealed class PublishOrchestratorTests
     }
 
     [TestMethod]
-    public async Task PublishAsync_ExistingApp_UpdatesWithoutNotesAndPassesStoredHash()
+    public async Task PublishAsync_ExistingApp_UpdatesAndPassesStoredHash()
     {
-        var harness = CreateHarness(ExistingManagedApp(inputHash: "hash-old"));
+        var harness = CreateHarness([ExistingManagedApp(inputHash: "hash-old")]);
 
         var result = await harness.Orchestrator.PublishAsync(CreateRequest(), null, CancellationToken.None);
 
         Assert.AreEqual(PublishOutcome.Published, result.Outcome);
         Assert.AreEqual(ExistingAppId, result.AppId);
         Assert.IsFalse(result.AppCreated);
-        CollectionAssert.AreEqual(new[] { $"update {ExistingAppId}" }, harness.AppClient.Calls);
-        Assert.IsNull(harness.AppClient.UpdatedPayload!.Notes);
-        Assert.AreEqual((ExistingAppId, (string?)"hash-old"), harness.ContentOrchestrator.Calls.Single());
+        CollectionAssert.AreEqual(new[] { $"update {ExistingAppId}" }, harness.Publisher.AppCalls);
+        Assert.AreEqual((ExistingAppId, (string?)"hash-old"), harness.Publisher.ContentCalls.Single());
     }
 
     [TestMethod]
@@ -225,21 +240,21 @@ public sealed class PublishOrchestratorTests
     [TestMethod]
     public async Task PublishAsync_Downgrade_SkipsWithoutAnyWrite()
     {
-        var harness = CreateHarness(ExistingManagedApp(packageVersion: "2.0.0"));
+        var harness = CreateHarness([ExistingManagedApp(packageVersion: "2.0.0")]);
 
         var result = await harness.Orchestrator.PublishAsync(CreateRequest(), null, CancellationToken.None);
 
         Assert.AreEqual(PublishOutcome.SkippedDowngrade, result.Outcome);
         Assert.IsNotNull(result.SkipReason);
-        Assert.AreEqual(0, harness.AppClient.Calls.Count);
-        Assert.AreEqual(0, harness.ContentOrchestrator.Calls.Count);
-        Assert.AreEqual(0, harness.AssignmentService.Calls.Count);
+        Assert.IsEmpty(harness.Publisher.AppCalls);
+        Assert.IsEmpty(harness.Publisher.ContentCalls);
+        Assert.IsEmpty(harness.AssignmentService.Calls);
     }
 
     [TestMethod]
     public async Task PublishAsync_AllowDowngrade_Publishes()
     {
-        var harness = CreateHarness(ExistingManagedApp(packageVersion: "2.0.0"));
+        var harness = CreateHarness([ExistingManagedApp(packageVersion: "2.0.0")]);
 
         var result = await harness.Orchestrator.PublishAsync(
             CreateRequest(allowDowngrade: true), null, CancellationToken.None);
@@ -281,38 +296,60 @@ public sealed class PublishOrchestratorTests
             () => harness.Orchestrator.PublishAsync(CreateRequest(manifest), null, CancellationToken.None));
 
         StringAssert.Contains(exception.Message, fieldName);
-        Assert.IsEmpty(harness.AppClient.Calls);
-        Assert.IsEmpty(harness.ContentOrchestrator.Calls);
+        Assert.IsEmpty(harness.Publisher.AppCalls);
+        Assert.IsEmpty(harness.Publisher.ContentCalls);
         Assert.IsEmpty(harness.AssignmentService.Calls);
     }
 
-    /// <summary>
-    /// Exercises the orchestrator's defense-in-depth platform gate directly. A manifest with
-    /// Platform "macos" is rejected by AppManifestValidator before it ever reaches
-    /// PublishOrchestrator in the CLI pipeline (ManifestValues.Platforms currently allows only
-    /// "windows"); this test builds the manifest by hand to confirm the gate still skips safely
-    /// for callers that construct a PublishRequest without going through that validator.
-    /// </summary>
     [TestMethod]
-    public async Task PublishAsync_MacOsEntry_SkipsWithoutAnyCall()
+    public async Task PublishAsync_UnsupportedPlatform_SkipsWithoutAnyCall()
     {
         var manifest = TestManifests.CreateValid();
-        manifest.Apps[0].Platform = "macos";
+        manifest.Apps[0].Platform = "linux";
         var harness = CreateHarness();
 
         var result = await harness.Orchestrator.PublishAsync(
             CreateRequest(manifest), null, CancellationToken.None);
 
         Assert.AreEqual(PublishOutcome.SkippedPlatformNotSupported, result.Outcome);
-        Assert.AreEqual(0, harness.AppClient.Calls.Count);
-        Assert.AreEqual(0, harness.ContentOrchestrator.Calls.Count);
-        Assert.AreEqual(0, harness.AssignmentService.Calls.Count);
+        Assert.IsEmpty(harness.Publisher.AppCalls);
+        Assert.IsEmpty(harness.Publisher.ContentCalls);
+        Assert.IsEmpty(harness.AssignmentService.Calls);
     }
 
     [TestMethod]
-    public async Task PublishAsync_DryRunExistingApp_MakesNoWriteCalls()
+    public async Task PublishAsync_MacOsEntry_DispatchesToMacOsPublisher()
     {
-        var harness = CreateHarness(ExistingManagedApp());
+        // Confirms the orchestrator's platform dispatch reaches whichever IPlatformAppPublisher is
+        // registered for "macos", not just the "windows" one used by every other test in this file.
+        var macEntryDirectory = Path.Combine(_packageDirectory, "Contoso.Tool", "macos-arm64");
+        Directory.CreateDirectory(macEntryDirectory);
+        var macMetadata = new PackageMetadata(
+            "Contoso.Tool", "1.2.3", "macos", "arm64", "mac-hash-1",
+            Tool: null, IntuneWinFile: null, IntuneWinSha256: null, DateTimeOffset.Parse("2026-07-06T00:00:00Z"),
+            ContentFile: "staging/contoso-tool-arm64.pkg", ContentSha256: "pkgsha");
+        File.WriteAllText(
+            Path.Combine(macEntryDirectory, PackageMetadataJson.FileName),
+            JsonSerializer.Serialize(macMetadata, PackageMetadataJson.SerializerOptions));
+        Directory.CreateDirectory(Path.Combine(macEntryDirectory, "staging"));
+        File.WriteAllBytes(Path.Combine(macEntryDirectory, "staging", "contoso-tool-arm64.pkg"), [1, 2, 3]);
+
+        var macPublisher = new FakePlatformAppPublisher();
+        var harness = CreateHarness(extraPublishers: new Dictionary<string, IPlatformAppPublisher> { ["macos"] = macPublisher });
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidMacOsApp()];
+
+        var result = await harness.Orchestrator.PublishAsync(CreateRequest(manifest), null, CancellationToken.None);
+
+        Assert.AreEqual(PublishOutcome.Published, result.Outcome);
+        CollectionAssert.AreEqual(new[] { "create" }, macPublisher.AppCalls);
+        Assert.IsEmpty(harness.Publisher.AppCalls);
+    }
+
+    [TestMethod]
+    public async Task PublishAsync_DryRunExistingApp_MakesNoWriteCallsButValidatesMapping()
+    {
+        var harness = CreateHarness([ExistingManagedApp()]);
         var reported = new List<AssignmentPlan>();
 
         var result = await harness.Orchestrator.PublishAsync(
@@ -321,10 +358,11 @@ public sealed class PublishOrchestratorTests
         Assert.AreEqual(PublishOutcome.DryRunCompleted, result.Outcome);
         Assert.AreEqual(ExistingAppId, result.AppId);
         Assert.IsNotNull(result.AssignmentPlan);
-        Assert.AreEqual(0, harness.AppClient.Calls.Count);
-        Assert.AreEqual(0, harness.ContentOrchestrator.Calls.Count);
+        Assert.IsEmpty(harness.Publisher.AppCalls);
+        Assert.IsEmpty(harness.Publisher.ContentCalls);
         CollectionAssert.AreEqual(new[] { $"plan {ExistingAppId}" }, harness.AssignmentService.Calls);
         Assert.AreEqual(1, reported.Count);
+        Assert.AreEqual(1, harness.Publisher.EnsureMappableCallCount, "Dry-run should map the payload once to surface mapping errors.");
     }
 
     [TestMethod]
@@ -338,7 +376,7 @@ public sealed class PublishOrchestratorTests
 
         Assert.AreEqual(PublishOutcome.DryRunCompleted, result.Outcome);
         Assert.IsNull(result.AppId);
-        Assert.AreEqual(0, harness.AssignmentService.Calls.Count);
+        Assert.IsEmpty(harness.AssignmentService.Calls);
         var plan = reported.Single();
         Assert.AreEqual(PublishOrchestrator.NewAppPlaceholderId, plan.AppId);
         Assert.IsTrue(plan.Entries.All(e => e.Action == AssignmentPlanAction.Add));
@@ -349,12 +387,12 @@ public sealed class PublishOrchestratorTests
     {
         // DisplayName match without metadata: resolution.Metadata is null, so content upload always
         // runs and its notes refresh performs the adopt write-back.
-        var harness = CreateHarness(new IntuneAppSummary(ExistingAppId, "Contoso Tool [Windows x64]", null));
+        var harness = CreateHarness([new IntuneAppSummary(ExistingAppId, "Contoso Tool [Windows x64]", null)]);
 
         var result = await harness.Orchestrator.PublishAsync(CreateRequest(), null, CancellationToken.None);
 
         Assert.AreEqual(PublishOutcome.Published, result.Outcome);
         Assert.IsFalse(result.AppCreated);
-        Assert.AreEqual((ExistingAppId, (string?)null), harness.ContentOrchestrator.Calls.Single());
+        Assert.AreEqual((ExistingAppId, (string?)null), harness.Publisher.ContentCalls.Single());
     }
 }

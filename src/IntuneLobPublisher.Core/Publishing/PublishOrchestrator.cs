@@ -1,18 +1,17 @@
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Packaging;
 using IntuneLobPublisher.Core.Publishing.Assignments;
-using IntuneLobPublisher.Core.Staging;
 using Microsoft.Extensions.Logging;
 
 namespace IntuneLobPublisher.Core.Publishing;
 
 /// <summary>
 /// Runs the per-app publish flow in the doc/00-overview.md 6.10 order: resolve the app, evaluate
-/// the version guard, create/update the win32LobApp, upload content, then plan and apply
+/// the version guard, create/update the app resource, upload content, then plan and apply
 /// assignments. Dry-run computes and reports the same information without any Graph write.
-/// The non-windows platform skip is defense-in-depth: today <c>AppManifestValidator</c> rejects
-/// non-windows entries before a request reaches here, so it is only reachable via callers that
-/// bypass that validator or once a future platform (e.g. macOS) is added to the manifest schema.
+/// Platform-specific work (payload mapping, app create/update, content extraction) is delegated to
+/// an <see cref="IPlatformAppPublisher"/> chosen by <c>AppManifest.Platform</c>; a platform with no
+/// registered publisher is skipped rather than failing the whole run.
 /// </summary>
 public interface IPublishOrchestrator
 {
@@ -32,23 +31,20 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
     public const string NewAppPlaceholderId = "(new app)";
 
     private readonly IntuneAppResolver _resolver;
-    private readonly IWin32LobAppClient _appClient;
-    private readonly IWin32LobAppContentUploadOrchestrator _contentOrchestrator;
+    private readonly IReadOnlyDictionary<string, IPlatformAppPublisher> _platformPublishers;
     private readonly IAssignmentService _assignmentService;
     private readonly ContentUploadOptions _contentUploadOptions;
     private readonly ILogger<PublishOrchestrator> _logger;
 
     public PublishOrchestrator(
         IntuneAppResolver resolver,
-        IWin32LobAppClient appClient,
-        IWin32LobAppContentUploadOrchestrator contentOrchestrator,
+        IReadOnlyDictionary<string, IPlatformAppPublisher> platformPublishers,
         IAssignmentService assignmentService,
         ILogger<PublishOrchestrator> logger,
         ContentUploadOptions? contentUploadOptions = null)
     {
         _resolver = resolver;
-        _appClient = appClient;
-        _contentOrchestrator = contentOrchestrator;
+        _platformPublishers = platformPublishers;
         _assignmentService = assignmentService;
         _contentUploadOptions = contentUploadOptions ?? new ContentUploadOptions();
         _logger = logger;
@@ -67,14 +63,9 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         var architecture = Require(app.Architecture, nameof(app.Architecture));
         var displayName = Require(app.DisplayName, nameof(app.DisplayName));
 
-        // Defense-in-depth, not currently reachable via the CLI: ManifestValues.Platforms only
-        // allows "windows" today, so AppManifestValidator rejects non-windows entries before this
-        // code runs. This guard exists for callers that build a PublishRequest without going
-        // through that validator, and to fail safely once macOS is added to the schema
-        // (doc/00-overview.md section 16, roadmap item 12) before its publish flow is implemented.
-        if (!string.Equals(platform, "windows", StringComparison.OrdinalIgnoreCase))
+        if (!_platformPublishers.TryGetValue(platform, out var platformPublisher))
         {
-            var reason = $"Platform '{platform}' has no publish flow yet; only windows is supported.";
+            var reason = $"Platform '{platform}' has no publish flow yet.";
             _logger.LogWarning(
                 "Skipping {PackageIdentifier} {Platform}-{Architecture}: {Reason}",
                 packageIdentifier, platform, architecture, reason);
@@ -99,7 +90,6 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
 
         var artifacts = await PackageMetadataReader.ReadAsync(request.PackageDirectory, identity, cancellationToken)
             .ConfigureAwait(false);
-        var package = ToPackageResult(identity, artifacts);
         var managementMetadata = new ManagementMetadata
         {
             PackageIdentifier = identity.PackageIdentifier,
@@ -112,14 +102,12 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
             SourceCommit = request.SourceCommit,
         };
 
-        var detectionScript = await ReadDetectionScriptAsync(request, app, cancellationToken).ConfigureAwait(false);
-        var iconBytes = await ReadIconAsync(request, manifest, cancellationToken).ConfigureAwait(false);
-        // Mapped in dry-run too, so mapping errors (unknown Windows release, icon format) surface there.
-        var payload = Win32LobAppPayloadMapper.Map(manifest, app, detectionScript, iconBytes);
         var syncMode = AssignmentSyncModes.Parse(manifest.AssignmentSync);
 
         if (request.DryRun)
         {
+            // Mapped here too, so mapping errors (unknown Windows release/macOS version, icon format) surface in dry-run.
+            await platformPublisher.EnsureMappableAsync(request, cancellationToken).ConfigureAwait(false);
             return await DryRunAsync(request, resolution, artifacts, syncMode, reportAssignmentPlan, cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -129,9 +117,8 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         if (resolution.Outcome == AppResolutionOutcome.NotFound)
         {
             // Create carries the metadata in `notes` so the new app is never metadata-less.
-            var createPayload = Win32LobAppPayloadMapper.Map(
-                manifest, app, detectionScript, iconBytes, managementMetadata.Serialize());
-            appId = await _appClient.CreateAppAsync(createPayload, cancellationToken).ConfigureAwait(false);
+            appId = await platformPublisher.CreateAppAsync(request, managementMetadata.Serialize(), cancellationToken)
+                .ConfigureAwait(false);
             appCreated = true;
             _logger.LogInformation(
                 "Created app {AppId} for {PackageIdentifier} {Platform}-{Architecture}",
@@ -140,7 +127,7 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         else
         {
             appId = resolution.AppId!;
-            await _appClient.UpdateAppAsync(appId, payload, cancellationToken).ConfigureAwait(false);
+            await platformPublisher.UpdateAppAsync(appId, request, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation(
                 "Updated app {AppId} for {PackageIdentifier} {Platform}-{Architecture}",
                 appId, identity.PackageIdentifier, identity.Platform, identity.Architecture);
@@ -148,8 +135,8 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
 
         // Adopted apps have null resolution.Metadata, so content is always uploaded and the
         // notes refresh inside the content flow performs the adopt write-back.
-        var contentResult = await _contentOrchestrator.PublishContentAsync(
-                appId, package, resolution.Metadata?.InputHash, managementMetadata, _contentUploadOptions, cancellationToken)
+        var contentResult = await platformPublisher.PublishContentAsync(
+                appId, request, artifacts, resolution.Metadata?.InputHash, managementMetadata, _contentUploadOptions, cancellationToken)
             .ConfigureAwait(false);
 
         var plan = await _assignmentService.CreatePlanAsync(appId, app, syncMode, cancellationToken).ConfigureAwait(false);
@@ -193,54 +180,8 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         return new PublishResult(PublishOutcome.DryRunCompleted, resolution.AppId, false, null, plan, null);
     }
 
-    // Only reached for platform "windows" (the platform gate above returns early otherwise), so the
-    // Windows-only metadata fields (Tool, IntuneWinSha256) are always populated here.
-    private static IntuneWinPackageResult ToPackageResult(AppIdentity identity, PackageArtifacts artifacts)
-        => new(
-            identity.PackageIdentifier,
-            identity.Platform,
-            identity.Architecture,
-            artifacts.ContentPath,
-            RequireWindowsMetadataField(artifacts.Metadata.IntuneWinSha256, nameof(PackageMetadata.IntuneWinSha256)),
-            artifacts.Metadata.InputHash,
-            RequireWindowsMetadataField(artifacts.Metadata.Tool, nameof(PackageMetadata.Tool)).Version,
-            RequireWindowsMetadataField(artifacts.Metadata.Tool, nameof(PackageMetadata.Tool)).Sha256,
-            Path.Combine(Path.GetDirectoryName(artifacts.ContentPath)!, PackageMetadataJson.FileName));
-
-    private static T RequireWindowsMetadataField<T>(T? value, string fieldName)
-        => value ?? throw new ManifestLoadException($"Package metadata is missing '{fieldName}', expected for Windows packages.");
-
     private static string Require(string? value, string fieldName)
         => string.IsNullOrWhiteSpace(value)
             ? throw new ManifestLoadException($"Manifest field '{fieldName}' is required for publish.")
             : value;
-
-    private static async Task<string> ReadDetectionScriptAsync(
-        PublishRequest request, Manifests.AppManifest app, CancellationToken cancellationToken)
-    {
-        var scriptPath = PathSafety.ResolveWithin(request.RepositoryRoot, app.Detection!.ScriptFile!, "Detection.ScriptFile");
-        if (!File.Exists(scriptPath))
-        {
-            throw new ManifestLoadException($"Detection script '{app.Detection.ScriptFile}' does not exist under '{request.RepositoryRoot}'.");
-        }
-
-        return await File.ReadAllTextAsync(scriptPath, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task<byte[]?> ReadIconAsync(
-        PublishRequest request, Manifests.IntunePackageManifest manifest, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrEmpty(manifest.Icon))
-        {
-            return null;
-        }
-
-        var iconPath = PathSafety.ResolveWithin(request.RepositoryRoot, manifest.Icon, "Icon");
-        if (!File.Exists(iconPath))
-        {
-            throw new ManifestLoadException($"Icon '{manifest.Icon}' does not exist under '{request.RepositoryRoot}'.");
-        }
-
-        return await File.ReadAllBytesAsync(iconPath, cancellationToken).ConfigureAwait(false);
-    }
 }
