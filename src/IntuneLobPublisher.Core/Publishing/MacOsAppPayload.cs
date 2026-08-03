@@ -90,11 +90,15 @@ public sealed class MacOsLobAppPayload : MacOsAppPayloadBase
     [JsonPropertyName("@odata.type")]
     public string ODataType { get; init; } = "#microsoft.graph.macOSLobApp";
 
-    /// <summary>Matches the package's CFBundleShortVersionString, from the first <c>Detection.IncludedApps</c> entry's BundleVersion.</summary>
+    /// <summary>
+    /// The manifest has a single per-app version value (<c>IncludedApps[0].BundleVersion</c>), not
+    /// separate build/version numbers, so both <see cref="BuildNumber"/> and <see cref="VersionNumber"/>
+    /// are set from it.
+    /// </summary>
     [JsonPropertyName("buildNumber")]
     public required string BuildNumber { get; init; }
 
-    /// <summary>Matches the package's CFBundleVersion, from the first <c>Detection.IncludedApps</c> entry's BundleVersion.</summary>
+    /// <summary>See <see cref="BuildNumber"/> - set from the same <c>IncludedApps[0].BundleVersion</c> value.</summary>
     [JsonPropertyName("versionNumber")]
     public required string VersionNumber { get; init; }
 

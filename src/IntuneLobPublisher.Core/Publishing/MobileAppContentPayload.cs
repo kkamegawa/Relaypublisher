@@ -13,7 +13,7 @@ public sealed class MobileAppContentCreateRequest
 public sealed class MobileAppContentResponse
 {
     [JsonPropertyName("id")]
-    public required string Id { get; init; }
+    public string? Id { get; init; }
 }
 
 /// <summary>Request body for <c>POST .../contentVersions/{cv}/files</c>.</summary>
@@ -41,7 +41,7 @@ public sealed class MobileAppContentFileCreateRequest
 public sealed class MobileAppContentFileResponse
 {
     [JsonPropertyName("id")]
-    public required string Id { get; init; }
+    public string? Id { get; init; }
 
     [JsonPropertyName("azureStorageUri")]
     public string? AzureStorageUri { get; init; }

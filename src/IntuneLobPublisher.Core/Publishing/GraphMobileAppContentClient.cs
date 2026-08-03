@@ -65,7 +65,9 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         using var response = await _httpClient.PostAsJsonAsync(requestUri, new MobileAppContentCreateRequest(), cancellationToken)
             .ConfigureAwait(false);
         var body = await ReadJsonAsync<MobileAppContentResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
-        return body.Id;
+        return body.Id ?? throw new GraphRequestException(
+            $"Graph returned a content version without an id for '{requestUri}'.",
+            (int)response.StatusCode, GetHeader(response, "client-request-id"), GetHeader(response, "request-id"));
     }
 
     public async Task<string> CreateContentFileAsync(
@@ -75,7 +77,9 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         var request = new MobileAppContentFileCreateRequest { Name = name, Size = size, SizeEncrypted = sizeEncrypted };
         using var response = await _httpClient.PostAsJsonAsync(requestUri, request, cancellationToken).ConfigureAwait(false);
         var body = await ReadJsonAsync<MobileAppContentFileResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
-        return body.Id;
+        return body.Id ?? throw new GraphRequestException(
+            $"Graph returned a content file without an id for '{requestUri}'.",
+            (int)response.StatusCode, GetHeader(response, "client-request-id"), GetHeader(response, "request-id"));
     }
 
     public async Task<MobileAppContentFileResponse> GetContentFileAsync(
