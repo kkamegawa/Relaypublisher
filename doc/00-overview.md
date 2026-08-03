@@ -309,6 +309,15 @@ validation ルール:
 - `AppType: pkg` の app に `Intent: uninstall` の assignment があれば fail。
 - `AppType: lob` の場合は Icon(ロゴ)を必須とし、2 GB 超の PKG を fail とする。
 
+**Graph API バージョン**: `macOSPkgApp` は **beta 専用**(v1.0 に存在しない)。そのため `AppType: pkg` の app に
+関するすべての Graph 呼び出し ― 作成・更新、content upload(contentVersions/files/commit)、notes /
+committedContentVersion の patch、app resolution 用の一覧取得 ― は `/beta/` を経由する。`macOSLobApp` は
+v1.0 に存在するため `AppType: lob` は `/v1.0/` のまま。両者は同一の CLI 実行内で混在しうるため、Graph 呼び出し
+の実装(`GraphMacOsAppClient` / `GraphMobileAppContentClient` / `GraphIntuneAppDirectory`)は各呼び出しごとに
+使用する API バージョンを判定する。副作用として、v1.0 の `macOSMinimumOperatingSystem` には macOS 14 以降の
+フラグが無いため、`AppType: lob` で `Requirements.MinimumOSVersion` に macOS 14 以降を指定すると publish 時に
+fail する(`AppType: pkg` への切り替えが必要)。
+
 ### 6.14 Manifest schema のバージョニングとソース指定の統一
 
 - winget の `ManifestVersion` に相当する **`SchemaVersion`** を top-level 必須フィールドとして最初から導入する。互換性のない変更は major を上げ、CLI は未知の major を fail とする。
