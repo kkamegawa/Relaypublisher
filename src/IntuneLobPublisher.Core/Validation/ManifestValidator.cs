@@ -45,6 +45,13 @@ internal sealed class IntunePackageManifestValidator : AbstractValidator<IntuneP
             .Must(v => v is null || PathSafety.IsSafeRelativePath(v))
             .WithMessage("Icon must be a repository-relative path without traversal segments.");
 
+        // macOS AppType: lob (macOSLobApp) requires a top-level Icon or the app never shows in the
+        // admin console list (doc/01-manifest-schema.md §5.4).
+        RuleFor(m => m.Icon)
+            .NotEmpty()
+            .When(m => m.Apps.Any(a => a.Platform == "macos" && (a.AppType ?? ManifestValues.DefaultMacOsAppType) == "lob"))
+            .WithMessage("Icon is required when any app entry has Platform 'macos' and AppType 'lob'.");
+
         RuleFor(m => m.Apps)
             .NotEmpty()
             .WithMessage("Apps is required and must contain at least one app entry.");
@@ -53,6 +60,12 @@ internal sealed class IntunePackageManifestValidator : AbstractValidator<IntuneP
     }
 }
 
+/// <summary>
+/// Validates a single app entry. Most rules are platform-conditional: Windows entries keep the
+/// original unconditional shape (Package/Install/script Detection required, Source/AppType forbidden);
+/// macOS entries use Source/IncludedApps detection and forbid the Windows-only fields
+/// (doc/01-manifest-schema.md §5.3/§5.4).
+/// </summary>
 internal sealed class AppManifestValidator : AbstractValidator<AppManifest>
 {
     public AppManifestValidator()
@@ -71,27 +84,50 @@ internal sealed class AppManifestValidator : AbstractValidator<AppManifest>
 
         RuleFor(a => a.InstallerType)
             .NotEmpty()
-            .Must(v => ManifestValues.WindowsInstallerTypes.Contains(v))
-            .When(a => a.Platform == "windows", ApplyConditionTo.CurrentValidator)
-            .WithMessage(a => $"InstallerType '{a.InstallerType}' is not supported for Platform 'windows'. Supported installer types: {string.Join(", ", ManifestValues.WindowsInstallerTypes)}.");
+            .Must(IsSupportedInstallerType)
+            .WithMessage(a => a.Platform == "macos"
+                ? $"InstallerType '{a.InstallerType}' is not supported for Platform 'macos'. Supported installer types: {string.Join(", ", ManifestValues.MacOsInstallerTypes)}."
+                : $"InstallerType '{a.InstallerType}' is not supported for Platform '{a.Platform}'. Supported installer types: {string.Join(", ", ManifestValues.WindowsInstallerTypes)}.");
+
+        RuleFor(a => a.AppType)
+            .Must((app, appType) => app.Platform != "windows" || appType is null)
+            .WithMessage("AppType must not be set for Platform 'windows'; it only applies to macOS.")
+            .Must((app, appType) => app.Platform != "macos" || appType is null || ManifestValues.MacOsAppTypes.Contains(appType))
+            .WithMessage(a => $"AppType '{a.AppType}' is not supported for Platform 'macos'. Allowed values: {string.Join(", ", ManifestValues.MacOsAppTypes)}.");
 
         RuleFor(a => a.DisplayName).NotEmpty();
 
+        // Package (Windows) and Source (macOS) are mutually exclusive per platform. SetValidator is a
+        // no-op when the property is null, so it naturally skips the platform where the field is unused.
         RuleFor(a => a.Package)
-            .NotNull()
+            .Must((app, package) => app.Platform != "windows" || package is not null)
+            .WithMessage("Package is required for Platform 'windows'.")
+            .Must((app, package) => app.Platform != "macos" || package is null)
+            .WithMessage("Package must not be set for Platform 'macos'; use Source instead.")
             .SetValidator(new WindowsPackageManifestValidator()!);
 
+        RuleFor(a => a.Source)
+            .Must((app, source) => app.Platform != "macos" || source is not null)
+            .WithMessage("Source is required for Platform 'macos'.")
+            .Must((app, source) => app.Platform != "windows" || source is null)
+            .WithMessage("Source must not be set for Platform 'windows'; use Package instead.")
+            .SetValidator(new SourceManifestValidator()!);
+
+        // A macOS PKG has no install command line: Intune drives the .pkg installer itself.
         RuleFor(a => a.Install)
-            .NotNull()
+            .Must((app, install) => app.Platform != "windows" || install is not null)
+            .WithMessage("Install is required for Platform 'windows'.")
+            .Must((app, install) => app.Platform != "macos" || install is null)
+            .WithMessage("Install must not be set for Platform 'macos'; PKG apps have no install command line.")
             .SetValidator(new InstallManifestValidator()!);
 
         RuleFor(a => a.Detection)
             .NotNull()
-            .SetValidator(new DetectionManifestValidator()!);
+            .SetValidator(a => new DetectionManifestValidator(a.Platform)!);
 
         RuleFor(a => a.Requirements)
             .NotNull()
-            .SetValidator(new RequirementsManifestValidator()!);
+            .SetValidator(a => new RequirementsManifestValidator(a.Platform)!);
 
         RuleFor(a => a.Requirements!.Architecture)
             .Must((app, requirementsArchitecture) => string.Equals(requirementsArchitecture, app.Architecture, StringComparison.Ordinal))
@@ -111,8 +147,16 @@ internal sealed class AppManifestValidator : AbstractValidator<AppManifest>
             .WithMessage("Intent 'uninstall' is not supported for macOS AppType 'pkg' apps.");
     }
 
+    private static bool IsSupportedInstallerType(AppManifest app, string? installerType) => app.Platform switch
+    {
+        "windows" => ManifestValues.WindowsInstallerTypes.Contains(installerType),
+        "macos" => ManifestValues.MacOsInstallerTypes.Contains(installerType),
+        // Unknown/empty platform is already reported by the Platform rule above.
+        _ => true,
+    };
+
     private static bool IsMacOsPkg(AppManifest app)
-        => app.Platform == "macos" && (app.AppType ?? "pkg") == "pkg";
+        => app.Platform == "macos" && (app.AppType ?? ManifestValues.DefaultMacOsAppType) == ManifestValues.DefaultMacOsAppType;
 
     private static bool HaveUniqueTargets(List<AssignmentManifest> assignments)
     {
@@ -234,32 +278,75 @@ internal sealed class InstallManifestValidator : AbstractValidator<InstallManife
     }
 }
 
+/// <summary>
+/// Windows uses script detection (<see cref="DetectionManifest.Type"/> / <see cref="DetectionManifest.ScriptFile"/>).
+/// macOS has no script detection: it always requires <see cref="DetectionManifest.IncludedApps"/>
+/// and forbids the Windows-only fields (doc/01-manifest-schema.md §5.3/§5.4).
+/// </summary>
 internal sealed class DetectionManifestValidator : AbstractValidator<DetectionManifest>
 {
-    public DetectionManifestValidator()
+    public DetectionManifestValidator(string? platform)
     {
         RuleLevelCascadeMode = CascadeMode.Stop;
 
+        var isWindows = platform == "windows";
+        var isMacOs = platform == "macos";
+
+        // A single Must (rather than NotEmpty().Must().When(..., CurrentValidator)) so the empty-check
+        // itself is also conditional: With ApplyConditionTo.CurrentValidator the When would only gate
+        // the Must, leaving NotEmpty unconditional and wrongly rejecting macOS entries (Type is null there).
         RuleFor(d => d.Type)
-            .NotEmpty()
-            .Must(v => ManifestValues.DetectionTypes.Contains(v))
-            .WithMessage(d => $"Detection.Type '{d.Type}' is not supported. Supported types: {string.Join(", ", ManifestValues.DetectionTypes)}.");
+            .Must(v => !isWindows || (!string.IsNullOrEmpty(v) && ManifestValues.DetectionTypes.Contains(v)))
+            .WithMessage(d => string.IsNullOrEmpty(d.Type)
+                ? "Detection.Type is required for Platform 'windows'."
+                : $"Detection.Type '{d.Type}' is not supported. Supported types: {string.Join(", ", ManifestValues.DetectionTypes)}.");
 
         RuleFor(d => d.ScriptFile)
             .NotEmpty()
-            .When(d => d.Type == "script")
+            .When(d => isWindows && d.Type == "script")
             .WithMessage("Detection.ScriptFile is required when Detection.Type is 'script'.");
+
+        RuleFor(d => d.Type)
+            .Null()
+            .When(_ => isMacOs)
+            .WithMessage("Detection.Type must not be set for Platform 'macos'; macOS apps are detected via IncludedApps.");
+
+        RuleFor(d => d.ScriptFile)
+            .Null()
+            .When(_ => isMacOs)
+            .WithMessage("Detection.ScriptFile must not be set for Platform 'macos'.");
+
+        RuleFor(d => d.IncludedApps)
+            .NotEmpty()
+            .When(_ => isMacOs, ApplyConditionTo.CurrentValidator)
+            .WithMessage("Detection.IncludedApps is required and must contain at least one entry for Platform 'macos'.");
+
+        RuleForEach(d => d.IncludedApps)
+            .ChildRules(entry =>
+            {
+                entry.RuleFor(e => e.BundleId).NotEmpty();
+                entry.RuleFor(e => e.BundleVersion).NotEmpty();
+            })
+            .When(_ => isMacOs);
     }
 }
 
+/// <summary>
+/// <see cref="RequirementsManifest.Architecture"/> only applies to Windows (it must match the app-level
+/// Architecture, checked separately by <see cref="AppManifestValidator"/>); the macOS sample manifest
+/// omits it, since macOS has no separate "requirements architecture" concept (doc/01-manifest-schema.md §5.3).
+/// </summary>
 internal sealed class RequirementsManifestValidator : AbstractValidator<RequirementsManifest>
 {
-    public RequirementsManifestValidator()
+    public RequirementsManifestValidator(string? platform)
     {
         RuleLevelCascadeMode = CascadeMode.Stop;
 
         RuleFor(r => r.MinimumOSVersion).NotEmpty();
-        RuleFor(r => r.Architecture).NotEmpty();
+
+        RuleFor(r => r.Architecture)
+            .NotEmpty()
+            .When(_ => platform == "windows", ApplyConditionTo.CurrentValidator);
     }
 }
 

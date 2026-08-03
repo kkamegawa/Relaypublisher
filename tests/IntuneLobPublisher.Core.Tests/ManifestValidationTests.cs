@@ -368,4 +368,120 @@ public sealed class ManifestValidationTests
         manifest.Icon = "../outside/icon.png";
         AssertInvalid(manifest, "Icon");
     }
+
+    [TestMethod]
+    public void Validate_ValidMacOsPkgManifest_Passes()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidMacOsApp()];
+
+        var result = _validator.Validate(manifest);
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => $"{e.PropertyName}: {e.ErrorMessage}")));
+    }
+
+    [TestMethod]
+    public void Validate_ValidMacOsPkgManifest_DefaultAppTypeIsPkg()
+    {
+        // AppType omitted (null) is equivalent to "pkg" (doc/01-manifest-schema.md §5.4).
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidMacOsApp(appType: null)];
+
+        var result = _validator.Validate(manifest);
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => $"{e.PropertyName}: {e.ErrorMessage}")));
+    }
+
+    [TestMethod]
+    public void Validate_ValidMacOsLobManifest_WithIcon_Passes()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Icon = "assets/icons/contoso-tool.png";
+        manifest.Apps = [TestManifests.CreateValidMacOsApp(appType: "lob")];
+
+        var result = _validator.Validate(manifest);
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => $"{e.PropertyName}: {e.ErrorMessage}")));
+    }
+
+    [TestMethod]
+    public void Validate_MacOsLobManifest_WithoutIcon_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Icon = null;
+        manifest.Apps = [TestManifests.CreateValidMacOsApp(appType: "lob")];
+
+        AssertInvalid(manifest, "Icon is required");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsEmptyIncludedApps_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Detection!.IncludedApps = [];
+        manifest.Apps = [macApp];
+
+        AssertInvalid(manifest, "Detection.IncludedApps is required");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsIncludedAppMissingBundleId_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Detection!.IncludedApps = [new IncludedAppManifest { BundleId = null, BundleVersion = "1.0" }];
+        manifest.Apps = [macApp];
+
+        AssertInvalid(manifest, "BundleId");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsAppWithWindowsPackage_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Package = TestManifests.CreateValidApp().Package;
+        manifest.Apps = [macApp];
+
+        AssertInvalid(manifest, "Package must not be set for Platform 'macos'");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsAppWithoutSource_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Source = null;
+        manifest.Apps = [macApp];
+
+        AssertInvalid(manifest, "Source is required for Platform 'macos'");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsAppWithInstallerTypeWin32_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.InstallerType = "win32";
+        manifest.Apps = [macApp];
+
+        AssertInvalid(manifest, "InstallerType 'win32' is not supported for Platform 'macos'");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsAppWithUnsupportedAppType_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp(appType: "dmg");
+        manifest.Apps = [macApp];
+
+        AssertInvalid(manifest, "AppType 'dmg' is not supported for Platform 'macos'");
+    }
+
+    [TestMethod]
+    public void Validate_WindowsAppWithAppTypeSet_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].AppType = "pkg";
+
+        AssertInvalid(manifest, "AppType must not be set for Platform 'windows'");
+    }
 }

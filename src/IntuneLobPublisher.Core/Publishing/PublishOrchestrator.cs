@@ -193,17 +193,22 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         return new PublishResult(PublishOutcome.DryRunCompleted, resolution.AppId, false, null, plan, null);
     }
 
+    // Only reached for platform "windows" (the platform gate above returns early otherwise), so the
+    // Windows-only metadata fields (Tool, IntuneWinSha256) are always populated here.
     private static IntuneWinPackageResult ToPackageResult(AppIdentity identity, PackageArtifacts artifacts)
         => new(
             identity.PackageIdentifier,
             identity.Platform,
             identity.Architecture,
-            artifacts.IntuneWinPath,
-            artifacts.Metadata.IntuneWinSha256,
+            artifacts.ContentPath,
+            RequireWindowsMetadataField(artifacts.Metadata.IntuneWinSha256, nameof(PackageMetadata.IntuneWinSha256)),
             artifacts.Metadata.InputHash,
-            artifacts.Metadata.Tool.Version,
-            artifacts.Metadata.Tool.Sha256,
-            Path.Combine(Path.GetDirectoryName(artifacts.IntuneWinPath)!, PackageMetadataJson.FileName));
+            RequireWindowsMetadataField(artifacts.Metadata.Tool, nameof(PackageMetadata.Tool)).Version,
+            RequireWindowsMetadataField(artifacts.Metadata.Tool, nameof(PackageMetadata.Tool)).Sha256,
+            Path.Combine(Path.GetDirectoryName(artifacts.ContentPath)!, PackageMetadataJson.FileName));
+
+    private static T RequireWindowsMetadataField<T>(T? value, string fieldName)
+        => value ?? throw new ManifestLoadException($"Package metadata is missing '{fieldName}', expected for Windows packages.");
 
     private static string Require(string? value, string fieldName)
         => string.IsNullOrWhiteSpace(value)

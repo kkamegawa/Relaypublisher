@@ -12,9 +12,15 @@ public static partial class ManifestValues
     public const string DefaultAssignmentTarget = "group";
     public const string DefaultAssignmentMode = "include";
 
-    public static readonly IReadOnlyList<string> Platforms = ["windows"];
+    public static readonly IReadOnlyList<string> Platforms = ["windows", "macos"];
     public static readonly IReadOnlyList<string> Architectures = ["x64", "arm64"];
     public static readonly IReadOnlyList<string> WindowsInstallerTypes = ["win32"];
+    public static readonly IReadOnlyList<string> MacOsInstallerTypes = ["pkg"];
+
+    /// <summary>"pkg" (default, macOSPkgApp) or "lob" (macOSLobApp). doc/01-manifest-schema.md §5.4.</summary>
+    public static readonly IReadOnlyList<string> MacOsAppTypes = ["pkg", "lob"];
+
+    public const string DefaultMacOsAppType = "pkg";
     public static readonly IReadOnlyList<string> InstallExperiences = ["system", "user"];
     public static readonly IReadOnlyList<string> RestartBehaviors = ["suppress", "allow", "force"];
     public static readonly IReadOnlyList<string> DetectionTypes = ["script"];

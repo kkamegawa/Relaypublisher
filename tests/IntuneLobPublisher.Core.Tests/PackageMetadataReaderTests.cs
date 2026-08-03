@@ -46,7 +46,7 @@ public sealed class PackageMetadataReaderTests
             JsonSerializer.Serialize(metadata, PackageMetadataJson.SerializerOptions));
         if (writePackageFile)
         {
-            File.WriteAllBytes(Path.Combine(entryDirectory, metadata.IntuneWinFile), [1, 2, 3]);
+            File.WriteAllBytes(Path.Combine(entryDirectory, metadata.IntuneWinFile!), [1, 2, 3]);
         }
 
         return entryDirectory;
@@ -62,8 +62,8 @@ public sealed class PackageMetadataReaderTests
         Assert.AreEqual("Contoso.Tool", artifacts.Metadata.PackageIdentifier);
         Assert.AreEqual("1.2.3", artifacts.Metadata.PackageVersion);
         Assert.AreEqual("hash-1", artifacts.Metadata.InputHash);
-        Assert.AreEqual("1.8.6", artifacts.Metadata.Tool.Version);
-        Assert.AreEqual(Path.Combine(entryDirectory, "install.intunewin"), artifacts.IntuneWinPath);
+        Assert.AreEqual("1.8.6", artifacts.Metadata.Tool!.Version);
+        Assert.AreEqual(Path.Combine(entryDirectory, "install.intunewin"), artifacts.ContentPath);
     }
 
     [TestMethod]
@@ -74,7 +74,7 @@ public sealed class PackageMetadataReaderTests
 
         var artifacts = await PackageMetadataReader.ReadAsync(_packageDirectory, Identity, CancellationToken.None);
 
-        Assert.IsNull(artifacts.Metadata.Tool.Version);
+        Assert.IsNull(artifacts.Metadata.Tool!.Version);
     }
 
     [TestMethod]

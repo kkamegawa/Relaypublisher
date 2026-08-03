@@ -5,8 +5,11 @@ using IntuneLobPublisher.Core.Staging;
 
 namespace IntuneLobPublisher.Core.Packaging;
 
-/// <summary>The package artifacts publish consumes: the parsed metadata and the resolved <c>.intunewin</c> full path.</summary>
-public sealed record PackageArtifacts(PackageMetadata Metadata, string IntuneWinPath);
+/// <summary>
+/// The package artifacts publish consumes: the parsed metadata and the resolved full path of the
+/// content file - the <c>.intunewin</c> for Windows, or the staged <c>.pkg</c> for macOS.
+/// </summary>
+public sealed record PackageArtifacts(PackageMetadata Metadata, string ContentPath);
 
 /// <summary>
 /// Reads <c>&lt;packageDir&gt;/&lt;PackageIdentifier&gt;/&lt;platform&gt;-&lt;architecture&gt;/package-metadata.json</c>
@@ -50,10 +53,12 @@ public static class PackageMetadataReader
             throw new PackagingException($"Package metadata '{metadataPath}' is not valid JSON: {exception.Message}");
         }
 
-        if (metadata is null || string.IsNullOrWhiteSpace(metadata.IntuneWinFile) || string.IsNullOrWhiteSpace(metadata.InputHash))
+        // Windows writes IntuneWinFile, macOS writes ContentFile; exactly one is expected to be present.
+        var contentFile = metadata?.ContentFile ?? metadata?.IntuneWinFile;
+        if (metadata is null || string.IsNullOrWhiteSpace(contentFile) || string.IsNullOrWhiteSpace(metadata.InputHash))
         {
             throw new PackagingException(
-                $"Package metadata '{metadataPath}' is missing required fields (intuneWinFile, inputHash).");
+                $"Package metadata '{metadataPath}' is missing required fields (contentFile/intuneWinFile, inputHash).");
         }
 
         // Same comparison rules as AppIdentity.Matches: the identifier is a stable case-sensitive
@@ -70,13 +75,13 @@ public static class PackageMetadataReader
                 $"'{identity.PackageIdentifier}' {identity.Platform}-{identity.Architecture}.");
         }
 
-        var intuneWinPath = PathSafety.ResolveWithin(entryDirectory, metadata.IntuneWinFile, "Package metadata IntuneWinFile");
-        if (!File.Exists(intuneWinPath))
+        var contentPath = PathSafety.ResolveWithin(entryDirectory, contentFile, "Package metadata ContentFile/IntuneWinFile");
+        if (!File.Exists(contentPath))
         {
             throw new PackagingException(
-                $"Package '{intuneWinPath}' referenced by '{metadataPath}' does not exist. Re-run the package command.");
+                $"Package '{contentPath}' referenced by '{metadataPath}' does not exist. Re-run the package command.");
         }
 
-        return new PackageArtifacts(metadata, intuneWinPath);
+        return new PackageArtifacts(metadata, contentPath);
     }
 }
