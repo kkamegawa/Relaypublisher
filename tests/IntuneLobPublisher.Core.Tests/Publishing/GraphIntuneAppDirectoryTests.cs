@@ -50,6 +50,21 @@ public sealed class GraphIntuneAppDirectoryTests
     }
 
     [TestMethod]
+    public async Task ListAppsAsync_ListsViaBetaSoMacOsPkgAppsAreNotOmitted()
+    {
+        // macOSPkgApp is beta-only (https://learn.microsoft.com/graph/api/resources/intune-apps-macospkgapp),
+        // so listing via v1.0 could silently miss pkg apps during app resolution.
+        var handler = new QueueHandler(_ => JsonResponse("""{"value":[]}"""));
+        var directory = new GraphIntuneAppDirectory(CreateClient(handler));
+
+        await directory.ListAppsAsync(CancellationToken.None);
+
+        Assert.AreEqual(
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?$select=id,displayName,notes",
+            handler.RequestedUris[0]);
+    }
+
+    [TestMethod]
     public async Task ListAppsAsync_FollowsNextLinkUntilExhausted()
     {
         var handler = new QueueHandler(

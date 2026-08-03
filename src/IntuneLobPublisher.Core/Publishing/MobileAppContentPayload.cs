@@ -102,14 +102,16 @@ public sealed class CommitFileRequest
 }
 
 /// <summary>
-/// PATCH body for updating a <c>win32LobApp</c> after content upload. Shared by the
+/// PATCH body for updating a mobile LOB app after content upload. Shared by the
 /// <c>committedContentVersion</c> patch (step 8) and the management-metadata <c>notes</c> patch (step 10) -
 /// each call only sets the field it needs, and the other is omitted rather than sent as null.
+/// <see cref="ODataType"/> has no default: callers must state the app's concrete Graph type
+/// (<c>win32LobApp</c>, <c>macOSPkgApp</c>, <c>macOSLobApp</c>) explicitly.
 /// </summary>
-public sealed class Win32LobAppContentPatchPayload
+public sealed class MobileAppMetadataPatchPayload
 {
     [JsonPropertyName("@odata.type")]
-    public string ODataType { get; init; } = "#microsoft.graph.win32LobApp";
+    public required string ODataType { get; init; }
 
     [JsonPropertyName("committedContentVersion")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -1,13 +1,14 @@
 using System.IO.Compression;
 using IntuneLobPublisher.Core.Exceptions;
-using IntuneLobPublisher.Core.Packaging;
 using IntuneLobPublisher.Core.Publishing;
 
 namespace IntuneLobPublisher.Core.Tests.Publishing;
 
 [TestClass]
-public sealed class Win32LobAppContentUploadOrchestratorTests
+public sealed class MobileAppContentUploadOrchestratorTests
 {
+    private const string WindowsODataType = "#microsoft.graph.win32LobApp";
+
     private DirectoryInfo _workspace = null!;
 
     [TestInitialize]
@@ -41,17 +42,26 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
 
         public List<string> PatchedNotes { get; } = [];
 
-        public Task<string> CreateContentVersionAsync(string appId, CancellationToken cancellationToken) => Task.FromResult("cv-1");
+        public List<bool> UseBetaCalls { get; } = [];
+
+        public List<string> ODataTypeCalls { get; } = [];
+
+        public Task<string> CreateContentVersionAsync(string appId, bool useBeta, CancellationToken cancellationToken)
+        {
+            UseBetaCalls.Add(useBeta);
+            return Task.FromResult("cv-1");
+        }
 
         public Task<string> CreateContentFileAsync(
-            string appId, string contentVersionId, string name, long size, long sizeEncrypted, CancellationToken cancellationToken)
+            string appId, string contentVersionId, string name, long size, long sizeEncrypted, bool useBeta, CancellationToken cancellationToken)
         {
             CreateContentFileCalls.Add((name, size, sizeEncrypted));
+            UseBetaCalls.Add(useBeta);
             return Task.FromResult("file-1");
         }
 
         public Task<MobileAppContentFileResponse> GetContentFileAsync(
-            string appId, string contentVersionId, string fileId, CancellationToken cancellationToken)
+            string appId, string contentVersionId, string fileId, bool useBeta, CancellationToken cancellationToken)
         {
             if (FileResponses.Count == 0)
             {
@@ -61,32 +71,36 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
             return Task.FromResult(FileResponses.Dequeue());
         }
 
-        public Task RenewUploadAsync(string appId, string contentVersionId, string fileId, CancellationToken cancellationToken)
+        public Task RenewUploadAsync(string appId, string contentVersionId, string fileId, bool useBeta, CancellationToken cancellationToken)
         {
             RenewUploadCallCount++;
             return Task.CompletedTask;
         }
 
         public Task CommitFileAsync(
-            string appId, string contentVersionId, string fileId, FileEncryptionInfoPayload fileEncryptionInfo, CancellationToken cancellationToken)
+            string appId, string contentVersionId, string fileId, FileEncryptionInfoPayload fileEncryptionInfo, bool useBeta, CancellationToken cancellationToken)
         {
             CommitFileCalls.Add(fileEncryptionInfo);
             return Task.CompletedTask;
         }
 
-        public Task PatchCommittedContentVersionAsync(string appId, string contentVersionId, CancellationToken cancellationToken)
+        public Task PatchCommittedContentVersionAsync(string appId, string contentVersionId, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
             PatchedCommittedContentVersion = contentVersionId;
+            ODataTypeCalls.Add(oDataType);
+            UseBetaCalls.Add(useBeta);
             return Task.CompletedTask;
         }
 
-        public Task PatchNotesAsync(string appId, string notes, CancellationToken cancellationToken)
+        public Task PatchNotesAsync(string appId, string notes, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
             PatchedNotes.Add(notes);
+            ODataTypeCalls.Add(oDataType);
+            UseBetaCalls.Add(useBeta);
             return Task.CompletedTask;
         }
 
-        public Task<string> GetPublishingStateAsync(string appId, CancellationToken cancellationToken)
+        public Task<string> GetPublishingStateAsync(string appId, bool useBeta, CancellationToken cancellationToken)
         {
             if (PublishingStates.Count == 0)
             {
@@ -174,8 +188,8 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
         return path;
     }
 
-    private IntuneWinPackageResult CreatePackage(string inputHash = "input-hash-new")
-        => new("Contoso.Tool", "windows", "x64", CreateIntuneWinFile(), "irrelevant-sha256", inputHash, "1.8.5.0", new string('a', 64), "irrelevant-metadata.json");
+    private PublishableContent CreateContent(string inputHash = "input-hash-new")
+        => new(CreateIntuneWinFile(), inputHash);
 
     private static ContentUploadOptions FastOptions() => new()
     {
@@ -187,13 +201,19 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
         PublishingStateTimeout = TimeSpan.FromSeconds(3),
     };
 
-    private static Win32LobAppContentUploadOrchestrator CreateOrchestrator(
+    private static MobileAppContentUploadOrchestrator CreateOrchestrator(
         FakeMobileAppContentClient client, FakeAzureStorageBlockBlobUploader uploader, ManualTimeProvider timeProvider)
-        => new(new IntuneWinContentExtractor(), client, uploader, timeProvider, (delay, _) =>
+        => new(client, uploader, timeProvider, (delay, _) =>
         {
             timeProvider.Advance(delay);
             return Task.CompletedTask;
         });
+
+    private static Task<ContentUploadResult> PublishAsync(
+        MobileAppContentUploadOrchestrator orchestrator, string appId, PublishableContent content, string? storedInputHash,
+        ManagementMetadata metadata, ContentUploadOptions options, bool useBeta = false)
+        => orchestrator.PublishContentAsync(
+            appId, content, storedInputHash, metadata, options, new IntuneWinContentExtractor(), WindowsODataType, useBeta, CancellationToken.None);
 
     [TestMethod]
     public async Task PublishContentAsync_MatchingInputHash_SkipsUploadAndOnlyPatchesNotes()
@@ -202,8 +222,8 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
         var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
         var metadata = CreateMetadata();
 
-        var result = await orchestrator.PublishContentAsync(
-            "app-1", CreatePackage(inputHash: "same-hash"), storedInputHash: "same-hash", metadata, FastOptions(), CancellationToken.None);
+        var result = await PublishAsync(
+            orchestrator, "app-1", CreateContent(inputHash: "same-hash"), storedInputHash: "same-hash", metadata, FastOptions());
 
         Assert.AreEqual(ContentUploadOutcome.SkippedUnchanged, result.Outcome);
         Assert.IsNull(result.ContentVersionId);
@@ -224,8 +244,7 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
         var orchestrator = CreateOrchestrator(client, uploader, new ManualTimeProvider());
         var metadata = CreateMetadata();
 
-        var result = await orchestrator.PublishContentAsync(
-            "app-1", CreatePackage(), storedInputHash: "old-hash", metadata, FastOptions(), CancellationToken.None);
+        var result = await PublishAsync(orchestrator, "app-1", CreateContent(), storedInputHash: "old-hash", metadata, FastOptions());
 
         Assert.AreEqual(ContentUploadOutcome.Uploaded, result.Outcome);
         Assert.AreEqual("cv-1", result.ContentVersionId);
@@ -237,6 +256,26 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
         Assert.AreEqual("cv-1", client.PatchedCommittedContentVersion);
         Assert.HasCount(1, client.PatchedNotes);
         Assert.AreEqual(metadata.Serialize(), client.PatchedNotes[0]);
+        Assert.IsTrue(client.UseBetaCalls.TrueForAll(b => !b), "useBeta should stay false end to end for a Windows publish.");
+        Assert.IsTrue(client.ODataTypeCalls.TrueForAll(t => t == WindowsODataType));
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_UseBetaTrue_PassedThroughToEveryContentCall()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.FileResponses.Enqueue(FileState("azureStorageUriRequestSuccess", "https://sas.example/blob"));
+        client.FileResponses.Enqueue(FileState("commitFileSuccess"));
+        client.PublishingStates.Enqueue("published");
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+
+        await orchestrator.PublishContentAsync(
+            "app-1", CreateContent(), storedInputHash: null, CreateMetadata(), FastOptions(),
+            new IntuneWinContentExtractor(), "#microsoft.graph.macOSPkgApp", useBeta: true, CancellationToken.None);
+
+        Assert.IsTrue(client.UseBetaCalls.Count > 0);
+        Assert.IsTrue(client.UseBetaCalls.TrueForAll(b => b));
+        Assert.IsTrue(client.ODataTypeCalls.TrueForAll(t => t == "#microsoft.graph.macOSPkgApp"));
     }
 
     [TestMethod]
@@ -246,8 +285,8 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
         client.FileResponses.Enqueue(FileState("azureStorageUriRequestFailed"));
         var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
 
-        var ex = await Assert.ThrowsExactlyAsync<ContentUploadFailedException>(() => orchestrator.PublishContentAsync(
-            "app-1", CreatePackage(), storedInputHash: null, CreateMetadata(), FastOptions(), CancellationToken.None));
+        var ex = await Assert.ThrowsExactlyAsync<ContentUploadFailedException>(() =>
+            PublishAsync(orchestrator, "app-1", CreateContent(), storedInputHash: null, CreateMetadata(), FastOptions()));
 
         Assert.AreEqual("azureStorageUriRequest", ex.Stage);
         Assert.AreEqual("azureStorageUriRequestFailed", ex.UploadState);
@@ -260,8 +299,8 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
         client.FileResponses.Enqueue(FileState("azureStorageUriRequestSuccess", "https://sas.example/blob", includeExpiration: false));
         var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
 
-        await Assert.ThrowsExactlyAsync<GraphRequestException>(() => orchestrator.PublishContentAsync(
-            "app-1", CreatePackage(), storedInputHash: null, CreateMetadata(), FastOptions(), CancellationToken.None));
+        await Assert.ThrowsExactlyAsync<GraphRequestException>(() =>
+            PublishAsync(orchestrator, "app-1", CreateContent(), storedInputHash: null, CreateMetadata(), FastOptions()));
     }
 
     [TestMethod]
@@ -275,8 +314,8 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
 
         var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
 
-        var ex = await Assert.ThrowsExactlyAsync<ContentUploadTimedOutException>(() => orchestrator.PublishContentAsync(
-            "app-1", CreatePackage(), storedInputHash: null, CreateMetadata(), FastOptions(), CancellationToken.None));
+        var ex = await Assert.ThrowsExactlyAsync<ContentUploadTimedOutException>(() =>
+            PublishAsync(orchestrator, "app-1", CreateContent(), storedInputHash: null, CreateMetadata(), FastOptions()));
 
         Assert.AreEqual("azureStorageUriRequest", ex.Stage);
     }
@@ -289,8 +328,8 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
         client.FileResponses.Enqueue(FileState("commitFileFailed"));
         var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
 
-        var ex = await Assert.ThrowsExactlyAsync<ContentUploadFailedException>(() => orchestrator.PublishContentAsync(
-            "app-1", CreatePackage(), storedInputHash: null, CreateMetadata(), FastOptions(), CancellationToken.None));
+        var ex = await Assert.ThrowsExactlyAsync<ContentUploadFailedException>(() =>
+            PublishAsync(orchestrator, "app-1", CreateContent(), storedInputHash: null, CreateMetadata(), FastOptions()));
 
         Assert.AreEqual("commit", ex.Stage);
         Assert.IsNull(client.PatchedCommittedContentVersion);
@@ -309,8 +348,8 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
 
         var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
 
-        var ex = await Assert.ThrowsExactlyAsync<ContentUploadTimedOutException>(() => orchestrator.PublishContentAsync(
-            "app-1", CreatePackage(), storedInputHash: null, CreateMetadata(), FastOptions(), CancellationToken.None));
+        var ex = await Assert.ThrowsExactlyAsync<ContentUploadTimedOutException>(() =>
+            PublishAsync(orchestrator, "app-1", CreateContent(), storedInputHash: null, CreateMetadata(), FastOptions()));
 
         Assert.AreEqual("publishingState", ex.Stage);
         // committedContentVersion is patched before waiting for publishingState - the point of no return already happened.
@@ -328,8 +367,7 @@ public sealed class Win32LobAppContentUploadOrchestratorTests
         var uploader = new FakeAzureStorageBlockBlobUploader { InvokeRenewal = true };
         var orchestrator = CreateOrchestrator(client, uploader, new ManualTimeProvider());
 
-        await orchestrator.PublishContentAsync(
-            "app-1", CreatePackage(), storedInputHash: null, CreateMetadata(), FastOptions(), CancellationToken.None);
+        await PublishAsync(orchestrator, "app-1", CreateContent(), storedInputHash: null, CreateMetadata(), FastOptions());
 
         Assert.AreEqual(1, client.RenewUploadCallCount);
         Assert.IsNotNull(uploader.LastRenewal);

@@ -8,10 +8,15 @@ namespace IntuneLobPublisher.Core.Publishing;
 /// Lists Intune mobile apps via <c>GET /deviceAppManagement/mobileApps</c>, following
 /// <c>@odata.nextLink</c> pages. Uses the caller-supplied <see cref="HttpClient"/>, which is
 /// expected to be one built by <see cref="GraphClientFactory"/> (authentication + retry already wired).
+/// Lists via <c>/beta/</c> (an absolute path, same technique as <see cref="Assignments.AssignmentGraphClient"/>)
+/// rather than the client's <c>/v1.0/</c> base address: <c>macOSPkgApp</c> is beta-only
+/// (https://learn.microsoft.com/graph/api/resources/intune-apps-macospkgapp), so a v1.0 listing could
+/// silently omit pkg apps from app resolution. <c>id</c>/<c>displayName</c>/<c>notes</c> are identical
+/// across both API versions, so this does not change what is returned for Windows/lob apps.
 /// </summary>
 public sealed class GraphIntuneAppDirectory : IIntuneAppDirectory
 {
-    private const string InitialRequestUri = "deviceAppManagement/mobileApps?$select=id,displayName,notes";
+    private const string InitialRequestUri = "/beta/deviceAppManagement/mobileApps?$select=id,displayName,notes";
 
     private readonly HttpClient _httpClient;
 

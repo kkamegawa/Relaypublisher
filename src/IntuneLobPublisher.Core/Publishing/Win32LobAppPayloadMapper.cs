@@ -46,7 +46,7 @@ public static class Win32LobAppPayloadMapper
             Owner = manifest.Owner,
             Developer = manifest.Developer,
             InformationUrl = manifest.InformationUrl,
-            LargeIcon = MapLargeIcon(manifest.Icon, iconBytes),
+            LargeIcon = IconPayloadMapper.Map(manifest.Icon, iconBytes),
             RoleScopeTagIds = manifest.RoleScopeTagIds is { Count: > 0 } ? manifest.RoleScopeTagIds : null,
             InstallCommandLine = install.CommandLine!,
             UninstallCommandLine = install.UninstallCommandLine!,
@@ -76,25 +76,4 @@ public static class Win32LobAppPayloadMapper
             RunAs32Bit = detection?.RunAs32Bit ?? false,
             ScriptContent = Convert.ToBase64String(Encoding.UTF8.GetBytes(detectionScriptContent)),
         };
-
-    private static MimeContentPayload? MapLargeIcon(string? iconPath, byte[]? iconBytes)
-    {
-        if (iconBytes is null || iconPath is null)
-        {
-            return null;
-        }
-
-        return new MimeContentPayload
-        {
-            Type = ResolveIconMimeType(iconPath),
-            Value = Convert.ToBase64String(iconBytes),
-        };
-    }
-
-    private static string ResolveIconMimeType(string iconPath) => Path.GetExtension(iconPath).ToLowerInvariant() switch
-    {
-        ".png" => "image/png",
-        ".jpg" or ".jpeg" => "image/jpeg",
-        _ => throw new UnsupportedIconFormatException(iconPath),
-    };
 }

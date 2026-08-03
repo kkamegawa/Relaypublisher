@@ -162,6 +162,28 @@ public sealed class UnsupportedWindowsBuildException : PublisherException
     public string MinimumOsVersion { get; }
 }
 
+/// <summary>
+/// A manifest's <c>Requirements.MinimumOSVersion</c> has no known mapping to a Graph
+/// <c>macOSMinimumOperatingSystem</c> flag, or maps to a beta-only flag (macOS 14+) requested by a
+/// v1.0-only app (<c>AppType: lob</c>).
+/// </summary>
+public sealed class UnsupportedMacOsVersionException : PublisherException
+{
+    public UnsupportedMacOsVersionException(string minimumOsVersion, bool requiresBetaOnlyFlag = false)
+        : base(requiresBetaOnlyFlag
+            ? $"MinimumOSVersion '{minimumOsVersion}' requires a beta-only macOS minimum-operating-system flag (macOS 14 or later), " +
+              "which is not available for AppType 'lob' (Graph v1.0). Use AppType 'pkg' instead."
+            : $"MinimumOSVersion '{minimumOsVersion}' has no known macOS minimum-operating-system mapping.")
+    {
+        MinimumOsVersion = minimumOsVersion;
+        RequiresBetaOnlyFlag = requiresBetaOnlyFlag;
+    }
+
+    public string MinimumOsVersion { get; }
+
+    public bool RequiresBetaOnlyFlag { get; }
+}
+
 /// <summary>A manifest's <c>Icon</c> file extension has no known Graph <c>largeIcon</c> MIME type mapping.</summary>
 public sealed class UnsupportedIconFormatException : PublisherException
 {
