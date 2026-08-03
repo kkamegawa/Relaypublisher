@@ -148,12 +148,15 @@ If publish reports missing package metadata:
 
 - **`UnsupportedMacOsVersionException` mentioning "no known macOS minimum-operating-system mapping"**:
   `Requirements.MinimumOSVersion` is not one of the values `MacOsMinimumOperatingSystemTable` recognizes
-  (`10.13`-`13.0`, or `14`/`14.0`/`15`/`15.0` for `AppType: pkg` only). Fix the version string in the manifest.
+  (`10.13`-`13.0`, or `14`/`14.0`/`15`/`15.0` for `AppType: pkg` only). This mapping only runs during
+  `publish` (including `--dry-run`), not `package`, so fix the version string before publishing.
 - **`UnsupportedMacOsVersionException` mentioning "AppType 'pkg'"**: the manifest has `AppType: lob` with
   `Requirements.MinimumOSVersion` set to macOS 14 or later. `macOSLobApp` stays on Graph v1.0, which has no
   minimum-OS flag past macOS 13. Either lower `MinimumOSVersion`, or switch to `AppType: pkg` (Graph beta,
   which does support 14/15). `validate` does not catch this - it is a Graph API-version limitation, not a
-  manifest schema rule - so it only surfaces at `package`/`publish` time (and in `--dry-run`).
+  manifest schema rule - and neither does `package`, which never maps `MinimumOSVersion` to a Graph value;
+  it only surfaces at `publish` time (and in `publish --dry-run`, which maps the payload to surface exactly
+  this kind of error before any Graph write).
 - **`Detection.IncludedApps` missing or empty**: every macOS app entry requires at least one
   `IncludedApps` item (`BundleId` + `BundleVersion`); this fails at `validate`, not `publish`.
 - **PKG content upload never reaches `commitFileSuccess`**: `PkgContentPreparer`'s AES-256-CBC + HMAC-SHA256

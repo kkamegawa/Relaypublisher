@@ -141,9 +141,14 @@ dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
 ```
 
 Windows 以外の runner では、Windows entry の `.intunewin` 生成をスキップしつつ staging validation を行うために
-`--stage-only` を使います。同じ manifest list 内の macOS entry は `--stage-only` の有無に関わらず staging(と
-`package-metadata.json` の書き出し)が行われます。macOS の packaging には外部ツール呼び出しの工程が無く、
-Windows runner を必要としないためです。
+`--stage-only` を使います。macOS entry は Windows 以外の runner でも `--stage-only` を付ける必要はありません。
+macOS の packaging には外部ツール呼び出しの工程が無いため、`--stage-only` を付けない通常の `package` だけで
+`.pkg` の staging・checksum 検証・`package-metadata.json` の書き出しまで完了します。ただし `--stage-only` は
+manifest list 内の全 platform に一律に適用されるため、Windows entry のために `--stage-only` を付けた場合、
+同じ実行に含まれる macOS entry も staging はされますが `package-metadata.json` は書き出されません。その状態の
+出力に対して `publish` を実行すると、macOS entry 側で package metadata missing により fail する。macOS entry
+については `--stage-only` を外して `package` を再実行するか、Windows entry と分けて別の `package` 呼び出しに
+すること:
 
 ```bash
 dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \

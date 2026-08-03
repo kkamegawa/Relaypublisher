@@ -148,12 +148,15 @@ Publish が package metadata missing を報告した場合:
 
 - **`UnsupportedMacOsVersionException`("no known macOS minimum-operating-system mapping")**:
   `Requirements.MinimumOSVersion` が `MacOsMinimumOperatingSystemTable` の認識する値(`10.13`〜`13.0`、または
-  `AppType: pkg` のみ有効な `14`/`14.0`/`15`/`15.0`)のいずれでもない。manifest のバージョン文字列を修正する。
+  `AppType: pkg` のみ有効な `14`/`14.0`/`15`/`15.0`)のいずれでもない。この mapping は `publish`(および
+  `--dry-run`)時にのみ実行され `package` では行われないため、publish 前に manifest のバージョン文字列を修正する。
 - **`UnsupportedMacOsVersionException`("AppType 'pkg'" に言及)**: manifest が `AppType: lob` かつ
   `Requirements.MinimumOSVersion` に macOS 14 以降を指定している。`macOSLobApp` は Graph v1.0 のままで、
   macOS 13 より先の minimum-OS フラグが無い。`MinimumOSVersion` を下げるか、`AppType: pkg`(Graph beta、
   14/15 に対応)に切り替える。これは Graph API バージョンの制約であり manifest schema のルールではないため
-  `validate` では検出されず、`package`/`publish` 時(および `--dry-run`)にのみ表面化する。
+  `validate` では検出されない。`package` も `MinimumOSVersion` を Graph の値へ mapping することは無いため
+  検出できず、`publish` 時(および、Graph へ書き込む前にこの種のエラーを表面化させる `publish --dry-run`)に
+  のみ表面化する。
 - **`Detection.IncludedApps` が欠落または空**: macOS のすべての app entry は `IncludedApps` を 1 件以上
   (`BundleId` + `BundleVersion`)必要とする。これは `publish` ではなく `validate` で fail する。
 - **PKG の content upload が `commitFileSuccess` に到達しない**: `PkgContentPreparer` の

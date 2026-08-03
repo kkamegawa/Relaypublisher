@@ -141,9 +141,14 @@ dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
 ```
 
 On non-Windows runners, use `--stage-only` for Windows entries to skip `.intunewin` generation while still
-validating staging. macOS entries in the same manifest list are staged (and their `package-metadata.json`
-written) regardless of `--stage-only`'s absence, since macOS packaging has no external tool step and does
-not require a Windows runner:
+validating staging. macOS entries do not need `--stage-only` on a non-Windows runner - macOS packaging has
+no external tool step, so plain `package` (without `--stage-only`) already stages the `.pkg`, verifies its
+checksum, and writes `package-metadata.json` there. `--stage-only` applies uniformly to every platform in
+the manifest list, though: if a mixed Windows/macOS list needs it for the Windows entries, macOS entries in
+that same run are staged but their `package-metadata.json` is *not* written either, so a later `publish`
+against that output fails with missing package metadata for the macOS entries too. Run `package` again
+without `--stage-only` for the macOS entries (or split them into a separate `package` invocation) before
+publishing:
 
 ```bash
 dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
