@@ -59,12 +59,13 @@ internal static class CommandSupport
     }
 
     /// <summary>
-    /// Loads and validates the given manifest files, including the repository-wide
-    /// uniqueness lint. Returns the successfully loaded manifests and all errors.
+    /// Loads and validates the given manifest files, including file-backed asset checks (issue #63)
+    /// and the repository-wide uniqueness lint. Returns the successfully loaded manifests and all errors.
     /// </summary>
     public static async Task<(IReadOnlyList<LoadedManifest> Manifests, IReadOnlyList<string> Errors)> LoadAndValidateAsync(
         IServiceProvider services,
         IReadOnlyList<string> manifestFiles,
+        string repoRoot,
         CancellationToken cancellationToken)
     {
         var loader = services.GetRequiredService<IManifestLoader>();
@@ -83,6 +84,13 @@ internal static class CommandSupport
                 if (!result.IsValid)
                 {
                     errors.AddRange(result.Errors.Select(e => $"{file}: {e.PropertyName}: {e.ErrorMessage}"));
+                    continue;
+                }
+
+                var assetErrors = ManifestAssetValidator.Validate(manifest, repoRoot);
+                if (assetErrors.Count > 0)
+                {
+                    errors.AddRange(assetErrors.Select(e => $"{file}: {e}"));
                     continue;
                 }
 

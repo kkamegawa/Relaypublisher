@@ -45,6 +45,12 @@ internal sealed class IntunePackageManifestValidator : AbstractValidator<IntuneP
             .Must(v => v is null || PathSafety.IsSafeRelativePath(v))
             .WithMessage("Icon must be a repository-relative path without traversal segments.");
 
+        // Format checked here (pure, no I/O); existence and size need the repository root and are
+        // checked separately by ManifestAssetValidator (issue #63).
+        RuleFor(m => m.Icon)
+            .Must(v => v is null || ManifestValues.IconExtensions.Contains(Path.GetExtension(v).ToLowerInvariant()))
+            .WithMessage(m => $"Icon '{m.Icon}' has an unsupported file extension. Supported: {string.Join(", ", ManifestValues.IconExtensions)}.");
+
         // macOS AppType: lob (macOSLobApp) requires a top-level Icon or the app never shows in the
         // admin console list (doc/01-manifest-schema.md §5.4).
         RuleFor(m => m.Icon)

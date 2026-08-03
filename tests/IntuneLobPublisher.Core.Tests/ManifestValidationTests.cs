@@ -47,6 +47,30 @@ public sealed class ManifestValidationTests
     }
 
     [TestMethod]
+    [DataRow("assets/icons/contoso-tool.png")]
+    [DataRow("assets/icons/contoso-tool.PNG")]
+    [DataRow("assets/icons/contoso-tool.jpg")]
+    [DataRow("assets/icons/contoso-tool.jpeg")]
+    public void Validate_SupportedIconExtension_Passes(string icon)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Icon = icon;
+        var result = _validator.Validate(manifest);
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => e.ErrorMessage)));
+    }
+
+    [TestMethod]
+    [DataRow("assets/icons/contoso-tool.bmp")]
+    [DataRow("assets/icons/contoso-tool.gif")]
+    [DataRow("assets/icons/contoso-tool")]
+    public void Validate_UnsupportedIconExtension_Fails(string icon)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Icon = icon;
+        AssertInvalid(manifest, "unsupported file extension");
+    }
+
+    [TestMethod]
     public void Validate_MissingSchemaVersion_Fails()
     {
         var manifest = TestManifests.CreateValid();
