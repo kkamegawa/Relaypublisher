@@ -72,7 +72,7 @@ internal static class PublishCommand
                     return ExitCodes.Success;
                 }
 
-                var (manifests, errors) = await CommandSupport.LoadAndValidateAsync(services, files, cancellationToken);
+                var (manifests, errors) = await CommandSupport.LoadAndValidateAsync(services, files, repoRoot, cancellationToken);
                 if (errors.Count > 0)
                 {
                     await WriteResultFileAsync(resultFile, [], cancellationToken);

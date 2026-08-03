@@ -214,6 +214,17 @@ validation ルール:
 - `AppType: pkg` の app に `Intent: uninstall` があれば fail。
 - `AppType: lob` の場合、top-level `Icon` を必須とする。
 
+### 5.4.1 Icon の制約(issue #63)
+
+top-level `Icon`(§2 参照)には次の制約がある。`validate` / `package` / `publish` はすべて、Graph 呼び出し前にこれらを検証する。
+
+- 形式: `.png` / `.jpg` / `.jpeg` のみ(大文字小文字は区別しない)。それ以外の拡張子は fail。
+- サイズ: 1 MiB(1,048,576 バイト)以下。超過は fail。
+- 存在: `--repo-root` からの相対パスにファイルが実在すること。存在しなければ fail。
+- `AppType: lob` の app が 1 つでもある場合、top-level `Icon` は必須(§5.4)。
+
+自動リサイズ・変換は行わない。要件を満たす画像を事前に用意すること。
+
 ### 5.5 Assignment schema
 
 ```yaml

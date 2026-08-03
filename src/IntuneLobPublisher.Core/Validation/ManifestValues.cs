@@ -34,6 +34,12 @@ public static partial class ManifestValues
     public static readonly IReadOnlyList<string> AssignmentSyncModes = ["merge", "replace"];
     public static readonly IReadOnlyList<string> NotificationValues = ["showAll", "showReboot", "hideAll"];
 
+    /// <summary>Icon file extensions Graph's largeIcon MIME mapping recognizes (case-insensitive).</summary>
+    public static readonly IReadOnlyList<string> IconExtensions = [".png", ".jpg", ".jpeg"];
+
+    /// <summary>Operational upper bound on Icon file size, so oversized icons fail before a Graph call.</summary>
+    public const long MaxIconBytes = 1 * 1024 * 1024;
+
     [GeneratedRegex("^[0-9a-fA-F]{64}$")]
     private static partial Regex Sha256Regex();
 
