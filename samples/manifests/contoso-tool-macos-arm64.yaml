@@ -1,6 +1,4 @@
 # Sample macOS PKG app manifest (doc/01-manifest-schema.md 5.3).
-# NOTE: macOS support is not implemented in the CLI yet; `validate` currently
-# accepts Platform 'windows' only. This sample documents the target schema.
 SchemaVersion: "1.0"
 PackageIdentifier: Contoso.Tool
 PackageName: Contoso Tool

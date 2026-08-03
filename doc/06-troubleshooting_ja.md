@@ -144,6 +144,29 @@ Publish が package metadata missing を報告した場合:
 - `package` と `publish` が同じ `manifest-list.json` を使っていることを確認します。
 - Package metadata を手動編集せず、`package` を rerun します。
 
+## 6a. macOS 固有の失敗
+
+- **`UnsupportedMacOsVersionException`("no known macOS minimum-operating-system mapping")**:
+  `Requirements.MinimumOSVersion` が `MacOsMinimumOperatingSystemTable` の認識する値(`10.13`〜`13.0`、または
+  `AppType: pkg` のみ有効な `14`/`14.0`/`15`/`15.0`)のいずれでもない。manifest のバージョン文字列を修正する。
+- **`UnsupportedMacOsVersionException`("AppType 'pkg'" に言及)**: manifest が `AppType: lob` かつ
+  `Requirements.MinimumOSVersion` に macOS 14 以降を指定している。`macOSLobApp` は Graph v1.0 のままで、
+  macOS 13 より先の minimum-OS フラグが無い。`MinimumOSVersion` を下げるか、`AppType: pkg`(Graph beta、
+  14/15 に対応)に切り替える。これは Graph API バージョンの制約であり manifest schema のルールではないため
+  `validate` では検出されず、`package`/`publish` 時(および `--dry-run`)にのみ表面化する。
+- **`Detection.IncludedApps` が欠落または空**: macOS のすべての app entry は `IncludedApps` を 1 件以上
+  (`BundleId` + `BundleVersion`)必要とする。これは `publish` ではなく `validate` で fail する。
+- **PKG の content upload が `commitFileSuccess` に到達しない**: `PkgContentPreparer` の
+  AES-256-CBC + HMAC-SHA256 暗号化形式は Microsoft の公開仕様が無く(doc/00-overview.md §6.13 参照)、
+  `IntuneWinContentExtractor` が `.intunewin` の content 解析にすでに依拠しているコミュニティ由来のスキームを
+  踏襲し、公開されている `fileEncryptionInfo.mac` の仕様と突き合わせて導出したものである。macOS entry でのみ
+  (Windows entry は影響を受けない)commit が繰り返し失敗する場合は、闇雲に retry せず、ログの Graph エラーと
+  `client-request-id`/`request-id` を添えて issue を起票する。
+- **macOS `AppType: pkg` entry に特有の 403/404(`GraphRequestException`)**: pkg app の作成・更新・
+  content upload はすべて Graph **beta** 経由で行われる(`macOSPkgApp` は v1.0 に存在しない)。service
+  principal の Graph 権限とテナントの beta API 可用性を確認する。Windows や `AppType: lob`(v1.0 のまま)の
+  publish には影響しない。
+
 ## 7. Safe rerun rules
 
 - `validate`、`plan`、`package --stage-only` は rerun して安全です。

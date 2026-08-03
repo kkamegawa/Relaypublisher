@@ -6,10 +6,26 @@ The repository now contains the .NET CLI foundation for the normal workflow:
 
 - `validate` checks manifest schema rules and repository-wide identity uniqueness.
 - `plan` resolves the target manifest set once and writes `manifest-list.json` for later CI jobs.
-- `package` stages Windows Win32 app files and creates `.intunewin` packages on Windows.
+- `package` stages app files: Windows Win32 `.intunewin` packages (Windows runner required) or a
+  staged, checksum-verified macOS `.pkg` (any OS).
 - `publish` creates or updates Intune apps, uploads packaged content, and reconciles assignments.
 
 The Japanese translation is available in [README_ja.md](README_ja.md).
+
+## Supported Platforms
+
+| | Windows (`win32LobApp`) | macOS `AppType: pkg` (`macOSPkgApp`, default) | macOS `AppType: lob` (`macOSLobApp`) |
+|---|---|---|---|
+| Graph API version | v1.0 | beta | v1.0 |
+| Signing | Not required | Not required | Developer ID Installer required |
+| Max package size | - | 8 GB | 2 GB |
+| Icon | Optional | Optional | Required |
+| `Intent: uninstall` | Supported | Not supported | Supported |
+| Detection | PowerShell script | `IncludedApps` (bundleId + version) | `IncludedApps` (bundleId + version) |
+
+See [doc/01-manifest-schema.md](doc/01-manifest-schema.md) §5.3-5.4 for the full macOS manifest shape
+and validation rules, and [doc/00-overview.md](doc/00-overview.md) §6.13 for the design rationale
+(including why `macOSPkgApp` requires Graph beta).
 
 ## What This Repository Provides
 

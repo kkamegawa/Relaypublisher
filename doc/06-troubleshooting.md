@@ -144,6 +144,29 @@ If publish reports missing package metadata:
 - Confirm the same `manifest-list.json` was used by `package` and `publish`.
 - Rerun `package` rather than editing package metadata manually.
 
+## 6a. macOS-Specific Failures
+
+- **`UnsupportedMacOsVersionException` mentioning "no known macOS minimum-operating-system mapping"**:
+  `Requirements.MinimumOSVersion` is not one of the values `MacOsMinimumOperatingSystemTable` recognizes
+  (`10.13`-`13.0`, or `14`/`14.0`/`15`/`15.0` for `AppType: pkg` only). Fix the version string in the manifest.
+- **`UnsupportedMacOsVersionException` mentioning "AppType 'pkg'"**: the manifest has `AppType: lob` with
+  `Requirements.MinimumOSVersion` set to macOS 14 or later. `macOSLobApp` stays on Graph v1.0, which has no
+  minimum-OS flag past macOS 13. Either lower `MinimumOSVersion`, or switch to `AppType: pkg` (Graph beta,
+  which does support 14/15). `validate` does not catch this - it is a Graph API-version limitation, not a
+  manifest schema rule - so it only surfaces at `package`/`publish` time (and in `--dry-run`).
+- **`Detection.IncludedApps` missing or empty**: every macOS app entry requires at least one
+  `IncludedApps` item (`BundleId` + `BundleVersion`); this fails at `validate`, not `publish`.
+- **PKG content upload never reaches `commitFileSuccess`**: `PkgContentPreparer`'s AES-256-CBC + HMAC-SHA256
+  encryption format has no published Microsoft specification (see doc/00-overview.md §6.13) - it is derived
+  from the same community-established scheme `IntuneWinContentExtractor` already relies on to parse
+  `.intunewin` content, cross-checked against the documented `fileEncryptionInfo.mac` semantics. If commit
+  repeatedly fails for macOS entries specifically (Windows entries unaffected), file an issue with the
+  Graph error and `client-request-id`/`request-id` from the log rather than retrying blindly.
+- **`GraphRequestException` with a 403/404 specific to macOS `AppType: pkg` entries**: pkg apps are
+  created, updated, and content-uploaded entirely through Graph **beta** (`macOSPkgApp` does not exist in
+  v1.0). Confirm the service principal's Graph permissions and the tenant's beta API availability; this
+  does not affect Windows or `AppType: lob` publishes, which stay on v1.0.
+
 ## 7. Safe Rerun Rules
 
 - `validate`, `plan`, and `package --stage-only` are safe to rerun.

@@ -140,7 +140,10 @@ dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
   package --manifest-list manifest-list.json --output ./out
 ```
 
-On non-Windows runners, use `--stage-only` for staging validation:
+On non-Windows runners, use `--stage-only` for Windows entries to skip `.intunewin` generation while still
+validating staging. macOS entries in the same manifest list are staged (and their `package-metadata.json`
+written) regardless of `--stage-only`'s absence, since macOS packaging has no external tool step and does
+not require a Windows runner:
 
 ```bash
 dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
@@ -162,6 +165,26 @@ dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
   publish --manifest-list manifest-list.json --package-dir ./out \
   --expected-tenant <tenant-id>
 ```
+
+## 4a. macOS Notes
+
+macOS support (doc/00-overview.md §6.13) has two `AppType` values with different Graph and operational
+characteristics:
+
+- `AppType: pkg` (default, `macOSPkgApp`): unsigned packages allowed, up to 8 GB, no `Intent: uninstall`.
+  Every Graph call for this app - create/update, content upload, notes/committedContentVersion patches,
+  and its appearance in app resolution - goes through Graph **beta**, because `macOSPkgApp` does not
+  exist in v1.0. There is no operator action needed for this; it is handled internally, but it means a
+  tenant-side beta API outage affects `pkg` publishes specifically.
+- `AppType: lob` (`macOSLobApp`): requires Developer ID Installer signing, capped at 2 GB, requires a
+  top-level `Icon`, and stays on Graph **v1.0**. Because v1.0's `minimumSupportedOperatingSystem` has no
+  flag past macOS 13, a `lob` manifest entry with `Requirements.MinimumOSVersion` set to macOS 14 or
+  later fails at `publish` (and in `--dry-run`) with `UnsupportedMacOsVersionException` pointing at
+  `AppType: pkg` as the fix - it is not caught by `validate`, since the constraint is a Graph API-version
+  limitation rather than a manifest schema rule.
+- `.pkg` content is encrypted in-process at publish time (no packaging-time tool like IntuneWinAppUtil
+  exists for macOS), so unlike Windows there is no separate "regenerate the encrypted package" step to
+  re-run after a content change; re-running `publish` re-encrypts the currently staged `.pkg`.
 
 ## 5. Exit Codes
 

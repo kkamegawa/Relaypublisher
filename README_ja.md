@@ -6,10 +6,25 @@ Relaypublisher は、winget 風の YAML manifest を CI から Microsoft Intune 
 
 - `validate` は manifest schema と repository 全体の identity 一意性を検証します。
 - `plan` は対象 manifest set を一度だけ確定し、後続 CI job 用の `manifest-list.json` を書き出します。
-- `package` は Windows Win32 app 用ファイルを staging し、Windows 上で `.intunewin` package を作成します。
+- `package` は app ファイルを staging します。Windows Win32 は `.intunewin` package を Windows 上で生成し、
+  macOS は checksum 検証済みの `.pkg` を staging します(OS 不問)。
 - `publish` は Intune app の作成・更新、package content upload、assignment 同期を行います。
 
 正式ドキュメントは英語版の [README.md](README.md) です。
+
+## 対応プラットフォーム
+
+| | Windows (`win32LobApp`) | macOS `AppType: pkg`(既定、`macOSPkgApp`) | macOS `AppType: lob`(`macOSLobApp`) |
+|---|---|---|---|
+| Graph API バージョン | v1.0 | beta | v1.0 |
+| 署名 | 不要 | 不要 | Developer ID Installer 署名必須 |
+| package サイズ上限 | - | 8 GB | 2 GB |
+| Icon | 任意 | 任意 | 必須 |
+| `Intent: uninstall` | 対応 | 非対応 | 対応 |
+| 検出方法 | PowerShell script | `IncludedApps`(bundleId + version) | `IncludedApps`(bundleId + version) |
+
+macOS manifest の詳細な形式と validation ルールは [doc/01-manifest-schema.md](doc/01-manifest-schema.md) §5.3-5.4 を、
+設計の背景(`macOSPkgApp` が Graph beta を必要とする理由を含む)は [doc/00-overview.md](doc/00-overview.md) §6.13 を参照してください。
 
 ## このリポジトリでできること
 
