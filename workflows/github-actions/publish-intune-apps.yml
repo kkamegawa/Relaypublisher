@@ -45,9 +45,11 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - run: dotnet build IntuneLobPublisher.sln --configuration Release
+      - run: dotnet build IntuneLobPublisher.slnx --configuration Release
 
-      - run: dotnet test IntuneLobPublisher.sln --configuration Release --no-build
+      - run: dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
+
+      - run: dotnet tool install --global relaypublisher
 
       # changed detection をここで一度だけ確定する。
       # PR: merge-base / push: event.before / dispatch: 明示指定または全件
@@ -74,12 +76,11 @@ jobs:
             ARGS+=(--manifests ${{ inputs.manifests }})
           fi
 
-          dotnet run --project src/IntuneLobPublisher.Cli --no-build --configuration Release -- "${ARGS[@]}"
+          relaypublisher "${ARGS[@]}"
 
       - name: Validate
         run: >
-          dotnet run --project src/IntuneLobPublisher.Cli --no-build --configuration Release --
-          validate --manifest-list manifest-list.json
+          relaypublisher validate --manifest-list manifest-list.json
 
       - uses: actions/upload-artifact@v4
         with:
@@ -105,6 +106,9 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      - shell: pwsh
+        run: dotnet tool install --global relaypublisher
+
       - uses: actions/download-artifact@v4
         with:
           name: manifest-list
@@ -117,9 +121,9 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - run: >
-          dotnet run --project src/IntuneLobPublisher.Cli --configuration Release --
-          package --manifest-list manifest-list.json --output ./out
+      - shell: pwsh
+        run: >
+          relaypublisher package --manifest-list manifest-list.json --output ./out
 
       - uses: actions/upload-artifact@v4
         with:
@@ -145,6 +149,8 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      - run: dotnet tool install --global relaypublisher
+
       - name: Azure login
         uses: azure/login@v2
         with:
@@ -162,8 +168,7 @@ jobs:
           path: ./out
 
       - run: >
-          dotnet run --project src/IntuneLobPublisher.Cli --configuration Release --
-          publish
+          relaypublisher publish
           --manifest-list manifest-list.json
           --package-dir ./out
           --expected-tenant "${{ secrets.AZURE_TENANT_ID }}"

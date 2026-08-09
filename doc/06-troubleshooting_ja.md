@@ -19,26 +19,20 @@ Relaypublisher は management metadata を JSON として Intune app の `notes`
 Commands:
 
 ```powershell
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  plan --manifest-root manifests --output manifest-list.json
+relaypublisher plan --manifest-root manifests --output manifest-list.json
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  validate --manifest-list manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  publish --manifest <manifest-path> --package-dir ./out `
+relaypublisher publish --manifest <manifest-path> --package-dir ./out `
   --expected-tenant <tenant-id> --dry-run
 ```
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  plan --manifest-root manifests --output manifest-list.json
+relaypublisher plan --manifest-root manifests --output manifest-list.json
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  validate --manifest-list manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  publish --manifest <manifest-path> --package-dir ./out \
+relaypublisher publish --manifest <manifest-path> --package-dir ./out \
   --expected-tenant <tenant-id> --dry-run
 ```
 
@@ -87,14 +81,12 @@ cat manifest-list.json
 意図的な rollback の場合は、`--allow-downgrade` を付けて以前の package を明示的に publish します。
 
 ```powershell
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  publish --manifest <manifest-path> --package-dir ./out `
+relaypublisher publish --manifest <manifest-path> --package-dir ./out `
   --expected-tenant <tenant-id> --allow-downgrade
 ```
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  publish --manifest <manifest-path> --package-dir ./out \
+relaypublisher publish --manifest <manifest-path> --package-dir ./out \
   --expected-tenant <tenant-id> --allow-downgrade
 ```
 

@@ -4,6 +4,40 @@
 
 正式ドキュメントは英語版の [05-operation.md](05-operation.md) です。
 
+## 0. ツールのインストールとバージョン運用
+
+Relaypublisher は NuGet global tool として配布します。
+
+Install:
+
+```bash
+dotnet tool install --global relaypublisher
+```
+
+Update:
+
+```bash
+dotnet tool update --global relaypublisher
+```
+
+特定バージョンへ pin / rollback:
+
+```bash
+dotnet tool update --global relaypublisher --version <x.y.z>
+```
+
+インストール済み version の確認:
+
+```bash
+dotnet tool list --global | grep relaypublisher
+```
+
+リリース version の運用方針:
+
+- Published package ID: `relaypublisher`
+- Command name: `relaypublisher`
+- Package version source: Git tag `vX.Y.Z` を CI が `-p:Version=X.Y.Z` で注入する
+
 ## 1. Microsoft Entra app registration
 
 CI publisher identity 用に Microsoft Entra application registration を 1 つ作成します。
@@ -112,32 +146,27 @@ dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
 Manifest set を一度だけ確定します。
 
 ```powershell
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  plan --base-ref <base-ref> --output manifest-list.json
+relaypublisher plan --base-ref <base-ref> --output manifest-list.json
 ```
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  plan --base-ref <base-ref> --output manifest-list.json
+relaypublisher plan --base-ref <base-ref> --output manifest-list.json
 ```
 
 選択された manifest を validate します。
 
 ```powershell
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  validate --manifest-list manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
 ```
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  validate --manifest-list manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
 ```
 
 Windows 上で Windows Win32 app を package します。
 
 ```powershell
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  package --manifest-list manifest-list.json --output ./out
+relaypublisher package --manifest-list manifest-list.json --output ./out
 ```
 
 Windows 以外の runner では、Windows entry の `.intunewin` 生成をスキップしつつ staging validation を行うために
@@ -151,23 +180,20 @@ manifest list 内の全 platform に一律に適用されるため、Windows ent
 すること:
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  package --manifest-list manifest-list.json --output ./out --stage-only
+relaypublisher package --manifest-list manifest-list.json --output ./out --stage-only
 ```
 
 Intune に write せず publish changes を確認します。
 
 ```powershell
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  publish --manifest-list manifest-list.json --package-dir ./out `
+relaypublisher publish --manifest-list manifest-list.json --package-dir ./out `
   --expected-tenant <tenant-id> --dry-run
 ```
 
 Intune に publish します。
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  publish --manifest-list manifest-list.json --package-dir ./out \
+relaypublisher publish --manifest-list manifest-list.json --package-dir ./out \
   --expected-tenant <tenant-id>
 ```
 

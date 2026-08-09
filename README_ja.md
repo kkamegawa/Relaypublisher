@@ -2,6 +2,18 @@
 
 Relaypublisher は、winget 風の YAML manifest を CI から Microsoft Intune の LOB アプリとして公開するためのプロジェクトです。
 
+配布形態:
+
+- NuGet global tool package id: `relaypublisher`
+- Command name: `relaypublisher`
+- Package version: Git tag `vX.Y.Z` から CI が注入
+
+Install:
+
+```bash
+dotnet tool install --global relaypublisher
+```
+
 このリポジトリには、通常運用に必要な .NET CLI の基礎実装が含まれています。
 
 - `validate` は manifest schema と repository 全体の identity 一意性を検証します。
@@ -53,26 +65,22 @@ macOS manifest の詳細な形式と validation ルールは [doc/01-manifest-sc
 dotnet build IntuneLobPublisher.slnx --configuration Release
 dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  plan --base-ref <base-ref> --output manifest-list.json
+relaypublisher plan --base-ref <base-ref> --output manifest-list.json
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  validate --manifest-list manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  package --manifest-list manifest-list.json --output ./out
+relaypublisher package --manifest-list manifest-list.json --output ./out
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  publish --manifest-list manifest-list.json --package-dir ./out --expected-tenant <tenant-id>
+relaypublisher publish --manifest-list manifest-list.json --package-dir ./out --expected-tenant <tenant-id>
 ```
 
-bash の場合は同じ引数を使い、行継続だけ `\` に変更します。
+bash の場合も同じコマンドを使えます。
 
 ## 重要な不変条件
 
 - 設計の正本は `doc/00` から `doc/04` と `doc/issues/` です。
 - `doc/99-full-conversation-summary.md` は歴史的記録で、現在の設計と差分がある場合があります。
-- `doc/intune-lob-publisher-design-and-copilot-issues.md` は分割ドキュメントへの pointer のみです。
+- `doc/relaypublisher-design-and-copilot-issues.md` は分割ドキュメントへの pointer のみです。
 - App identity は `PackageIdentifier + Platform + Architecture` です。
 - Management metadata は Intune app の `notes` field に保存します。
 - Changed manifest detection は `plan` で一度だけ確定し、CI では `manifest-list.json` を引き回します。

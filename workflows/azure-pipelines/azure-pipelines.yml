@@ -31,17 +31,16 @@ stages:
             inputs:
               packageType: sdk
               version: 10.0.x
-          - script: dotnet build IntuneLobPublisher.sln --configuration Release
-          - script: dotnet test IntuneLobPublisher.sln --configuration Release --no-build
+          - script: dotnet build IntuneLobPublisher.slnx --configuration Release
+          - script: dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
+          - script: dotnet tool install --global relaypublisher
           # changed detection をここで一度だけ確定する
           - script: >
-              dotnet run --project src/IntuneLobPublisher.Cli --no-build --configuration Release --
-              plan
+              relaypublisher plan
               --base-ref "$(System.PullRequest.TargetCommitId)"
               --output '$(Build.ArtifactStagingDirectory)/manifest-list.json'
           - script: >
-              dotnet run --project src/IntuneLobPublisher.Cli --no-build --configuration Release --
-              validate --manifest-list '$(Build.ArtifactStagingDirectory)/manifest-list.json'
+              relaypublisher validate --manifest-list '$(Build.ArtifactStagingDirectory)/manifest-list.json'
           - publish: '$(Build.ArtifactStagingDirectory)/manifest-list.json'
             artifact: manifest-list
 
@@ -62,11 +61,11 @@ stages:
             inputs:
               packageType: sdk
               version: 10.0.x
+          - script: dotnet tool install --global relaypublisher
           - download: current
             artifact: manifest-list
           - script: >
-              dotnet run --project src/IntuneLobPublisher.Cli --configuration Release --
-              package
+              relaypublisher package
               --manifest-list '$(Pipeline.Workspace)/manifest-list/manifest-list.json'
               --output '$(Build.ArtifactStagingDirectory)/out'
             env:
@@ -101,9 +100,9 @@ stages:
                     azureSubscription: '<workload-identity-service-connection-name>'
                     scriptType: bash
                     scriptLocation: inlineScript
-                    inlineScript: >
-                      dotnet run --project src/IntuneLobPublisher.Cli --configuration Release --
-                      publish
-                      --manifest-list '$(Pipeline.Workspace)/manifest-list/manifest-list.json'
-                      --package-dir '$(Pipeline.Workspace)/intunewin-packages'
-                      --expected-tenant '<tenant-id>'
+                    inlineScript: |
+                      dotnet tool install --global relaypublisher
+                      relaypublisher publish \
+                        --manifest-list '$(Pipeline.Workspace)/manifest-list/manifest-list.json' \
+                        --package-dir '$(Pipeline.Workspace)/intunewin-packages' \
+                        --expected-tenant '<tenant-id>'

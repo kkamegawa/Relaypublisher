@@ -49,11 +49,11 @@ CLI entry point.
 Commands:
 
 ```powershell
-intune-lob-publisher validate --manifest manifests/**/*.yaml
-intune-lob-publisher plan --changed --base-ref <sha> --output manifest-list.json
-intune-lob-publisher package --manifest-list manifest-list.json --output ./out
-intune-lob-publisher publish --manifest-list manifest-list.json --package-dir ./out
-intune-lob-publisher publish --manifest .\manifests\Contoso.Tool.yaml
+relaypublisher validate --manifest manifests/**/*.yaml
+relaypublisher plan --changed --base-ref <sha> --output manifest-list.json
+relaypublisher package --manifest-list manifest-list.json --output ./out
+relaypublisher publish --manifest-list manifest-list.json --package-dir ./out
+relaypublisher publish --manifest .\manifests\Contoso.Tool.yaml
 ```
 
 `--changed` の定義(詳細は `00-overview.md` 6.6):
@@ -162,6 +162,36 @@ var credential = new DefaultAzureCredential();
 var token = await credential.GetTokenAsync(
     new TokenRequestContext(["https://graph.microsoft.com/.default"]),
     cancellationToken);
+```
+
+### 8.1 Global tool packaging
+
+`IntuneLobPublisher.Cli` は NuGet global tool として pack/publish する。
+
+`IntuneLobPublisher.Cli.csproj` の必須設定:
+
+```xml
+<PackAsTool>true</PackAsTool>
+<PackageId>relaypublisher</PackageId>
+<ToolCommandName>relaypublisher</ToolCommandName>
+```
+
+運用ルール:
+
+- `PackageId` と `ToolCommandName` はどちらも `relaypublisher` で固定。
+- version は Git tag(`vX.Y.Z`)から CI が `-p:Version=X.Y.Z` で注入する。
+- ローカル pack 検証時のみ `csproj` fallback version を使ってよい。
+- package metadata(license/readme/repository/tags)は `csproj` に定義し、publish 前の `dotnet pack` で警告ゼロを維持する。
+
+CI pack 例:
+
+```bash
+VERSION="${GITHUB_REF_NAME#v}"
+dotnet pack src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj \
+  --configuration Release \
+  -p:ContinuousIntegrationBuild=true \
+  -p:Version="$VERSION" \
+  --output ./artifacts/nuget
 ```
 
 ---
