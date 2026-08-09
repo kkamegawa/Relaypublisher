@@ -1,0 +1,71 @@
+SchemaVersion: "1.0"
+PackageIdentifier: Apple.Container
+PackageName: Apple Container
+Publisher: Apple
+Description: "Tool for creating and running Linux containers as lightweight virtual machines on Apple silicon Macs (reference-only sample)."
+PackageVersion: 1.2.2
+AssignmentSync: merge
+
+# Apple Container 1.2.2 is a reference-only sample.
+#
+# The official signed and notarized PKG is available from:
+#   https://github.com/apple/container/releases/tag/1.2.2
+#   asset: container-1.2.2-installer-signed.pkg
+#   SHA-256: f4c7e73f7203725a3512676dfd9ec6c6a98a37093b6fd4a1b0fdcfcb227e2118
+#
+# IMPORTANT: This PKG installs CLI components to /usr/local and does NOT include
+# any .app bundle. According to Microsoft Learn, Intune's Detection.IncludedApps
+# requires the bundleId + version of applications *actually installed by the PKG*.
+# Since this PKG installs no .app, the IncludedApps list cannot be populated with
+# real values without falsifying data.
+#
+# This manifest therefore keeps IncludedApps empty. Relaypublisher validation will
+# intentionally reject this manifest because Detection.IncludedApps is empty/required
+# for macOS apps (per schema doc/01-manifest-schema.md §5.4).
+#
+# To deploy a tool like Apple Container via Intune:
+# 1. Create a wrapper PKG that embeds the official installer as a component and
+#    bundles it with a detectable .app or other application payload.
+# 2. Populate IncludedApps with the correct bundleId + version of those apps.
+# 3. Ensure minimum OS version is set (Apple Container 1.2.2 requires macOS 26).
+#
+# See GitHub issue #73 and doc/01-manifest-schema.md §5.3-5.4 for schema details.
+
+Apps:
+  - Platform: macos
+    Architecture: arm64
+    InstallerType: pkg
+    AppType: pkg
+    DisplayName: Apple Container [macOS Arm64]
+
+    # Single Source item for macOS (unified shape per schema 5.0.1).
+    Source:
+      Type: githubRelease
+      Owner: apple
+      Repository: container
+      Tag: "1.2.2"
+      AssetName: container-1.2.2-installer-signed.pkg
+      Destination: apple-container-1.2.2.pkg
+      Sha256: "f4c7e73f7203725a3512676dfd9ec6c6a98a37093b6fd4a1b0fdcfcb227e2118"
+      Auth:
+        Type: none
+
+    Requirements:
+      # Apple Container 1.2.2 requires macOS 26 per the official README.
+      # macOS 26 flag (v26_0) is not yet in the Relaypublisher macOS version table.
+      # Schema validation will reject this manifest due to:
+      #   1. Unknown macOS version (not in MacOsMinimumOperatingSystemTable)
+      #   2. Empty Detection.IncludedApps (required, cannot use false bundleId)
+      MinimumOSVersion: "26.0"
+
+    Detection:
+      # REFERENCE-ONLY: This list is intentionally empty and will cause validation to fail.
+      # Relaypublisher requires at least one entry per doc/01-manifest-schema.md §5.4.
+      # Do not populate this with fabricated bundle IDs; instead, create a wrapper PKG
+      # that installs actual applications with detectable bundle identifiers.
+      IgnoreAppVersion: false
+      IncludedApps: []
+
+    # Assignments: omitted for reference sample. An organization would add their
+    # target device groups here in a real deployment manifest.
+    Assignments: []
