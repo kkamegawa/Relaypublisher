@@ -25,7 +25,7 @@
     <Description>Publishes winget-like YAML manifests as Microsoft Intune LOB apps.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryType>git</RepositoryType>
-    <RepositoryUrl>https://example.com/relaypublisher</RepositoryUrl>
+    <RepositoryUrl>https://github.com/kkamegawa/Relaypublisher</RepositoryUrl>
     <PackageTags>intune;lob;winget;cli</PackageTags>
     <Version Condition="'$(Version)' == ''">0.0.0-local</Version>
   </PropertyGroup>

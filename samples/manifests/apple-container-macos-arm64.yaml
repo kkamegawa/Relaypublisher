@@ -9,7 +9,7 @@ AssignmentSync: merge
 # Apple Container 1.2.2 is a reference-only sample.
 #
 # The official signed and notarized PKG is available from:
-#   https://github.com/apple/container/releases/tag/1.2.2
+#   <upstream-release-page>
 #   asset: container-1.2.2-installer-signed.pkg
 #   SHA-256: f4c7e73f7203725a3512676dfd9ec6c6a98a37093b6fd4a1b0fdcfcb227e2118
 #
