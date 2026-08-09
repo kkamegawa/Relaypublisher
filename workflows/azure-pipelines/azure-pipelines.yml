@@ -33,7 +33,9 @@ stages:
               version: 10.0.x
           - script: dotnet build IntuneLobPublisher.slnx --configuration Release
           - script: dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
-          - script: dotnet tool install --global relaypublisher
+          - script: |
+              dotnet tool install --global relaypublisher
+              echo "##vso[task.prependpath]$HOME/.dotnet/tools"
           # changed detection をここで一度だけ確定する
           - script: >
               relaypublisher plan
@@ -61,7 +63,9 @@ stages:
             inputs:
               packageType: sdk
               version: 10.0.x
-          - script: dotnet tool install --global relaypublisher
+          - pwsh: |
+              dotnet tool install --global relaypublisher
+              Write-Host "##vso[task.prependpath]$env:USERPROFILE\.dotnet\tools"
           - download: current
             artifact: manifest-list
           - script: >
@@ -102,6 +106,8 @@ stages:
                     scriptLocation: inlineScript
                     inlineScript: |
                       dotnet tool install --global relaypublisher
+                      echo "##vso[task.prependpath]$HOME/.dotnet/tools"
+                      export PATH="$HOME/.dotnet/tools:$PATH"
                       relaypublisher publish \
                         --manifest-list '$(Pipeline.Workspace)/manifest-list/manifest-list.json' \
                         --package-dir '$(Pipeline.Workspace)/intunewin-packages' \
