@@ -19,26 +19,20 @@ Expected recovery path:
 Commands:
 
 ```powershell
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  plan --manifest-root manifests --output manifest-list.json
+relaypublisher plan --manifest-root manifests --output manifest-list.json
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  validate --manifest-list manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  publish --manifest <manifest-path> --package-dir ./out `
+relaypublisher publish --manifest <manifest-path> --package-dir ./out `
   --expected-tenant <tenant-id> --dry-run
 ```
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  plan --manifest-root manifests --output manifest-list.json
+relaypublisher plan --manifest-root manifests --output manifest-list.json
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  validate --manifest-list manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  publish --manifest <manifest-path> --package-dir ./out \
+relaypublisher publish --manifest <manifest-path> --package-dir ./out \
   --expected-tenant <tenant-id> --dry-run
 ```
 
@@ -87,14 +81,12 @@ If this is not an intentional rollback, update the manifest version or fix the b
 For an intentional rollback, publish the previous package explicitly with `--allow-downgrade`:
 
 ```powershell
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  publish --manifest <manifest-path> --package-dir ./out `
+relaypublisher publish --manifest <manifest-path> --package-dir ./out `
   --expected-tenant <tenant-id> --allow-downgrade
 ```
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  publish --manifest <manifest-path> --package-dir ./out \
+relaypublisher publish --manifest <manifest-path> --package-dir ./out \
   --expected-tenant <tenant-id> --allow-downgrade
 ```
 

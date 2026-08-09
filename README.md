@@ -2,6 +2,18 @@
 
 Relaypublisher publishes winget-like YAML manifests as Microsoft Intune LOB apps from CI.
 
+Distribution:
+
+- NuGet global tool package id: `relaypublisher`
+- Command name: `relaypublisher`
+- Package version: injected by CI from Git tag `vX.Y.Z`
+
+Quick install:
+
+```bash
+dotnet tool install --global relaypublisher
+```
+
 The repository now contains the .NET CLI foundation for the normal workflow:
 
 - `validate` checks manifest schema rules and repository-wide identity uniqueness.
@@ -54,26 +66,22 @@ Japanese translations are provided with the `_ja` postfix, for example [doc/05-o
 dotnet build IntuneLobPublisher.slnx --configuration Release
 dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  plan --base-ref <base-ref> --output manifest-list.json
+relaypublisher plan --base-ref <base-ref> --output manifest-list.json
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  validate --manifest-list manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  package --manifest-list manifest-list.json --output ./out
+relaypublisher package --manifest-list manifest-list.json --output ./out
 
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  publish --manifest-list manifest-list.json --package-dir ./out --expected-tenant <tenant-id>
+relaypublisher publish --manifest-list manifest-list.json --package-dir ./out --expected-tenant <tenant-id>
 ```
 
-For bash, use the same arguments with line continuations changed to `\`.
+For bash, use the same commands.
 
 ## Important Invariants
 
 - The authoritative design sources are `doc/00` through `doc/04` and `doc/issues/`.
 - `doc/99-full-conversation-summary.md` is historical context and can differ from the current design.
-- `doc/intune-lob-publisher-design-and-copilot-issues.md` is only a pointer to split documents.
+- `doc/relaypublisher-design-and-copilot-issues.md` is only a pointer to split documents.
 - App identity is `PackageIdentifier + Platform + Architecture`.
 - Management metadata is stored in the Intune app `notes` field.
 - Changed manifest detection is resolved once by `plan` and passed through CI as `manifest-list.json`.

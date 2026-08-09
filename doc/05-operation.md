@@ -4,6 +4,40 @@ This guide covers the setup and daily operation required to publish Intune LOB a
 
 The Japanese translation is available in [05-operation_ja.md](05-operation_ja.md).
 
+## 0. Tool Installation and Version Control
+
+Relaypublisher is distributed as a NuGet global tool.
+
+Install:
+
+```bash
+dotnet tool install --global relaypublisher
+```
+
+Update:
+
+```bash
+dotnet tool update --global relaypublisher
+```
+
+Pin/rollback to a specific version:
+
+```bash
+dotnet tool update --global relaypublisher --version <x.y.z>
+```
+
+Verify installed version:
+
+```bash
+dotnet tool list --global | grep relaypublisher
+```
+
+Release version policy:
+
+- Published package ID: `relaypublisher`
+- Command name: `relaypublisher`
+- Package version source: Git tag `vX.Y.Z` injected by CI (`-p:Version=X.Y.Z`)
+
 ## 1. Microsoft Entra App Registration
 
 Create one Microsoft Entra application registration for the CI publisher identity.
@@ -112,32 +146,27 @@ dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
 Resolve the manifest set once:
 
 ```powershell
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  plan --base-ref <base-ref> --output manifest-list.json
+relaypublisher plan --base-ref <base-ref> --output manifest-list.json
 ```
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  plan --base-ref <base-ref> --output manifest-list.json
+relaypublisher plan --base-ref <base-ref> --output manifest-list.json
 ```
 
 Validate the selected manifests:
 
 ```powershell
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  validate --manifest-list manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
 ```
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  validate --manifest-list manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
 ```
 
 Package Windows Win32 apps on Windows:
 
 ```powershell
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  package --manifest-list manifest-list.json --output ./out
+relaypublisher package --manifest-list manifest-list.json --output ./out
 ```
 
 On non-Windows runners, use `--stage-only` for Windows entries to skip `.intunewin` generation while still
@@ -151,23 +180,20 @@ without `--stage-only` for the macOS entries (or split them into a separate `pac
 publishing:
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  package --manifest-list manifest-list.json --output ./out --stage-only
+relaypublisher package --manifest-list manifest-list.json --output ./out --stage-only
 ```
 
 Preview publish changes without writing to Intune:
 
 ```powershell
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- `
-  publish --manifest-list manifest-list.json --package-dir ./out `
+relaypublisher publish --manifest-list manifest-list.json --package-dir ./out `
   --expected-tenant <tenant-id> --dry-run
 ```
 
 Publish to Intune:
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli --configuration Release -- \
-  publish --manifest-list manifest-list.json --package-dir ./out \
+relaypublisher publish --manifest-list manifest-list.json --package-dir ./out \
   --expected-tenant <tenant-id>
 ```
 

@@ -20,7 +20,7 @@ Relaypublisher は、winget 風の YAML manifest を Git に commit すると、
 | `doc/03-ci-github-actions.md` | GitHub Actions workflow 案 |
 | `doc/04-ci-azure-pipelines.md` | Azure Pipelines workflow 案 |
 | `doc/issues/issue-001 〜 005` | 実装 Issue(この順に実装する) |
-| `doc/intune-lob-publisher-design-and-copilot-issues.md` | 分割版へのポインタ。**実内容を書かない** |
+| `doc/relaypublisher-design-and-copilot-issues.md` | 分割版へのポインタ。**実内容を書かない** |
 | `doc/99-full-conversation-summary.md` | 初期検討のスナップショット。**歴史的記録なので更新しない**(最新設計と差分あり) |
 
 設計の正本は `doc/00`〜`04` と `doc/issues/` です。矛盾を見つけたら 99 ではなく正本側を信頼してください。

@@ -339,6 +339,17 @@ Intune 系 Graph API は 429 が発生しやすい。すべての Graph 呼び�
 - `429` / `503` 時は `Retry-After` ヘッダーを尊重して retry する(上限回数付き exponential backoff)。
 - 失敗時は `client-request-id` / `request-id` をログに出す。
 
+### 6.17 配布形態(NuGet global tool)
+
+本ツールの配布形態は **NuGet global tool** を正とする。
+
+- NuGet package id は `relaypublisher` 固定。
+- 実行コマンド名は `relaypublisher` 固定。
+- バージョンは Git tag(`vX.Y.Z`)を唯一の正本とし、`dotnet pack -p:Version=<X.Y.Z>` で CI から注入する。
+- `csproj` に固定バージョン文字列は置かない(ローカル検証用の fallback は許容)。
+- `nuget.org` への publish は CI でのみ実行し、重複 version は `--skip-duplicate` で冪等に扱う。
+- macOS 向けの初期配布導線も `dotnet tool install --global relaypublisher` を標準とする(Homebrew tap は別トラックで検討)。
+
 ---
 
 

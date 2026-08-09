@@ -44,13 +44,13 @@ Validates one or more manifest files.
 Example:
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli -- validate --manifest manifests/Contoso.Tool.yaml
+relaypublisher validate --manifest manifests/Contoso.Tool.yaml
 ```
 
 Also support glob-style or directory-based input if practical:
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli -- validate --manifest manifests/**/*.yaml
+relaypublisher validate --manifest manifests/**/*.yaml
 ```
 
 Command options:
@@ -77,7 +77,7 @@ Stages Windows Win32 app package files.
 Example:
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli -- package --manifest manifests/Contoso.Tool.yaml --output ./out
+relaypublisher package --manifest manifests/Contoso.Tool.yaml --output ./out
 ```
 
 Command options:
@@ -113,7 +113,7 @@ Add the command but keep it as a stub for now.
 Example:
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli -- publish --manifest manifests/Contoso.Tool.yaml
+relaypublisher publish --manifest manifests/Contoso.Tool.yaml
 ```
 
 Behavior:
@@ -128,7 +128,7 @@ Resolves the target manifest set and writes it to a JSON file so later commands 
 Example:
 
 ```bash
-dotnet run --project src/IntuneLobPublisher.Cli -- plan --base-ref <sha> --output manifest-list.json
+relaypublisher plan --base-ref <sha> --output manifest-list.json
 ```
 
 Command options:
