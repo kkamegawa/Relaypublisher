@@ -11,9 +11,14 @@
   - `PackageId: relaypublisher`
   - `ToolCommandName: relaypublisher`
 - バージョンは Git tag `vX.Y.Z` を唯一の正本とし、CI で `-p:Version=X.Y.Z` を注入する
-- GitHub Actions / Azure Pipelines の release 設計を追加する
+- GitHub Actions CI workflow を追加する(`workflows/github-actions/ci.yml`)
+  - main ブランチへの pull request で `dotnet build` / `dotnet test` を実行する
+  - `dotnet pack -p:Version=0.0.0-ci` で global tool として pack できることを検証する
+- GitHub Actions release workflow を追加・更新する(`workflows/github-actions/release-nuget-tool.yml`)
+  - trigger: `v*` tag push
   - build/test 後に pack
-  - `dotnet nuget push --skip-duplicate`
+  - pack 後に `gh release create --draft` で GitHub draft release を作成し `.nupkg` を添付する
+  - `dotnet nuget push --skip-duplicate` で nuget.org に publish する
 - 運用ドキュメントに install / update / rollback 手順を追加する
 
 ## 対象外

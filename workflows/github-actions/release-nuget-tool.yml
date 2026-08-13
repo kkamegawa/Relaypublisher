@@ -13,6 +13,8 @@ permissions:
 jobs:
   release-nuget:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required to create GitHub releases
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +36,18 @@ jobs:
             -p:ContinuousIntegrationBuild=true \
             -p:Version="$VERSION" \
             --output ./artifacts/nuget
+
+      - name: Create draft GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            --title "relaypublisher v${VERSION}" \
+            --draft \
+            --generate-notes \
+            ./artifacts/nuget/*.nupkg
 
       - name: Publish to nuget.org
         run: |
