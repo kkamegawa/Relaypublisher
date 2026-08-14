@@ -2,7 +2,7 @@
 
 ## 11b. CI workflow (PR build / test validation)
 
-main ブランチへの pull request では、build と test のバリデーションのみを実行する。
+main ブランチへの pull request では、build / test に加えて global tool pack の検証まで実行する。
 実際にコピーして使えるサンプルは `workflows/github-actions/ci.yml` を参照。
 
 設計上のポイント:

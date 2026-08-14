@@ -43,11 +43,15 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          gh release create "$GITHUB_REF_NAME" \
-            --title "relaypublisher v${VERSION}" \
-            --draft \
-            --generate-notes \
-            ./artifacts/nuget/*.nupkg
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" ./artifacts/nuget/*.nupkg --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "relaypublisher v${VERSION}" \
+              --draft \
+              --generate-notes \
+              ./artifacts/nuget/*.nupkg
+          fi
 
       - name: Publish to nuget.org
         run: |
@@ -55,4 +59,3 @@ jobs:
             --source https://api.nuget.org/v3/index.json \
             --api-key "${{ secrets.NUGET_API_KEY }}" \
             --skip-duplicate
-
