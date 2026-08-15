@@ -1,5 +1,6 @@
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
+using IntuneLobPublisher.Core.Packaging;
 
 namespace IntuneLobPublisher.Core.Tests;
 
@@ -168,6 +169,31 @@ public sealed class ManifestLoaderTests
             """);
 
         Assert.AreEqual("Contoso.Tool", manifest.PackageIdentifier);
+    }
+
+    [TestMethod]
+    public async Task LoadAsync_FormattingCommentsAndPropertyOrderDoNotChangeManifestHash()
+    {
+        var formatted = await LoadFromTextAsync(
+            """
+            # Formatting and comments are not hash inputs.
+            SchemaVersion: "1.0"
+            PackageIdentifier: Contoso.Tool
+            PackageName: Contoso Tool
+            Apps: []
+            """);
+        var reordered = await LoadFromTextAsync(
+            """
+            Apps: []
+            PackageName: Contoso Tool
+            # The same model in a different YAML layout.
+            PackageIdentifier: Contoso.Tool
+            SchemaVersion: "1.0"
+            """);
+
+        Assert.AreEqual(
+            InputHashCalculator.ComputeManifestHash(formatted),
+            InputHashCalculator.ComputeManifestHash(reordered));
     }
 
     [TestMethod]

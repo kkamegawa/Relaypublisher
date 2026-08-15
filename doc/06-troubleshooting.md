@@ -4,6 +4,14 @@ This guide covers common production failures and recovery paths for Relaypublish
 
 The Japanese translation is available in [06-troubleshooting_ja.md](06-troubleshooting_ja.md).
 
+## 0. Manifest Selection in Recovery Commands
+
+The normal CI flow is one-way: `plan` resolves the target set, writes `manifest-list.json`, and the later
+`validate`, `package`, and `publish` commands consume that same list. Use `plan --manifest-root <directory>`
+to discover a repository manifest tree, `plan --manifest <path>...` (or `--manifests`) for an explicit set,
+and `--manifest-list <file>` for downstream commands. A direct `--manifest <path>` is appropriate only for
+single-manifest local checks or the focused recovery example below; it should not be used to recompute a CI set.
+
 ## 1. Management Metadata in Intune Notes Was Damaged
 
 Relaypublisher stores management metadata as JSON in the Intune app `notes` field. The `notes` field is editable in the Intune admin center, so an operator can accidentally delete or corrupt the metadata.

@@ -12,7 +12,21 @@
 - CI 実行時の CLI 呼び出しは `relaypublisher` コマンドに統一し、各 job で `dotnet tool install --global relaypublisher` を実行する。
 - publish は Graph REST 呼び出しのみなので ubuntu で動かす。
 
-実際にコピーして使えるサンプルは `workflows/azure-pipelines/azure-pipelines.yml` を参照。
+実際にコピーして使える参照サンプルは `workflows/azure-pipelines/azure-pipelines.yml`。この repository では
+有効化されないため、対象 repository の root に `azure-pipelines.yml` としてコピーして使用する。導入前の
+variable、service connection、Exclusive Lock、source provider の確認は `doc/05-operation.md` §6 を参照する。
+
+PowerShell:
+
+```powershell
+Copy-Item workflows/azure-pipelines/azure-pipelines.yml azure-pipelines.yml
+```
+
+bash:
+
+```bash
+cp workflows/azure-pipelines/azure-pipelines.yml azure-pipelines.yml
+```
 
 ```yaml
 trigger:
@@ -78,10 +92,17 @@ stages:
           - script: dotnet tool install --global relaypublisher
           - download: current
             artifact: manifest-list
-          - script: >
-              relaypublisher package
-              --manifest-list '$(Pipeline.Workspace)/manifest-list/manifest-list.json'
-              --output '$(Build.ArtifactStagingDirectory)/out'
+          # AzureCLI@2 establishes the workload-identity CLI session used by DefaultAzureCredential
+          # when a manifest downloads an azureBlob source during packaging.
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: '<workload-identity-service-connection-name>'
+              scriptType: pscore
+              scriptLocation: inlineScript
+              inlineScript: |
+                relaypublisher package `
+                  --manifest-list '$(Pipeline.Workspace)/manifest-list/manifest-list.json' `
+                  --output '$(Build.ArtifactStagingDirectory)/out'
             env:
               GH_RELEASE_PAT: $(GH_RELEASE_PAT)
           - publish: '$(Build.ArtifactStagingDirectory)/out'
@@ -130,7 +151,8 @@ stages:
 ## 13a. NuGet global tool release (optional)
 
 GitHub Actions を使わず Azure Pipelines で `relaypublisher` を `nuget.org` に公開する場合は、Intune publish pipeline と分離した release pipeline を用意する。
-実際にコピーして使えるサンプルは `workflows/azure-pipelines/release-nuget-tool.yml` を参照。
+NuGet release の参照サンプルは `workflows/azure-pipelines/release-nuget-tool.yml`。対象 repository の
+pipeline 定義として登録し、NuGet push 用 secret を設定してから使用する。
 
 設計上のポイント:
 

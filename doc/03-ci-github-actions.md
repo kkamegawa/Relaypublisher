@@ -3,7 +3,22 @@
 ## 11b. CI workflow (PR build / test validation)
 
 main ブランチへの pull request では、build / test に加えて global tool pack の検証まで実行する。
-実際にコピーして使えるサンプルは `workflows/github-actions/ci.yml` を参照。
+実際にコピーして使える参照サンプルは `workflows/github-actions/ci.yml`。この repository では有効化されないため、
+対象 repository の `.github/workflows/ci.yml` にコピーして使用する。導入前 checklist は `doc/05-operation.md` §6 を参照する。
+
+PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force .github/workflows | Out-Null
+Copy-Item workflows/github-actions/ci.yml .github/workflows/ci.yml
+```
+
+bash:
+
+```bash
+mkdir -p .github/workflows
+cp workflows/github-actions/ci.yml .github/workflows/ci.yml
+```
 
 設計上のポイント:
 
@@ -61,7 +76,23 @@ jobs:
 - `.intunewin` 生成のみ Windows runner が必要。publish は Graph REST 呼び出しだけなので ubuntu で動かす。
 - `workflow_dispatch` の `dryRun` input を publish 実行判定に使う。
 
-実際にコピーして使えるサンプルは `workflows/github-actions/publish-intune-apps.yml` を参照。
+実際にコピーして使える参照サンプルは `workflows/github-actions/publish-intune-apps.yml`。対象 repository の
+`.github/workflows/publish-intune-apps.yml` にコピーしてから、environment、secrets、OIDC、source provider
+の設定を行う。
+
+PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force .github/workflows | Out-Null
+Copy-Item workflows/github-actions/publish-intune-apps.yml .github/workflows/publish-intune-apps.yml
+```
+
+bash:
+
+```bash
+mkdir -p .github/workflows
+cp workflows/github-actions/publish-intune-apps.yml .github/workflows/publish-intune-apps.yml
+```
 
 ```yaml
 name: Publish Intune Apps

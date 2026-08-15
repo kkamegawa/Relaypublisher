@@ -4,6 +4,14 @@
 
 正式ドキュメントは英語版の [06-troubleshooting.md](06-troubleshooting.md) です。
 
+## 0. Recovery command の manifest selection
+
+通常の CI flow は一方向です。`plan` で対象集合を確定して `manifest-list.json` に書き出し、後続の
+`validate`、`package`、`publish` は同じ list を入力にします。Repository の manifest tree を探索する場合は
+`plan --manifest-root <directory>`、明示した集合には `plan --manifest <path>...`（または `--manifests`）、
+後続 command には `--manifest-list <file>` を使います。下記の focused recovery 例で使う直接の
+`--manifest <path>` は、単一 manifest の local check 用です。CI の対象集合を再計算するためには使いません。
+
 ## 1. Intune notes の management metadata が壊れた
 
 Relaypublisher は management metadata を JSON として Intune app の `notes` field に保存します。`notes` field は Intune admin center から編集できるため、operator が誤って metadata を削除または破損する可能性があります。
