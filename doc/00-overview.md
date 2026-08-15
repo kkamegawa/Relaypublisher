@@ -260,7 +260,7 @@ inputHash = SHA256(
 
 正規化と連結の contract は次のとおりとする。
 
-- manifest は YAML の構文木を loader で model に変換した後、model の declaration order、camelCase の property name、null property を省略、空白なし、UTF-8 の canonical JSON に serialize する。したがって YAML の formatting、property の記述順、comment の変更は manifest hash を変えない。
+- manifest は YAML の構文木を loader で model に変換した後、現在の実装が使用する `System.Text.Json` の既定 property order、camelCase の property name、null property の省略、空白なし、UTF-8 の canonical JSON として serialize する。property order は独立した相互運用 contract として固定せず、model または serializer の順序を変更する場合は hash 互換性への影響を確認する。YAML の formatting、property の記述順、comment の変更は manifest hash を変えない。
 - manifest hash は canonical JSON の UTF-8 bytes に SHA256 を適用した lowercase hexadecimal とする。loader が無視する未知の YAML property も hash の入力には含めない。
 - staging root からの各入力ファイルの相対 path は `/` 区切りに正規化する。各 file の entry は `relative-path`、LF、lowercase hexadecimal の file SHA256 の順に連結する。
 - file entry は path を `StringComparer.Ordinal` で昇順に sort する。OS の path separator、locale、case-insensitive sort は使用しない。
