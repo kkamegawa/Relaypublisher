@@ -1,5 +1,5 @@
 # Reference sample for doc/03-ci-github-actions.md.
-# Copy this file into .github/workflows/ and configure secrets/environment before enabling it.
+# Copy this file into .github/workflows/, then follow doc/05-operation.md §6 before enabling it.
 name: Publish Intune Apps
 
 on:

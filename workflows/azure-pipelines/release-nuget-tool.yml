@@ -1,4 +1,5 @@
 # Reference sample for NuGet global tool release on Azure Pipelines.
+# For Intune publishing workflow setup, follow doc/05-operation.md §6; NuGet release variables are separate.
 trigger:
   tags:
     include:

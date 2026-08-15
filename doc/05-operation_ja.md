@@ -60,11 +60,18 @@ CI publisher identity 用に Microsoft Entra application registration を 1 つ�
 
 Federated credential により、CI は runner が発行した OIDC token を Microsoft identity platform の access token と交換できます。Graph publishing に使う Entra app registration に設定します。
 
-Federated credential には Microsoft 推奨の token exchange audience を使います。issuer と subject は完全一致が必要で、wildcard matching はサポートされません。
+Federated credential には Microsoft 推奨の token exchange audience `api://AzureADTokenExchange` を使います。
+`issuer`、`subject`、`audience` は incoming OIDC token と大文字小文字を含めて完全一致させます。通常の
+credential では wildcard matching は使用できません。
+
+Setup 後の代表的な failure は、[トラブルシューティングガイド](06-troubleshooting_ja.md) の
+`TenantMismatchException`（§2）と Azure Blob source（§5）を参照してください。
 
 ### GitHub Actions
 
-GitHub Actions federated credential は protected production environment に限定します。
+GitHub Actions federated credential は protected production environment に限定します。issuer は
+`https://token.actions.githubusercontent.com/`、audience は `api://AzureADTokenExchange`、subject は
+workflow の owner、repository、environment と一致する値にします。
 
 推奨 subject 形式:
 
@@ -92,6 +99,25 @@ Workload identity federation を設定した Azure Resource Manager service conn
 - Intune app を publish する pipeline のみ authorize します。
 - `production` environment に Exclusive Lock check を設定し、publish run を直列化します。
 - Protected variable group から `<tenant-id>` を渡し、`publish --expected-tenant` で使います。
+
+Azure DevOps workload identity federation service connection が生成した issuer と subject identifier を、
+Entra federated credential にそのままコピーします。GitHub の issuer を流用したり、subject を推測したり
+しないでください。audience は `api://AzureADTokenExchange` とし、service connection は対象 pipeline
+だけに authorize します。
+
+### CI login 後の token acquisition
+
+GitHub Actions の `azure/login` と Azure Pipelines の workload identity service connection を使う
+`AzureCLI@2` は runner 上の Azure CLI login を確立します。Relaypublisher の `DefaultAzureCredential` は
+この CI 経路では `AzureCliCredential` を使って Azure CLI session から
+`https://graph.microsoft.com/.default` scope の Graph token を取得します。Azure CLI login だけでは
+Graph application permission と admin consent の代わりになりません。
+
+代表的な failure の確認先は [06-troubleshooting.md](06-troubleshooting.md) です。
+
+- OIDC または tenant mismatch: [TenantMismatchException](06-troubleshooting.md#2-tenantmismatchexception)
+- GitHub Release token の不足: [GitHub Release Token Is Missing](06-troubleshooting.md#4-github-release-token-is-missing)
+- Azure Blob の権限または download failure: [Azure Blob Source Cannot Be Downloaded](06-troubleshooting.md#5-azure-blob-source-cannot-be-downloaded)
 
 ## 3. Source provider environment variables
 
@@ -222,7 +248,40 @@ macOS 対応(doc/00-overview.md §6.13)には `AppType` によって Graph・運
 | `1` | Validation、packaging、authentication、tenant、Graph、publish のいずれかが失敗しました。 | Error message を読み、manifest または environment を修正して rerun します。 |
 | `2` | 未実装 command path 用の予約値です。 | Operator retry ではなく tool implementation gap として扱います。 |
 
-## 6. Production checklist
+## 6. Workflow setup checklist
+
+`workflows/` の参照 sample をコピーした後、次を確認します。sample は対象 repository にコピーするまで
+自動的には有効になりません。
+
+### 共通
+
+- [ ] 対象 repository に workflow をコピーし、trigger が参照する manifest / script path が存在する。
+- [ ] Entra app に `DeviceManagementApps.ReadWrite.All` application permission と admin consent がある。
+- [ ] `AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、Azure login 用の `AZURE_SUBSCRIPTION_ID` を protected CI configuration に保存している。
+- [ ] expected tenant を保護し、`publish --expected-tenant <tenant-id>` に渡している。
+- [ ] Federated credential の issuer、subject、audience が CI token と完全一致している。
+
+### GitHub Actions
+
+- [ ] `workflows/github-actions/publish-intune-apps.yml` を `.github/workflows/publish-intune-apps.yml` にコピーする。
+- [ ] PR build validation が必要なら `workflows/github-actions/ci.yml` を `.github/workflows/ci.yml` にコピーする。
+- [ ] `production` environment を作成し、reviewer または policy で保護する。
+- [ ] `id-token: write` は OIDC が必要な job だけに付与し、PR validation job には付与しない。
+- [ ] GitHub federated credential に issuer `https://token.actions.githubusercontent.com/`、subject `repo:<owner>/<repo>:environment:production`、audience `api://AzureADTokenExchange` を設定する。
+- [ ] `githubRelease` を使う manifest では `Auth.SecretName` の secret（例: `GH_RELEASE_PAT`）を package job だけに渡す。
+- [ ] `azureBlob` を使う場合は package job に OIDC login と storage reader role を設定する。
+
+### Azure Pipelines
+
+- [ ] `workflows/azure-pipelines/azure-pipelines.yml` を対象 repository root の `azure-pipelines.yml` にコピーする。
+- [ ] workload identity federation の Azure Resource Manager service connection を作成または選択し、この pipeline だけを authorize する。
+- [ ] service connection が生成した issuer / subject と audience `api://AzureADTokenExchange` で Entra federated credential を設定する。
+- [ ] `production` environment と Exclusive Lock check を設定する。
+- [ ] sample が使う protected variable group に `AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、`AZURE_SUBSCRIPTION_ID`、expected tenant を登録する。
+- [ ] `githubRelease` を使う場合は `Auth.SecretName` の secret（例: `GH_RELEASE_PAT`）を package job だけに map する。
+- [ ] `azureBlob` を使う場合は package job が authorized service connection と storage reader role を使うことを確認する。
+
+## 7. Production checklist
 
 - Full repository で `validate` が成功している。
 - `plan` output を `manifest-list.json` として保存し、後続 job で再利用している。

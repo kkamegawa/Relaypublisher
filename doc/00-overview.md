@@ -105,14 +105,23 @@ repo/
     manifest-schema.md
     operation.md
     troubleshooting.md
-  .github/
-    workflows/
+  workflows/
+    github-actions/
+      ci.yml
       publish-intune-apps.yml
-  azure-pipelines.yml
+      release-nuget-tool.yml
+    azure-pipelines/
+      azure-pipelines.yml
+      release-nuget-tool.yml
   .gitignore
   LICENSE
   SECURITY.md
 ```
+
+`workflows/` 配下は参照用サンプルであり、この repository で自動的に有効になる workflow ではない。
+GitHub Actions の publish / CI sample は対象 repository の `.github/workflows/` に、Azure Pipelines の
+publish sample は対象 repository の root にコピーしてから、`doc/05-operation.md` の workflow setup
+checklist に従って secret、variable、environment、service connection を設定する。
 
 ---
 
@@ -217,6 +226,9 @@ repo:<owner>/<repo>:environment:production
 
 ### 6.6 Changed detection (`--changed`) の定義
 
+ここでの `--changed` は changed detection の設計上の呼称であり、現在の CLI に独立した
+`--changed` option があることを意味しない。CLI では `plan --base-ref` がこの判定を実行する。
+
 「changed」とは **git diff で変更された manifest ファイル**を指し、比較基準は次のとおり。
 
 | Trigger | 比較基準 |
@@ -245,6 +257,15 @@ inputHash = SHA256(
     パス順にソートして連結したもの
 )
 ```
+
+正規化と連結の contract は次のとおりとする。
+
+- manifest は YAML の構文木を loader で model に変換した後、model の declaration order、camelCase の property name、null property を省略、空白なし、UTF-8 の canonical JSON に serialize する。したがって YAML の formatting、property の記述順、comment の変更は manifest hash を変えない。
+- manifest hash は canonical JSON の UTF-8 bytes に SHA256 を適用した lowercase hexadecimal とする。loader が無視する未知の YAML property も hash の入力には含めない。
+- staging root からの各入力ファイルの相対 path は `/` 区切りに正規化する。各 file の entry は `relative-path`、LF、lowercase hexadecimal の file SHA256 の順に連結する。
+- file entry は path を `StringComparer.Ordinal` で昇順に sort する。OS の path separator、locale、case-insensitive sort は使用しない。
+- input hash の入力文字列は、manifest hash の後に各 file entry を LF で連結したものとし、末尾に余分な LF は付けない。その UTF-8 bytes に SHA256 を適用し、lowercase hexadecimal で保存する。
+- 同一の model と staging input で再実行した場合は同一 hash になり、YAML の formatting / comment だけを変更した場合は hash が変わらないことを test で保証する。
 
 - `inputHash` を notes metadata に保存する。
 - publish 時、Intune 側 metadata の `inputHash` と一致すればコンテンツアップロードをスキップする(assignment 差分のみ適用)。
