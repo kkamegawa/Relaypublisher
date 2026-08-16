@@ -401,6 +401,21 @@ public sealed class AssignmentManifest
 
 ## 11. Implementation phases
 
+### Test execution environment
+
+The test suite uses MSTest OS conditions for the Windows-only packaging boundary. Apply
+`[OSCondition(OperatingSystems.Windows)]` at class level to:
+
+- `IntuneWinPackagerTests`
+- `IntuneWinToolResolverTests`
+- `WindowsStagingServiceTests`
+
+These classes are skipped on macOS and Linux before their initialization code runs. Keep
+portable tests such as IntuneWin ZIP extraction, package metadata reading, Graph payload mapping,
+and macOS publishing tests available on every supported runner. The standard `dotnet test` command
+does not require a shell-specific filter. Run the Windows-only coverage on a Windows runner when
+that coverage is required; this design does not add a separate Windows CI job.
+
 ### Phase 1: Manifest schema and validation
 
 Tasks:

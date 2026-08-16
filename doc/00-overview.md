@@ -371,6 +371,15 @@ Intune 系 Graph API は 429 が発生しやすい。すべての Graph 呼び�
 - `nuget.org` への publish は CI でのみ実行し、重複 version は `--skip-duplicate` で冪等に扱う。
 - macOS 向けの初期配布導線も `dotnet tool install --global relaypublisher` を標準とする(Homebrew tap は別トラックで検討)。
 
+### 6.18 Test execution environment
+
+Tests that exercise the Windows-only IntuneWin packaging boundary run only on Windows.
+
+- `IntuneWinPackagerTests`, `IntuneWinToolResolverTests`, and `WindowsStagingServiceTests` are marked with MSTest `[OSCondition(OperatingSystems.Windows)]`.
+- On macOS and Linux, these test classes are skipped during normal `dotnet test` discovery/execution. The rule does not depend on a workflow-specific shell filter or runner environment variable.
+- Tests for portable behavior, including IntuneWin ZIP extraction, package metadata reading, Graph payload mapping, and macOS publishing, continue to run on non-Windows platforms.
+- This design does not add a dedicated Windows CI job. A Windows runner is required when the Windows-only test coverage itself must be executed.
+
 ---
 
 

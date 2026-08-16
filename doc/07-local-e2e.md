@@ -184,6 +184,11 @@ dotnet build IntuneLobPublisher.slnx --configuration Release
 dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
 ```
 
+The normal test command is safe to use on macOS and Linux. Tests that exercise the Windows-only
+IntuneWin packaging boundary are skipped by MSTest on those platforms; portable IntuneWin parsing,
+metadata, Graph mapping, and macOS tests continue to run. Use a Windows runner when the skipped
+Windows-only test coverage must be executed.
+
 ### 4.2 Resolve the manifest set once
 
 Use an explicit manifest path for a focused local test. This avoids depending on the current Git base ref and makes the input set easy to review.
