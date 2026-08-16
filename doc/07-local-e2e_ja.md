@@ -85,7 +85,7 @@ client secret、秘密鍵、access token を shell history、log、manifest、ar
 
 service principal に Azure subscription がない場合は、`az login` に `--allow-no-subscriptions` を追加します。これは Graph のみを使うテストには十分ですが、Azure Blob のテストでは `az account set` で選択する subscription へのアクセス権も必要です。
 
-この手順は Microsoft Learn の「Sign in with Azure CLI using a service principal」および「Get access without a user - Microsoft Graph」のガイダンスに従っています。
+この手順は Microsoft Learn の [Sign in with Azure CLI using a service principal](https://learn.microsoft.com/cli/azure/authenticate-azure-cli-service-principal?view=azure-cli-latest) および [Get access without a user - Microsoft Graph](https://learn.microsoft.com/graph/auth-v2-service) のガイダンスに従っています。
 
 package source が Azure Blob の場合は、storage account が存在する subscription を選択します。
 
