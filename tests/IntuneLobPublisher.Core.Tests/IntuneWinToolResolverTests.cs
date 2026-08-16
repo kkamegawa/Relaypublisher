@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace IntuneLobPublisher.Core.Tests;
 
 [TestClass]
+[OSCondition(OperatingSystems.Windows)]
 public sealed class IntuneWinToolResolverTests
 {
     private static readonly byte[] ToolContent = "fake-intunewinapputil"u8.ToArray();

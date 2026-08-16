@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace IntuneLobPublisher.Core.Tests;
 
 [TestClass]
+[OSCondition(OperatingSystems.Windows)]
 public sealed class WindowsStagingServiceTests
 {
     private static readonly byte[] ExternalContent = "external-binary"u8.ToArray();

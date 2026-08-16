@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace IntuneLobPublisher.Core.Tests;
 
 [TestClass]
+[OSCondition(OperatingSystems.Windows)]
 public sealed class IntuneWinPackagerTests
 {
     private DirectoryInfo _workspace = null!;

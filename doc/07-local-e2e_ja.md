@@ -184,6 +184,10 @@ dotnet build IntuneLobPublisher.slnx --configuration Release
 dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
 ```
 
+通常の test コマンドは macOS / Linux でもそのまま安全に使用できます。Windows 専用の IntuneWin パッケージング境界を検証するテストは、
+これらのプラットフォームでは MSTest によってスキップされます。IntuneWin の解析、メタデータ、Graph マッピング、macOS 向けのポータブルな
+テストは引き続き実行されます。スキップされる Windows 専用のテストカバレッジを実行する必要がある場合は、Windows runner を使用してください。
+
 ### 4.2 manifest set を一度だけ確定
 
 対象を絞ったローカルテストでは manifest path を明示します。これにより現在の Git base ref に依存せず、入力集合を確認しやすくなります。
