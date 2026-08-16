@@ -1,6 +1,6 @@
 # Sample manifests
 
-This directory mixes two kinds of manifest:
+This directory mixes two kinds of manifests:
 
 - **E2E-runnable samples**: point at a real, publicly downloadable package. `plan` -> `validate` -> `package` succeed unmodified (`publish` still needs a real tenant and, for `Assignments`, a real group GUID; see [../../doc/07-local-e2e.md](../../doc/07-local-e2e.md)).
 - **Reference-only samples**: illustrate a schema shape or a constraint. Some are written to fail `validate` or `package` on purpose, to document a real-world limitation. Read the comments inside the file before assuming it is a bug.
