@@ -5,40 +5,32 @@
 ### 7.1 Solution structure
 
 ```text
-IntuneLobPublisher.sln
+IntuneLobPublisher.slnx
   src/
     IntuneLobPublisher.Cli/
       Program.cs
 
     IntuneLobPublisher.Core/
+      Exceptions/
       Manifests/
       Validation/
+      Planning/
       Staging/
       Packaging/
+      Publishing/
+        Assignments/
+        ManagementMetadata.cs
       Sources/
-      Assignments/
-      Metadata/
-
-    IntuneLobPublisher.Intune/
-      Graph/
-      Apps/
-      Win32/
-      MacOS/
-      Upload/
-      Assignments/
-
-    IntuneLobPublisher.Azure/
-      Identity/
-      Blob/
-
-    IntuneLobPublisher.GitHub/
-      Releases/
 
   tests/
     IntuneLobPublisher.Core.Tests/
-    IntuneLobPublisher.Intune.Tests/
-    IntuneLobPublisher.IntegrationTests/
+    IntuneLobPublisher.IntegrationTests/ (planned in #48)
 ```
+
+The current implementation intentionally uses two projects. Graph/Intune operations are in
+`Core/Publishing`, Azure Blob and GitHub Release providers are in `Core/Sources`, and the CLI
+composition is in `IntuneLobPublisher.Cli`. Separate provider or integration-test projects are
+future extensions, not current solution members.
 
 ### 7.2 Project responsibilities
 
@@ -50,18 +42,25 @@ Commands:
 
 ```powershell
 relaypublisher validate --manifest manifests/**/*.yaml
-relaypublisher plan --changed --base-ref <sha> --output manifest-list.json
+relaypublisher plan --manifest-root manifests --base-ref <sha> --output manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
 relaypublisher package --manifest-list manifest-list.json --output ./out
 relaypublisher publish --manifest-list manifest-list.json --package-dir ./out
 relaypublisher publish --manifest .\manifests\Contoso.Tool.yaml
 ```
 
-`--changed` の定義(詳細は `00-overview.md` 6.6):
+Manifest input options:
+
+- `--manifest <path-or-pattern>` は `validate` / `package` / `publish` に直接渡す manifest path または glob である。単一 manifest の確認や、既に対象を決めているローカル操作で使用する。
+- `plan --manifest-root <directory>` は manifest root を探索して対象一覧を作る。`--manifest <path>...` / `--manifests <path>...` を指定した場合は明示一覧が優先される。
+- `--manifest-list <file>` は `plan --output` が生成した JSON を `validate` / `package` / `publish` に渡す。CI の job 間ではこの形式を使い、対象集合を再計算しない。
+
+`plan --base-ref <sha>` の changed detection の定義(詳細は `00-overview.md` 6.6):
 
 - `--base-ref <sha>` との git diff で変更された manifest を対象とする。
 - `scripts/**` の変更は、その script を参照する manifest を逆引きして対象に含める。
 - `--base-ref` が解決できない場合(zero SHA 等)は全件 fallback。
-- `plan` が確定した対象一覧を `manifest-list.json` に出力し、`package` / `publish` はそれを入力とする。CI の job 間で対象集合をズラさないため、後続 job で `--changed` を再計算しない。
+- `plan` が確定した対象一覧を `manifest-list.json` に出力し、`package` / `publish` はそれを入力とする。
 
 publish の安全オプション:
 
@@ -71,7 +70,7 @@ publish の安全オプション:
 MVP:
 
 - validate
-- plan(changed detection + manifest-list.json 出力)
+- plan(base-ref changed detection + manifest-list.json 出力)
 - package
 - publish stub
 
@@ -92,9 +91,9 @@ Responsibilities:
 - dry-run plan generation
 - Intune metadata generation
 
-#### `IntuneLobPublisher.Intune`
+#### `IntuneLobPublisher.Core/Publishing`
 
-Microsoft Graph 経由で Intune を操作する layer。
+Microsoft Graph 経由で Intune を操作する implementation layer。
 
 Responsibilities:
 
@@ -110,13 +109,10 @@ Responsibilities:
 - notes metadata update
 - 429 / 503 の `Retry-After` 尊重 retry(全 Graph 呼び出し共通)
 
-#### `IntuneLobPublisher.Azure`
+#### `IntuneLobPublisher.Core/Sources`
 
-Azure Blob download を担当。
-
-#### `IntuneLobPublisher.GitHub`
-
-Private GitHub Release asset download を担当。
+Azure Blob、private GitHub Release、public HTTP の source provider を担当する。将来、provider
+ごとの独立 project が必要になった場合は、この directory と interface を境界に分割する。
 
 ---
 

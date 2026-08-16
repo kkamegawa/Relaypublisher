@@ -1,6 +1,6 @@
 # Reference sample for doc/04-ci-azure-pipelines.md.
 # Copy this file to the repository root (or wherever the pipeline definition is configured)
-# and set up the variable group / service connection / Exclusive Lock check before enabling it.
+# and follow doc/05-operation.md §6 to set up the variable group / service connection / Exclusive Lock check.
 trigger:
   branches:
     include:
@@ -68,10 +68,17 @@ stages:
               Write-Host "##vso[task.prependpath]$env:USERPROFILE\.dotnet\tools"
           - download: current
             artifact: manifest-list
-          - script: >
-              relaypublisher package
-              --manifest-list '$(Pipeline.Workspace)/manifest-list/manifest-list.json'
-              --output '$(Build.ArtifactStagingDirectory)/out'
+          # AzureCLI@2 establishes the workload-identity CLI session used by DefaultAzureCredential
+          # when a manifest downloads an azureBlob source during packaging.
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: '<workload-identity-service-connection-name>'
+              scriptType: pscore
+              scriptLocation: inlineScript
+              inlineScript: |
+                relaypublisher package `
+                  --manifest-list '$(Pipeline.Workspace)/manifest-list/manifest-list.json' `
+                  --output '$(Build.ArtifactStagingDirectory)/out'
             env:
               GH_RELEASE_PAT: $(GH_RELEASE_PAT)
           - publish: '$(Build.ArtifactStagingDirectory)/out'

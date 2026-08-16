@@ -61,6 +61,16 @@ and validation rules, and [doc/00-overview.md](doc/00-overview.md) §6.13 for th
 
 Japanese translations are provided with the `_ja` postfix, for example [doc/05-operation_ja.md](doc/05-operation_ja.md).
 
+## Workflow Samples
+
+The files under `workflows/` are reference samples and are not enabled automatically in this repository.
+Copy the sample for the CI platform into the target repository, then complete the setup checklist in
+[doc/05-operation.md](doc/05-operation.md#6-workflow-setup-checklist).
+
+- GitHub Actions: copy `workflows/github-actions/publish-intune-apps.yml` and `ci.yml` into `.github/workflows/`.
+- Azure Pipelines: copy `workflows/azure-pipelines/azure-pipelines.yml` into the target repository root.
+- NuGet release: copy the corresponding `release-nuget-tool.yml` sample and configure its publishing secrets.
+
 ## Basic CLI Flow
 
 ```powershell

@@ -1,5 +1,69 @@
 # GitHub Actions Workflow
 
+## 11b. CI workflow (PR build / test validation)
+
+main ブランチへの pull request では、build / test に加えて global tool pack の検証まで実行する。
+実際にコピーして使える参照サンプルは `workflows/github-actions/ci.yml`。この repository では有効化されないため、
+対象 repository の `.github/workflows/ci.yml` にコピーして使用する。導入前 checklist は `doc/05-operation.md` §6 を参照する。
+
+PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force .github/workflows | Out-Null
+Copy-Item workflows/github-actions/ci.yml .github/workflows/ci.yml
+```
+
+bash:
+
+```bash
+mkdir -p .github/workflows
+cp workflows/github-actions/ci.yml .github/workflows/ci.yml
+```
+
+設計上のポイント:
+
+- trigger は `pull_request` の `main` ブランチのみ。
+- `dotnet build` / `dotnet test` を必ず通す。
+- NuGet global tool として pack できることを `dotnet pack -p:Version=0.0.0-ci` で検証する。
+- secrets / OIDC は不要なため `permissions: contents: read` のみ付与する。
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build
+        run: dotnet build IntuneLobPublisher.slnx --configuration Release
+
+      - name: Test
+        run: dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
+
+      - name: Verify global tool pack
+        shell: bash
+        run: |
+          dotnet pack src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj \
+            --configuration Release \
+            -p:Version=0.0.0-ci \
+            --output ./artifacts/nuget
+```
+
 ## 12. GitHub Actions example
 
 設計上のポイント:
@@ -35,7 +99,23 @@ Windows の package job は manifest が参照する installer input を downloa
 
 package job の source provider download は manifest の各 item で制御する。`publicHttp` は匿名、`githubRelease` は `Auth.Type: token` の場合に `Auth.SecretName` が指定する環境変数を読み取り、`azureBlob` は Azure login 後の `DefaultAzureCredential` を利用する。source provider 用 secret は package job にだけ渡す。
 
-実際にコピーして使えるサンプルは `workflows/github-actions/publish-intune-apps.yml` を参照。
+実際にコピーして使える参照サンプルは `workflows/github-actions/publish-intune-apps.yml`。対象 repository の
+`.github/workflows/publish-intune-apps.yml` にコピーしてから、environment、secrets、OIDC、source provider
+の設定を行う。
+
+PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force .github/workflows | Out-Null
+Copy-Item workflows/github-actions/publish-intune-apps.yml .github/workflows/publish-intune-apps.yml
+```
+
+bash:
+
+```bash
+mkdir -p .github/workflows
+cp workflows/github-actions/publish-intune-apps.yml .github/workflows/publish-intune-apps.yml
+```
 
 ```yaml
 name: Publish Intune Apps
@@ -228,8 +308,10 @@ jobs:
 - trigger は `v*` tag push のみ(`v1.2.3` 形式)。
 - version は tag から抽出し、`dotnet pack -p:Version=<X.Y.Z>` で注入する。
 - pack 対象は `src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj` のみ。
-- publish step は `--skip-duplicate` を付け、再実行可能にする。
-- `dotnet build` / `dotnet test` を先に通してから publish する。
+- `dotnet build` / `dotnet test` を先に通してから pack / publish する。
+- pack 後に `gh release create --draft` で GitHub draft release を作成し、`.nupkg` を添付する。draft release は手動で確認・公開する運用とする。
+- nuget.org への publish step は `--skip-duplicate` を付け、再実行可能にする。
+- `contents: write` が GitHub release 作成に必要。
 
 ```yaml
 name: Release NuGet Tool
@@ -245,6 +327,8 @@ permissions:
 jobs:
   release-nuget:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required to create GitHub releases
     steps:
       - uses: actions/checkout@v4
 
@@ -267,6 +351,18 @@ jobs:
             -p:Version="$VERSION" \
             --output ./artifacts/nuget
 
+      - name: Create draft GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            --title "relaypublisher v${VERSION}" \
+            --draft \
+            --generate-notes \
+            ./artifacts/nuget/*.nupkg
+
       - name: Publish to nuget.org
         run: |
           dotnet nuget push ./artifacts/nuget/*.nupkg \
@@ -279,5 +375,6 @@ jobs:
 
 - `NUGET_API_KEY` は package publish 権限のみを持つ key を使う。
 - NuGet Trusted Publishing(OIDC)を使う場合は、上記 publish step を trusted publishing 用手順に置き換える。
+- draft release を確認後、手動で「Publish release」する運用とする。
 
 ---
