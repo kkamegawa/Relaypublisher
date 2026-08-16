@@ -19,17 +19,73 @@
 
 ## 2. Azure CLI によるローカル認証
 
-Relaypublisher は Microsoft Graph と Azure Blob へのアクセスに `DefaultAzureCredential` を使用します。ローカル実行では Azure CLI でログインします。
+Relaypublisher は Microsoft Graph と Azure Blob へのアクセスに `DefaultAzureCredential` を使用します。app-only のローカル E2E テストでは、Microsoft Entra app 登録に対応する service principal として Azure CLI にログインします。`az login --tenant <tenant-id>` だけでは対話型のユーザーログインになり、app 登録に設定した application permission のテストにはなりません。
+
+ログイン前に app 登録を次のように構成します。
+
+- application (client) ID と tenant ID を確認します。
+- Microsoft Graph の application permission `DeviceManagementApps.ReadWrite.All` を付与し、admin consent を取得します。
+- client secret または app に登録した PEM 証明書を準備します。ローカル環境で秘密鍵を保護できる場合は、証明書の利用を推奨します。
+- 選択した manifest が Azure Blob を使う場合は、必要な storage scope で service principal に `Storage Blob Data Reader` を付与します。
+
+app-only の Graph token は `.default` scope により app 登録に事前設定された permission を使用します。そのため `DefaultAzureCredential` は Azure CLI の service principal ログインを Azure CLI credential 経由で利用できます。
+
+client secret を使う Bash/zsh の例:
 
 ```bash
-az login --tenant <tenant-id>
+APP_ID="<application-client-id>"
+TENANT_ID="<tenant-id>"
+read -r -s -p "Client secret: " CLIENT_SECRET
+echo
+az login --service-principal \
+  --username "$APP_ID" \
+  --password "$CLIENT_SECRET" \
+  --tenant "$TENANT_ID"
+unset CLIENT_SECRET
 az account show
+```
+
+client secret を使う PowerShell 7 の例:
+
+```powershell
+$AppId = "<application-client-id>"
+$TenantId = "<tenant-id>"
+$Credential = Get-Credential -UserName $AppId -Message "Enter the client secret for the service principal"
+az login --service-principal `
+  --username $Credential.UserName `
+  --password $Credential.GetNetworkCredential().Password `
+  --tenant $TenantId
+$Credential = $null
+az account show
+```
+
+client secret の代わりに証明書を使う場合は、service principal の秘密鍵を含む PEM 証明書を指定します。
+
+```bash
+APP_ID="<application-client-id>"
+TENANT_ID="<tenant-id>"
+
+az login --service-principal \
+  --username "$APP_ID" \
+  --certificate "/path/to/certificate.pem" \
+  --tenant "$TENANT_ID"
 ```
 
 ```powershell
-az login --tenant <tenant-id>
-az account show
+$AppId = "<application-client-id>"
+$TenantId = "<tenant-id>"
+
+az login --service-principal `
+  --username $AppId `
+  --certificate "C:\path\to\certificate.pem" `
+  --tenant $TenantId
 ```
+
+client secret、秘密鍵、access token を shell history、log、manifest、artifact に残さないでください。証明書や秘密鍵を commit しないでください。
+
+service principal に Azure subscription がない場合は、`az login` に `--allow-no-subscriptions` を追加します。これは Graph のみを使うテストには十分ですが、Azure Blob のテストでは `az account set` で選択する subscription へのアクセス権も必要です。
+
+この手順は Microsoft Learn の「Sign in with Azure CLI using a service principal」および「Get access without a user - Microsoft Graph」のガイダンスに従っています。
 
 package source が Azure Blob の場合は、storage account が存在する subscription を選択します。
 
@@ -41,7 +97,7 @@ az account set --subscription <subscription-id>
 az account set --subscription <subscription-id>
 ```
 
-ログインした identity には、必要な Graph/Intune 権限とテスト用 assignment group へのアクセス権が必要です。すべての publish コマンドで tenant guard を指定します。
+`az account show` で、期待した tenant と service principal のアカウントが表示されることを確認します。service principal には、必要な Graph/Intune 権限とテスト用 assignment group へのアクセス権が必要です。すべての publish コマンドで tenant guard を指定します。
 
 `--expected-tenant <tenant-id>`
 
@@ -55,7 +111,7 @@ Relaypublisher は Graph に書き込む前に token の `tid` claim を検証�
 |---|---|---|
 | `publicHttp` | なし、または `Auth.Type: none` | 匿名でダウンロードします。 |
 | `githubRelease` | `Auth.Type: token` の場合に `Auth.SecretName` が指定する環境変数を設定します。 | GitHub API 経由で release asset をダウンロードします。 |
-| `azureBlob` | `Auth.Type: workloadIdentity` を指定します。ローカルの `DefaultAzureCredential` は Azure CLI login を利用します。 | Azure Blob Storage からダウンロードします。 |
+| `azureBlob` | `Auth.Type: workloadIdentity` を指定します。ローカルの `DefaultAzureCredential` は Azure CLI の service principal login を利用します。 | Azure Blob Storage からダウンロードします。 |
 
 private GitHub Release asset を使う場合は、`Auth.Type: token` を設定し、`package` の前に manifest の secret variable を設定します。
 

@@ -19,17 +19,73 @@ The repository sample manifests are reference material rather than guaranteed E2
 
 ## 2. Local Azure CLI authentication
 
-Relaypublisher uses `DefaultAzureCredential` for Microsoft Graph and Azure Blob access. For local execution, sign in with Azure CLI:
+Relaypublisher uses `DefaultAzureCredential` for Microsoft Graph and Azure Blob access. For an app-only local E2E test, sign in to Azure CLI as the service principal for the Microsoft Entra app registration. `az login --tenant <tenant-id>` by itself performs an interactive user login and does not test the app registration's application permissions.
+
+Before signing in, configure the app registration as follows:
+
+- Record the application (client) ID and tenant ID.
+- Grant the Microsoft Graph application permission `DeviceManagementApps.ReadWrite.All` and obtain admin consent.
+- Prepare either a client secret or a PEM certificate registered on the app. A certificate is preferable when the local environment can protect its private key.
+- If the selected manifest uses Azure Blob, grant the service principal `Storage Blob Data Reader` on the required storage scope.
+
+The app-only Graph token uses the permissions preconfigured on the app registration through the `.default` scope. `DefaultAzureCredential` can then use the Azure CLI service-principal login through its Azure CLI credential.
+
+Bash/zsh with a client secret:
 
 ```bash
-az login --tenant <tenant-id>
+APP_ID="<application-client-id>"
+TENANT_ID="<tenant-id>"
+read -r -s -p "Client secret: " CLIENT_SECRET
+echo
+az login --service-principal \
+  --username "$APP_ID" \
+  --password "$CLIENT_SECRET" \
+  --tenant "$TENANT_ID"
+unset CLIENT_SECRET
 az account show
+```
+
+PowerShell 7 with a client secret:
+
+```powershell
+$AppId = "<application-client-id>"
+$TenantId = "<tenant-id>"
+$Credential = Get-Credential -UserName $AppId -Message "Enter the client secret for the service principal"
+az login --service-principal `
+  --username $Credential.UserName `
+  --password $Credential.GetNetworkCredential().Password `
+  --tenant $TenantId
+$Credential = $null
+az account show
+```
+
+When using a certificate instead of a client secret, pass the PEM certificate that contains the service principal's private key:
+
+```bash
+APP_ID="<application-client-id>"
+TENANT_ID="<tenant-id>"
+
+az login --service-principal \
+  --username "$APP_ID" \
+  --certificate "/path/to/certificate.pem" \
+  --tenant "$TENANT_ID"
 ```
 
 ```powershell
-az login --tenant <tenant-id>
-az account show
+$AppId = "<application-client-id>"
+$TenantId = "<tenant-id>"
+
+az login --service-principal `
+  --username $AppId `
+  --certificate "C:\path\to\certificate.pem" `
+  --tenant $TenantId
 ```
+
+Keep client secrets, private keys, and access tokens out of shell history, logs, manifests, and artifacts. Do not commit the certificate or its private key.
+
+If the service principal has no Azure subscription, add `--allow-no-subscriptions` to `az login`. This is sufficient for Graph-only tests; Azure Blob tests still require access to the subscription selected by `az account set`.
+
+This procedure follows Microsoft Learn's “Sign in with Azure CLI using a service principal” and “Get access without a user - Microsoft Graph” guidance.
 
 If the package source uses Azure Blob, select the subscription that contains the storage account:
 
@@ -41,7 +97,7 @@ az account set --subscription <subscription-id>
 az account set --subscription <subscription-id>
 ```
 
-The signed-in identity must have the required Graph/Intune permissions and access to the test assignment group. Keep the tenant guard in every publish command:
+Confirm that `az account show` reports the expected tenant and service-principal account. The service principal must have the required Graph/Intune permissions and access to the test assignment group. Keep the tenant guard in every publish command:
 
 `--expected-tenant <tenant-id>`
 
@@ -55,7 +111,7 @@ The `package` command downloads or copies the files referenced by the selected m
 |---|---|---|
 | `publicHttp` | None, or `Auth.Type: none` | Downloads anonymously. |
 | `githubRelease` | With `Auth.Type: token`, set the environment variable named by `Auth.SecretName`. | Downloads the release asset through the GitHub API. |
-| `azureBlob` | Use `Auth.Type: workloadIdentity`; local `DefaultAzureCredential` uses the Azure CLI login. | Downloads from Azure Blob Storage. |
+| `azureBlob` | Use `Auth.Type: workloadIdentity`; local `DefaultAzureCredential` uses the Azure CLI service-principal login. | Downloads from Azure Blob Storage. |
 
 For a private GitHub Release asset, set `Auth.Type: token` and the manifest's secret variable before running `package`:
 
