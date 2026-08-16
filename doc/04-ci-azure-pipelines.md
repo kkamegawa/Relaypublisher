@@ -12,6 +12,34 @@
 - CI 実行時の CLI 呼び出しは `relaypublisher` コマンドに統一し、各 job で `dotnet tool install --global relaypublisher` を実行する。
 - publish は Graph REST 呼び出しのみなので ubuntu で動かす。
 
+### Package artifact handoff
+
+Windows の package job は manifest が参照する installer input を download し、file を staging し、checksum を検証して、artifact staging directory に最終 package を生成する。このディレクトリを `intunewin-packages` として publish する。publish stage は `manifest-list` と `intunewin-packages` の両方を download し、manifest set を再計算せず、download した package directory を `--package-dir` に渡す。
+
+```yaml
+- download: current
+  artifact: intunewin-packages
+
+- script: >
+    relaypublisher publish
+    --manifest-list '$(Pipeline.Workspace)/manifest-list/manifest-list.json'
+    --package-dir '$(Pipeline.Workspace)/intunewin-packages'
+    --expected-tenant '<tenant-id>'
+```
+
+package input の download は manifest の各 item で制御する。`publicHttp` は匿名、`githubRelease` は `Auth.Type: token` の場合に `Auth.SecretName` が指定する環境変数を読み取り、`azureBlob` は Azure login 後の `DefaultAzureCredential` を利用する。source provider 用 secret は package job にだけ map する。
+
+manifest が `azureBlob` を使う場合、Package stage は `relaypublisher package` の前に Azure CLI login を実行する必要がある。別 job である publish stage の login は package job には引き継がれない。workload identity service connection を使う `AzureCLI@2` の login step を Package job に追加し、package storage scope に `Storage Blob Data Reader` を付与する。
+
+```yaml
+- task: AzureCLI@2
+  inputs:
+    azureSubscription: '<workload-identity-service-connection-name>'
+    scriptType: bash
+    scriptLocation: inlineScript
+    inlineScript: az account show
+```
+
 実際にコピーして使える参照サンプルは `workflows/azure-pipelines/azure-pipelines.yml`。この repository では
 有効化されないため、対象 repository の root に `azure-pipelines.yml` としてコピーして使用する。導入前の
 variable、service connection、Exclusive Lock、source provider の確認は `doc/05-operation.md` §6 を参照する。

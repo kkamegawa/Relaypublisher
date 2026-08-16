@@ -4,6 +4,8 @@
 
 正式ドキュメントは英語版の [05-operation.md](05-operation.md) です。
 
+ローカルターミナルでの一連の手順は [07-local-e2e_ja.md](07-local-e2e_ja.md) を参照してください。
+
 ## 0. ツールのインストールとバージョン運用
 
 Relaypublisher は NuGet global tool として配布します。
@@ -223,7 +225,64 @@ relaypublisher publish --manifest-list manifest-list.json --package-dir ./out \
   --expected-tenant <tenant-id>
 ```
 
-## 4a. macOS に関する注記
+## 4a. Package input と CI artifact の受け渡し
+
+`package` コマンドは、manifest で指定された source provider から input を取得し、`--output` に指定したディレクトリへ package file を出力します。
+
+- `publicHttp` は匿名でダウンロードします。
+- `githubRelease` は `Auth.Type: token` の場合に `Auth.SecretName` が指定する環境変数を読み取ります。
+- `azureBlob` は `Auth.Type: workloadIdentity` が必要です。ローカルの `DefaultAzureCredential` は Azure CLI login を利用でき、CI では workload identity login を利用します。
+
+private GitHub Release asset を使う場合は、`Auth.Type: token` を設定し、package 前に manifest の secret variable を設定します。
+
+```bash
+export GH_RELEASE_PAT="<token>"
+```
+
+```powershell
+$env:GH_RELEASE_PAT = "<token>"
+```
+
+Windows packaging は `publish` に必要な `.intunewin` を生成します。macOS packaging は staging 済み `.pkg` と `package-metadata.json` を生成します。`package --stage-only` の output には最終 `.intunewin` と package metadata がないため、Windows の publish に使わないでください。
+
+CI では package job が package directory を `intunewin-packages` artifact として upload します。publish job はこの artifact を download して、download 先のディレクトリを `--package-dir` に渡します。また、`plan` が生成した同じ `manifest-list.json` を再利用します。
+
+GitHub Actions:
+
+```yaml
+- uses: actions/download-artifact@v4
+  with:
+    name: manifest-list
+
+- uses: actions/download-artifact@v4
+  with:
+    name: intunewin-packages
+    path: ./out
+
+- run: >
+    relaypublisher publish
+    --manifest-list manifest-list.json
+    --package-dir ./out
+    --expected-tenant "<tenant-id>"
+```
+
+Azure Pipelines:
+
+```yaml
+- download: current
+  artifact: manifest-list
+
+- download: current
+  artifact: intunewin-packages
+
+- script: >
+    relaypublisher publish
+    --manifest-list '$(Pipeline.Workspace)/manifest-list/manifest-list.json'
+    --package-dir '$(Pipeline.Workspace)/intunewin-packages'
+    --expected-tenant '<tenant-id>'
+```
+
+## 4b. macOS に関する注記
 
 macOS 対応(doc/00-overview.md §6.13)には `AppType` によって Graph・運用上の特性が異なる 2 種類がある。
 

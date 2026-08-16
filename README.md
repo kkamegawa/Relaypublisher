@@ -57,6 +57,7 @@ and validation rules, and [doc/00-overview.md](doc/00-overview.md) §6.13 for th
 - [doc/04-ci-azure-pipelines.md](doc/04-ci-azure-pipelines.md) - Azure Pipelines workflow.
 - [doc/05-operation.md](doc/05-operation.md) - operational setup and daily commands.
 - [doc/06-troubleshooting.md](doc/06-troubleshooting.md) - recovery and failure handling.
+- [doc/07-local-e2e.md](doc/07-local-e2e.md) - local terminal E2E testing and package handoff.
 
 Japanese translations are provided with the `_ja` postfix, for example [doc/05-operation_ja.md](doc/05-operation_ja.md).
 

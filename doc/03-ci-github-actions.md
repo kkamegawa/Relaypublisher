@@ -76,6 +76,29 @@ jobs:
 - `.intunewin` 生成のみ Windows runner が必要。publish は Graph REST 呼び出しだけなので ubuntu で動かす。
 - `workflow_dispatch` の `dryRun` input を publish 実行判定に使う。
 
+### Package artifact handoff
+
+Windows の package job は manifest が参照する installer input を download し、repository file を staging し、checksum を検証して、`./out` に最終 package を生成する。このディレクトリを `intunewin-packages` artifact として upload する。publish job は `publish` の前に同じ artifact を download する必要があり、manifest set を再構築または再計算しない。
+
+```yaml
+- uses: actions/download-artifact@v4
+  with:
+    name: manifest-list
+
+- uses: actions/download-artifact@v4
+  with:
+    name: intunewin-packages
+    path: ./out
+
+- run: >
+    relaypublisher publish
+    --manifest-list manifest-list.json
+    --package-dir ./out
+    --expected-tenant "<tenant-id>"
+```
+
+package job の source provider download は manifest の各 item で制御する。`publicHttp` は匿名、`githubRelease` は `Auth.Type: token` の場合に `Auth.SecretName` が指定する環境変数を読み取り、`azureBlob` は Azure login 後の `DefaultAzureCredential` を利用する。source provider 用 secret は package job にだけ渡す。
+
 実際にコピーして使える参照サンプルは `workflows/github-actions/publish-intune-apps.yml`。対象 repository の
 `.github/workflows/publish-intune-apps.yml` にコピーしてから、environment、secrets、OIDC、source provider
 の設定を行う。

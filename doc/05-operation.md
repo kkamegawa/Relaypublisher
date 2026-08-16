@@ -4,6 +4,8 @@ This guide covers the setup and daily operation required to publish Intune LOB a
 
 The Japanese translation is available in [05-operation_ja.md](05-operation_ja.md).
 
+For a complete local terminal procedure, see [07-local-e2e.md](07-local-e2e.md).
+
 ## 0. Tool Installation and Version Control
 
 Relaypublisher is distributed as a NuGet global tool.
@@ -227,7 +229,64 @@ relaypublisher publish --manifest-list manifest-list.json --package-dir ./out \
   --expected-tenant <tenant-id>
 ```
 
-## 4a. macOS Notes
+## 4a. Package Input and CI Artifact Handoff
+
+The `package` command obtains manifest inputs through the configured source provider and writes the resulting package files under `--output`:
+
+- `publicHttp` downloads anonymously.
+- `githubRelease` with `Auth.Type: token` reads the environment variable named by `Auth.SecretName`.
+- `azureBlob` requires `Auth.Type: workloadIdentity`; local `DefaultAzureCredential` can use an Azure CLI login, while CI uses its workload identity login.
+
+For a private GitHub Release asset, set `Auth.Type: token` and the manifest's secret variable before packaging:
+
+```bash
+export GH_RELEASE_PAT="<token>"
+```
+
+```powershell
+$env:GH_RELEASE_PAT = "<token>"
+```
+
+Windows packaging produces the `.intunewin` output required by `publish`. macOS packaging produces the staged `.pkg` and `package-metadata.json`. Do not use output from `package --stage-only` for a Windows publish because it does not contain the final `.intunewin` or package metadata.
+
+In CI, the package job uploads the package directory as the `intunewin-packages` artifact. The publish job must download that artifact and pass the downloaded directory to `--package-dir`; it must also reuse the exact `manifest-list.json` produced by `plan`.
+
+GitHub Actions:
+
+```yaml
+- uses: actions/download-artifact@v4
+  with:
+    name: manifest-list
+
+- uses: actions/download-artifact@v4
+  with:
+    name: intunewin-packages
+    path: ./out
+
+- run: >
+    relaypublisher publish
+    --manifest-list manifest-list.json
+    --package-dir ./out
+    --expected-tenant "<tenant-id>"
+```
+
+Azure Pipelines:
+
+```yaml
+- download: current
+  artifact: manifest-list
+
+- download: current
+  artifact: intunewin-packages
+
+- script: >
+    relaypublisher publish
+    --manifest-list '$(Pipeline.Workspace)/manifest-list/manifest-list.json'
+    --package-dir '$(Pipeline.Workspace)/intunewin-packages'
+    --expected-tenant '<tenant-id>'
+```
+
+## 4b. macOS Notes
 
 macOS support (doc/00-overview.md §6.13) has two `AppType` values with different Graph and operational
 characteristics:
