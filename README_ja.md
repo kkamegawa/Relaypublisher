@@ -56,6 +56,7 @@ macOS manifest の詳細な形式と validation ルールは [doc/01-manifest-sc
 - [doc/04-ci-azure-pipelines.md](doc/04-ci-azure-pipelines.md) - Azure Pipelines workflow。
 - [doc/05-operation.md](doc/05-operation.md) - 運用設定と日常コマンド。
 - [doc/06-troubleshooting.md](doc/06-troubleshooting.md) - 復旧と障害対応。
+- [doc/07-local-e2e_ja.md](doc/07-local-e2e_ja.md) - ローカルターミナルでの E2E テストと package の受け渡し。
 
 日本語訳は `_ja` postfix 付きで提供します。例: [doc/05-operation_ja.md](doc/05-operation_ja.md)。
 
