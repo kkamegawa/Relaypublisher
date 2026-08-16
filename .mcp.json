@@ -13,10 +13,6 @@
         "server",
         "start"
       ]
-    },
-    "rider": {
-      "url": "http://127.0.0.1:64482/stream",
-      "type": "http"
     }
   }
 }

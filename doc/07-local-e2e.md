@@ -83,11 +83,11 @@ az login --service-principal `
 
 Keep client secrets, private keys, and access tokens out of shell history, logs, manifests, and artifacts. Do not commit the certificate or its private key.
 
-If the service principal has no Azure subscription, add `--allow-no-subscriptions` to `az login`. This is sufficient for Graph-only tests; Azure Blob tests still require access to the subscription selected by `az account set`.
+If the service principal has no Azure subscription, add `--allow-no-subscriptions` to `az login`. This is sufficient for Graph-only tests. Azure Blob tests use `DefaultAzureCredential` and require RBAC on the storage scope (for example, `Storage Blob Data Reader`), but do not require the service principal to have an Azure subscription in Azure CLI.
 
 This procedure follows Microsoft Learn's [Sign in with Azure CLI using a service principal](https://learn.microsoft.com/cli/azure/authenticate-azure-cli-service-principal?view=azure-cli-latest) and [Get access without a user - Microsoft Graph](https://learn.microsoft.com/graph/auth-v2-service) guidance.
 
-If the package source uses Azure Blob, select the subscription that contains the storage account:
+If you need an Azure CLI subscription context for other commands, select the subscription that contains the storage account. Blob download authorization itself comes from the service principal's RBAC assignment on the storage scope:
 
 ```bash
 az account set --subscription <subscription-id>
