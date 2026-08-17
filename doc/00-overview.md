@@ -344,6 +344,22 @@ v1.0 に存在するため `AppType: lob` は `/v1.0/` のまま。両者は同�
 フラグが無いため、`AppType: lob` で `Requirements.MinimumOSVersion` に macOS 14 以降を指定すると publish 時に
 fail する(`AppType: pkg` への切り替えが必要)。
 
+**pre/post install script**(`AppType: pkg` 限定、issue #86): Graph `macOSPkgApp` は `preInstallScript` /
+`postInstallScript`(型 `macOSAppScript`、プロパティは base64 エンコードされた `scriptContent` のみ)を持つが、
+`macOSLobApp` / `macOSDmgApp` には存在しない。manifest 側は app entry 直下の `Scripts.PreInstall` /
+`Scripts.PostInstall`(repository-relative path)で表現し、`Platform: windows` または `AppType: lob` への指定は
+validation error とする。
+
+- スクリプト本文は決定的 **inputHash には含めない**(`Icon` / `Detection.ScriptFile` と同じ前例)。app メタデータの
+  更新(`UpdateAppAsync`)は publish のたび無条件に実行されるため、スクリプトのみの変更は最大 8 GB になり得る
+  `.pkg` の再アップロードを伴わずに反映される。
+- `plan --base-ref` の changed detection(§6.6 参照)は `scripts/**` の変更も対象 manifest の逆引きに含める
+  (`PlanService.EnumerateReferencedFiles`)。
+- 各スクリプトは 15360 文字未満、UTF-8(BOM 無し)、shebang(`#!`)で開始する必要がある(Intune の shell script
+  前提条件)。改行コードは base64 化の直前に CRLF → LF へ正規化する。
+- 運用前提として Intune management agent for macOS 2309.007 以降が必要。pre-install が非 0 終了で app は
+  "failed" となり次回 check-in で再試行される。post-install の失敗は報告されない(app は "success" のまま)。
+
 ### 6.14 Manifest schema のバージョニングとソース指定の統一
 
 - winget の `ManifestVersion` に相当する **`SchemaVersion`** を top-level 必須フィールドとして最初から導入する。互換性のない変更は major を上げ、CLI は未知の major を fail とする。
