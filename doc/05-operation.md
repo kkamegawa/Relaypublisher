@@ -306,6 +306,64 @@ characteristics:
   exists for macOS), so unlike Windows there is no separate "regenerate the encrypted package" step to
   re-run after a content change; re-running `publish` re-encrypts the currently staged `.pkg`.
 
+## 4c. Updating an Existing App to a New Version
+
+App identity is `PackageIdentifier + Platform + Architecture` and does not include the version
+(doc/00-overview.md §6.1/§6.2). Publishing a new `PackageVersion` under the same identity therefore
+updates the existing Intune app in place - the app ID, its assignments, and the devices it is already
+installed on are all preserved. This is the only supported way to move an app to a new package version;
+Relaypublisher does not create a second app or set up an Intune supersedence relationship between
+versions.
+
+Steps:
+
+1. Create `manifests/<Publisher>/<PackageIdentifier>/<new-version>/` and copy the manifest from the
+   previous version folder into it. Keep old version folders - they are not deleted, and function as
+   history (doc/00-overview.md §6.8).
+2. Update the top-level `PackageVersion`.
+3. Update the version-dependent `Source` fields for the new release (for example `Tag`, `AssetName`,
+   `BlobName`, `Destination`). Take `Sha256` from the new release's published checksum, not from memory
+   or a previous manifest - `package` downloads the asset and fails if it does not match.
+4. macOS only: update `Detection.IncludedApps[].BundleVersion` to the new release's bundle version. If
+   this is left at the old value, Intune's detection rule keeps checking for the previous version after
+   the update, which can make already-managed devices report as not installed/not up to date even though
+   the new content was published.
+5. Windows only: check `SetupFile`, `RepositoryFiles`, and any detection script for version references
+   that also need to change.
+6. Do not change `PackageIdentifier`, `Platform`, `Architecture`, or `DisplayName` when bumping a
+   version. Changing any of these breaks identity resolution (doc/00-overview.md §6.1): `publish` will
+   not find the existing app and creates a new one instead, leaving the old app and its assignments
+   behind un-migrated.
+7. Run the normal flow - `plan` selects the new manifest, and if an older version of the same manifest
+   is still present in the resolved set, only the highest version is published; the rest are logged as
+   superseded (doc/00-overview.md §6.8):
+
+```powershell
+relaypublisher plan --base-ref <base-ref> --output manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
+relaypublisher package --manifest-list manifest-list.json --output ./out
+relaypublisher publish --manifest-list manifest-list.json --package-dir ./out `
+  --expected-tenant <tenant-id> --dry-run
+```
+
+```bash
+relaypublisher plan --base-ref <base-ref> --output manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
+relaypublisher package --manifest-list manifest-list.json --output ./out
+relaypublisher publish --manifest-list manifest-list.json --package-dir ./out \
+  --expected-tenant <tenant-id> --dry-run
+```
+
+8. Review the `--dry-run` output before running `publish` without `--dry-run`. Behind the scenes,
+   `publish` resolves the existing app from notes metadata, applies the downgrade guard (§6.8), compares
+   `inputHash` and skips the content upload if it is unchanged (§6.7), then uploads and commits a new
+   content version. Once `committedContentVersion` is patched the new content is live and this tool
+   cannot revert it (§6.10) - rolling back means publishing the previous version's manifest again with
+   `--allow-downgrade`.
+
+See [samples/manifests/README.md](../samples/manifests/README.md#updating-the-powershell-sample-to-a-new-version)
+for a runnable example that adds a new version folder next to an existing one.
+
 ## 5. Exit Codes
 
 | Exit code | Meaning | Operator action |

@@ -299,6 +299,58 @@ macOS 対応(doc/00-overview.md §6.13)には `AppType` によって Graph・運
   ツールが無い)。そのため Windows のように「暗号化済み package を再生成する」個別の手順は無く、`publish` を
   再実行すればその時点で staging されている `.pkg` が再暗号化される。
 
+## 4c. 既存 app を新しいバージョンに更新する
+
+app identity は `PackageIdentifier + Platform + Architecture` であり、バージョンを含まない
+(doc/00-overview.md §6.1/§6.2)。したがって同じ identity のまま新しい `PackageVersion` を publish すると、
+既存の Intune app が in-place で更新される — app ID・assignment・すでに配布済みのデバイスはすべて維持される。
+これがバージョンを更新する唯一のサポート方法であり、Relaypublisher は別 app を新規作成したり、バージョン間に
+Intune の supersedence 関係を設定したりはしない。
+
+手順:
+
+1. `manifests/<Publisher>/<PackageIdentifier>/<新しい version>/` を作り、直前バージョンの manifest をコピーする。
+   旧バージョンのフォルダは削除しない — 履歴として機能する(doc/00-overview.md §6.8)。
+2. top-level の `PackageVersion` を更新する。
+3. `Source` の版数依存フィールド(`Tag`、`AssetName`、`BlobName`、`Destination` など)を新しいリリースに合わせて
+   更新する。`Sha256` は記憶や以前の manifest からではなく、新しいリリースの公表チェックサムから取得する —
+   `package` は実際にアセットをダウンロードして照合し、不一致なら失敗する。
+4. macOS のみ: `Detection.IncludedApps[].BundleVersion` を新リリースの bundle version に更新する。これを旧値の
+   ままにすると、更新後も Intune の検出ルールが旧バージョンを探し続けるため、新しい content が publish されても
+   既存管理下のデバイスが「未インストール/未更新」と判定されることがある。
+5. Windows のみ: `SetupFile`、`RepositoryFiles`、検出スクリプトの中に版数依存の参照が残っていないか確認する。
+6. バージョンを上げる際に `PackageIdentifier`・`Platform`・`Architecture`・`DisplayName` を変更しない。
+   これらを変更すると identity 解決が壊れ(doc/00-overview.md §6.1)、`publish` は既存 app を見つけられずに
+   別 app を新規作成してしまい、旧 app と assignment は移行されないまま残る。
+7. 通常のフローを実行する — `plan` が新しい manifest を選択する。解決された set に同じ manifest の旧バージョンが
+   残っている場合、最高バージョンのみが publish され、他は superseded としてログに出る(doc/00-overview.md §6.8)。
+
+```powershell
+relaypublisher plan --base-ref <base-ref> --output manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
+relaypublisher package --manifest-list manifest-list.json --output ./out
+relaypublisher publish --manifest-list manifest-list.json --package-dir ./out `
+  --expected-tenant <tenant-id> --dry-run
+```
+
+```bash
+relaypublisher plan --base-ref <base-ref> --output manifest-list.json
+relaypublisher validate --manifest-list manifest-list.json
+relaypublisher package --manifest-list manifest-list.json --output ./out
+relaypublisher publish --manifest-list manifest-list.json --package-dir ./out \
+  --expected-tenant <tenant-id> --dry-run
+```
+
+8. `--dry-run` の出力を確認してから、`--dry-run` なしで `publish` を実行する。内部では、`publish` は notes
+   metadata から既存 app を解決し、downgrade guard(§6.8)を適用し、`inputHash` を比較して変化がなければ
+   content upload を skip し(§6.7)、そうでなければ新しい content version をアップロード・commit する。
+   `committedContentVersion` が patch された時点で新しい content が有効になり、この tool では戻せない
+   (§6.10) — rollback するには、以前のバージョンの manifest を `--allow-downgrade` 付きで再度 publish する。
+
+新しいバージョンフォルダを既存のものと並べて追加する実行可能な例は
+[samples/manifests/README_ja.md](../samples/manifests/README_ja.md#powershell-サンプルを新しいバージョンに更新する)
+を参照。
+
 ## 5. Exit codes
 
 | Exit code | 意味 | Operator action |

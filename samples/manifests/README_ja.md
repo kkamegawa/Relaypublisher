@@ -7,10 +7,18 @@
 
 以下のコマンドはすべて `--repo-root samples` を付けています。これらの manifest 内の `RepositoryFiles.Source` / `Icon` のパスは、リポジトリルートではなくこの `samples/` ディレクトリからの相対パスだからです(`scripts/windows/...` は `<repo-root>/scripts/windows/...` ではなく `samples/scripts/windows/...` を指します)。同じ manifest に対して `plan`・`validate`・`package`・`publish` を実行するときは `--repo-root samples` を一貫させてください。`manifest-list.json` に記録される manifest path は、`plan` 実行時に渡した `--repo-root` を基準に解決されます。
 
+`Microsoft/Microsoft.PowerShell/` は、実際のリポジトリ運用者が使うべきバージョン別フォルダ構成
+(doc/00-overview.md §6.8、doc/05-operation.md §4c)を採用しています。`PackageVersion` ごとに
+`<Publisher>/<PackageIdentifier>/<version>/` 配下の別フォルダを持ち、旧バージョンフォルダは上書きせず残します。
+他のサンプルは単一の schema の形や制約を示すためのものでバージョンアップのライフサイクルを表すものではないため、
+`manifests/` 直下にフラットなまま置いています。
+
 | Manifest | 位置づけ | `validate` | `package` | 備考 |
 |---|---|---|---|---|
-| `powershell-macos-arm64.yaml` | E2E 実行可能 | 通る | 通る(GitHub から約 68 MB をダウンロードし SHA-256 を検証) | 詳細は下記 |
-| `powershell-macos-x64.yaml` | E2E 実行可能 | 通る | 通る(GitHub から約 73 MB をダウンロードし SHA-256 を検証) | 詳細は下記 |
+| `Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-arm64.yaml` | E2E 実行可能・現行バージョン | 通る | 通る(GitHub から約 68 MB をダウンロードし SHA-256 を検証) | 詳細は下記 |
+| `Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-x64.yaml` | E2E 実行可能・現行バージョン | 通る | 通る(GitHub から約 73 MB をダウンロードし SHA-256 を検証) | 詳細は下記 |
+| `Microsoft/Microsoft.PowerShell/7.6.4/powershell-macos-arm64.yaml` | E2E 実行可能・旧バージョン | 通る | 通る(GitHub から約 68 MB をダウンロードし SHA-256 を検証) | 上記 7.6.5 の manifest と同一 identity。両方を解決すると `publish` はこちらを superseded として扱う — 詳細は下記 |
+| `Microsoft/Microsoft.PowerShell/7.6.4/powershell-macos-x64.yaml` | E2E 実行可能・旧バージョン | 通る | 通る(GitHub から約 73 MB をダウンロードし SHA-256 を検証) | 上記と同様 |
 | `contoso-tool-windows-x64.yaml` | E2E 実行可能 | 通る | 通る(ローカルの `RepositoryFiles` を staging し、実際に `.intunewin` を生成 — Windows マシン/runner が必要) | 外部ダウンロードは無し。`.intunewin` 生成には `IntuneWinAppUtil.exe` が必要だが自動ダウンロードされる |
 | `contoso-tool-windows-arm64.yaml` | E2E 実行可能 | 通る | 通る(上記と同様) | |
 | `contoso-tool-macos-arm64.yaml` | 参照専用(schema 例) | 通る | **落ちる** — `Source` が架空の Azure Blob account(`contosopackages`)と、全ゼロのプレースホルダ `Sha256` を指している | [doc/01-manifest-schema.md §5.3](../../doc/01-manifest-schema.md) の `azureBlob` の形を示すためのもの。解決される想定ではない |
@@ -49,7 +57,7 @@ Assignments:
 CLI_PROJECT="src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj"
 
 dotnet run --configuration Release --project "$CLI_PROJECT" -- \
-  plan --repo-root samples --manifest manifests/powershell-macos-arm64.yaml --output manifest-list.json
+  plan --repo-root samples --manifest manifests/Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-arm64.yaml --output manifest-list.json
 
 dotnet run --configuration Release --project "$CLI_PROJECT" -- \
   validate --repo-root samples --manifest-list manifest-list.json
@@ -62,7 +70,7 @@ dotnet run --configuration Release --project "$CLI_PROJECT" -- \
 $CliProject = "src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj"
 
 dotnet run --configuration Release --project $CliProject -- `
-  plan --repo-root samples --manifest manifests/powershell-macos-arm64.yaml --output manifest-list.json
+  plan --repo-root samples --manifest manifests/Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-arm64.yaml --output manifest-list.json
 
 dotnet run --configuration Release --project $CliProject -- `
   validate --repo-root samples --manifest-list manifest-list.json
@@ -73,15 +81,51 @@ dotnet run --configuration Release --project $CliProject -- `
 
 `publish --dry-run` / `publish` については [doc/07-local-e2e_ja.md §2, §4.5-4.6](../../doc/07-local-e2e_ja.md)(ローカル Azure CLI 認証、`--expected-tenant`)に従い、先に `Assignments` を追加することを忘れないでください。
 
-## PowerShell サンプルを新しいリリースに更新する
+## PowerShell サンプルを新しいバージョンに更新する
 
-`powershell-macos-arm64.yaml` と `powershell-macos-x64.yaml` の両方で、一貫して以下を差し替えます。
+これは [doc/05-operation_ja.md §4c](../../doc/05-operation_ja.md#4c-既存-app-を新しいバージョンに更新する) の
+一般的な更新手順を実行可能にした例です — 新しいバージョンフォルダを追加し、既存フォルダは上書きしません。
+`Microsoft/Microsoft.PowerShell/7.6.4/` と `Microsoft/Microsoft.PowerShell/7.6.5/` はすでにこれを並べて示して
+います。両方とも同じ `PackageIdentifier + Platform + Architecture` を持つため同一 Intune app identity に
+解決され、`7.6.4` はバージョンを上げる前の `7.6.5` のコピー元にあたります。
+
+サンプルを 7.6.5 より新しいリリースへ進める場合は、`7.6.5` の各ファイルをコピーして
+`Microsoft/Microsoft.PowerShell/<新しい version>/` を作り、`arm64` / `x64` 両方の manifest で一貫して
+以下を差し替えます。
 
 - `PackageVersion`(top level)
 - `Source.Tag`(`v<version>`)、`Source.AssetName`、`Source.Destination`
 - `Source.Sha256` — 記憶ではなく、リリースの `hashes.sha256` アセットから取得すること。`package` が実ダウンロードと突き合わせて検証し、不一致なら失敗する
-- `Detection.IncludedApps[0].BundleVersion`
+- `Detection.IncludedApps[0].BundleVersion` — 旧値のままにすると、更新後も Intune の検出ルールが旧 bundle version を探し続けるため、新しい content が publish されても既存管理下のデバイスが未更新と判定されることがある
 - 新しいリリースが macOS 14 のサポートを打ち切った場合は `Requirements.MinimumOSVersion`
+
+`PackageIdentifier`・`Platform`・`Architecture`・`DisplayName` は変更しないでください。理由は
+[doc/05-operation_ja.md §4c](../../doc/05-operation_ja.md#4c-既存-app-を新しいバージョンに更新する) を参照。
+
+バージョン選択の挙動そのものを確認するには、7.6.4 と 7.6.5 の両方を同じ `manifest-list.json` に解決してから
+publish をプレビューします。
+
+```bash
+dotnet run --configuration Release --project "$CLI_PROJECT" -- \
+  plan --repo-root samples \
+  --manifest manifests/Microsoft/Microsoft.PowerShell/7.6.4/powershell-macos-arm64.yaml manifests/Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-arm64.yaml \
+  --output manifest-list.json
+
+dotnet run --configuration Release --project "$CLI_PROJECT" -- \
+  validate --repo-root samples --manifest-list manifest-list.json
+
+dotnet run --configuration Release --project "$CLI_PROJECT" -- \
+  publish --repo-root samples --manifest-list manifest-list.json --package-dir ./out \
+  --expected-tenant <tenant-id> --dry-run
+```
+
+`validate` は通ります — バージョンフォルダをまたいで同一 identity・別 `PackageVersion` が存在するのは想定内で
+矛盾ではないためです(doc/00-overview.md §6.8)。`publish` は高い方のバージョンのみを選び、他はログに出力します。
+出力には次のような行が含まれます。
+
+```text
+Skipping Microsoft.PowerShell macos-arm64 version 7.6.4 from '.../7.6.4/powershell-macos-arm64.yaml' (superseded by version 7.6.5).
+```
 
 ## 後始末
 

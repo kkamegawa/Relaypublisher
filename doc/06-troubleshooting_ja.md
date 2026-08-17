@@ -100,6 +100,18 @@ relaypublisher publish --manifest <manifest-path> --package-dir ./out \
 
 Rollback 後は Intune で app を確認し、assignments が意図した manifest state と一致していることを確認します。
 
+## 3a. バージョンアップしても既存 app が更新されない
+
+既存 app の `PackageVersion` を上げた後の症状(doc/05-operation_ja.md §4c):
+
+| 症状 | 考えられる原因 | 対処 |
+|---|---|---|
+| 既存 app が更新されず、Intune に別 app が増えた | `DisplayName`・`PackageIdentifier`・`Platform`・`Architecture` をバージョンと一緒に変更してしまい、identity 解決(doc/00-overview.md §6.1)が既存 app と一致しなくなった | 元の identity フィールドに戻して正しい app が更新されるよう再 publish し、余分に増えた app は Intune 管理センターで手動削除する(doc/00-overview.md §6.11 — リタイアは本ツールのスコープ外) |
+| run が `skipped (downgrade)` と報告した | manifest の version が Intune 側 metadata に保存された version より低い | 上記 §3 を参照 |
+| `publish` は成功したが content が変わらない | `inputHash` が保存値と一致し、content upload が skip された(doc/00-overview.md §6.7) | manifest または入力ファイルが実際に変わっているか確認する。`inputHash` が変わっていなければ再アップロードを skip するのは仕様どおり |
+| macOS: publish 後もデバイス側の検出バージョンが変わらない | `Detection.IncludedApps[].BundleVersion` を新リリースに合わせて更新していない | manifest を修正して再 publish する |
+| ログに旧バージョンの `superseded by version X` が出る | 解決された set に同一 identity の複数バージョンが含まれる場合の仕様(doc/00-overview.md §6.8) | 対処不要 — 最高バージョンのみが publish される |
+
 ## 4. GitHub release token がない
 
 `githubRelease` source が `Auth.Type: token` を使う場合、Relaypublisher は `Auth.SecretName` に指定された environment variable から token を読みます。
