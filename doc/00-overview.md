@@ -187,6 +187,10 @@ Contoso Tool [macOS Arm64]
 - app ID を維持しやすい。
 - Intune app 一覧が増殖しにくい。
 
+バージョンアップは常にこの同一 app への in-place 更新で行う。新規 app を作成して Intune の supersedence
+関係(旧バージョンを新バージョンで置き換える機能)で繋ぐ運用は、本ツールのスコープ外とする(6.11 と同様、
+必要なら Intune 管理センターで手動運用する)。具体的な更新手順は doc/05-operation.md §4c を参照。
+
 ### 6.3 Assignment sync
 
 既定は `merge`。
@@ -278,6 +282,7 @@ manifest はバージョン別フォルダで管理するが、app identity は�
 - publish 時、Intune 側 metadata の `packageVersion` と manifest の `PackageVersion` を比較し、**バージョンが下がる場合は既定で skip + warning** とする。意図的なロールバックは `--allow-downgrade` で明示する。
 - 同一 push で同じ `PackageIdentifier + Platform + Architecture` の複数バージョンが changed になった場合、**最高バージョンのみ**を処理し、他は skip としてログに出す。
 - 旧バージョンの manifest フォルダは削除せず残してよい(履歴として機能する)。ただし changed にならない限り処理対象にはならない。
+- 既存 app のバージョンアップは、新しいバージョンフォルダを追加する(既存フォルダを上書きしない)のが正規の手順である。運用手順は doc/05-operation.md §4c を参照。
 
 ### 6.9 同時実行制御
 

@@ -15,7 +15,7 @@ Run the commands from the repository root. The local workflow requires:
 - A test Microsoft Entra tenant, Intune permission, and assignment group.
 - A Windows machine or runner for generating Windows `.intunewin` packages.
 
-The repository sample manifests are reference material rather than guaranteed E2E fixtures, with two exceptions: `samples/manifests/powershell-macos-arm64.yaml` / `-x64.yaml` point at a real, publicly downloadable package and run `plan` -> `validate` -> `package` unmodified. The other samples intentionally fail validation, or refer to package sources that do not resolve, to document schema shapes or real-world constraints rather than to be run as-is. See [samples/manifests/README.md](../samples/manifests/README.md) for which sample is which before assuming a failure is a bug. Use an organization-specific test manifest with real package inputs for anything beyond a quick local smoke test.
+The repository sample manifests are reference material rather than guaranteed E2E fixtures, with two exceptions: `samples/manifests/Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-arm64.yaml` / `-x64.yaml` point at a real, publicly downloadable package and run `plan` -> `validate` -> `package` unmodified. The other samples intentionally fail validation, or refer to package sources that do not resolve, to document schema shapes or real-world constraints rather than to be run as-is. See [samples/manifests/README.md](../samples/manifests/README.md) for which sample is which before assuming a failure is a bug. Use an organization-specific test manifest with real package inputs for anything beyond a quick local smoke test.
 
 ## 2. Local Azure CLI authentication
 
@@ -219,7 +219,7 @@ dotnet run --configuration Release --project $CliProject -- `
 
 For changed-manifest testing, use `plan --base-ref <base-ref> --output manifest-list.json`. Do not recompute changed manifests in later steps.
 
-To try the workflow with a concrete, runnable manifest before wiring up your own, use `--repo-root samples --manifest manifests/powershell-macos-arm64.yaml` — see [samples/manifests/README.md](../samples/manifests/README.md) for why `--repo-root samples` is required and which other samples are runnable.
+To try the workflow with a concrete, runnable manifest before wiring up your own, use `--repo-root samples --manifest manifests/Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-arm64.yaml` — see [samples/manifests/README.md](../samples/manifests/README.md) for why `--repo-root samples` is required and which other samples are runnable.
 
 ### 4.3 Validate
 

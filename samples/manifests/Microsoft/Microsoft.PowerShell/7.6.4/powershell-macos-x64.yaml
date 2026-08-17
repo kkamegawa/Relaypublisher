@@ -1,0 +1,82 @@
+# Sample macOS PKG app manifest that runs end to end (plan -> validate -> package
+# -> publish --dry-run) without edits. See samples/manifests/README.md for how this
+# differs from the other samples in this directory.
+#
+# This is the previous release relative to ../7.6.5/powershell-macos-x64.yaml,
+# kept side by side under the same PackageIdentifier + Platform + Architecture to
+# demonstrate the version-folder upgrade flow (doc/05-operation.md §4c): both
+# manifests share the same app identity, so `publish` resolves them to the same
+# Intune app. When both are included in the same manifest-list.json, `publish`
+# selects only the highest PackageVersion (7.6.5) and reports this one as
+# "superseded by version 7.6.5" (doc/00-overview.md §6.8).
+#
+# PowerShell's macOS pkg is a good E2E fixture because, unlike a CLI-only pkg
+# (see apple-container-macos-arm64.yaml), its installer places a real .app bundle
+# under /Applications, so Detection.IncludedApps can be populated with genuine
+# values instead of being left empty or falsified:
+#   - BundleId:      com.microsoft.powershell
+#   - BundleVersion: 7.6.4
+# Source: PowerShell/PowerShell tools/packaging/packaging.psm1 (New-MacOSLauncher,
+# Get-MacOSPackageIdentifierInfo) and the MacOSLauncherPlistTemplate in
+# packaging.strings.psd1, which writes CFBundleIdentifier from the package
+# identifier and CFBundleShortVersionString from the package version.
+#
+# To confirm on a real Mac after installing the package:
+#   defaults read /Applications/PowerShell.app/Contents/Info CFBundleIdentifier
+#   defaults read /Applications/PowerShell.app/Contents/Info CFBundleShortVersionString
+
+SchemaVersion: "1.0"
+PackageIdentifier: Microsoft.PowerShell
+PackageName: PowerShell
+Publisher: Microsoft Corporation
+Description: PowerShell 7 cross-platform automation and configuration tool.
+PackageVersion: 7.6.4
+AssignmentSync: merge
+
+Apps:
+  - Platform: macos
+    Architecture: x64
+    InstallerType: pkg
+    # pkg (default): unmanaged macOSPkgApp, unsigned allowed, up to 8 GB, and the
+    # only AppType that can target MinimumOSVersion 14+ (v14_0/v15_0 are beta-only
+    # flags; see doc/01-manifest-schema.md 5.7 and MacOsMinimumOperatingSystemTable).
+    AppType: pkg
+    # DisplayName, PackageIdentifier, Platform, and Architecture are unchanged from
+    # ../7.6.5/powershell-macos-x64.yaml on purpose: identity must stay stable
+    # across a version bump so publish updates the existing Intune app in place
+    # instead of creating a new one (doc/00-overview.md §6.1/§6.2).
+    DisplayName: PowerShell [macOS x64]
+
+    # Single Source item for macOS (unified source item shape, doc/01-manifest-schema.md 5.0.1).
+    # PowerShell/PowerShell is a public repository, so Auth.Type: none is enough
+    # for anonymous asset download.
+    Source:
+      Type: githubRelease
+      Owner: PowerShell
+      Repository: PowerShell
+      Tag: v7.6.4
+      AssetName: powershell-7.6.4-osx-x64.pkg
+      Destination: powershell-7.6.4-osx-x64.pkg
+      Sha256: "c01c12b659bc778dbcfc948085587c78c9f4799c52093ec79e83672836e52382"
+      Auth:
+        Type: none
+
+    Requirements:
+      # PowerShell 7.6 (LTS) supports macOS 14 (Sonoma), 15 (Sequoia), and 26 (Tahoe).
+      # 14.0 is the lowest version Relaypublisher's version table can map (26.0 is not
+      # yet defined there); AppType: pkg allows the beta-only v14_0 flag.
+      MinimumOSVersion: "14.0"
+
+    Detection:
+      IgnoreAppVersion: false
+      IncludedApps:
+        - BundleId: com.microsoft.powershell
+          BundleVersion: 7.6.4
+
+    # Left empty so this manifest applies unmodified in any tenant. Add your own
+    # target group(s) before a real (non-dry-run) publish, for example:
+    # Assignments:
+    #   - Target: group
+    #     GroupId: "<your-assignment-group-guid>"
+    #     Intent: required
+    Assignments: []

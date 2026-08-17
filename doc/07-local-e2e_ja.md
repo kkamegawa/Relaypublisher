@@ -15,7 +15,7 @@
 - テスト用 Microsoft Entra tenant、Intune 権限、assignment group。
 - Windows の `.intunewin` を生成するための Windows マシンまたは runner。
 
-リポジトリの sample manifest は、必ずしも E2E 実行できる fixture ではなく、参照用です。ただし例外が 2 つあります: `samples/manifests/powershell-macos-arm64.yaml` / `-x64.yaml` は実在する、公開ダウンロード可能な package を指しており、無編集で `plan` → `validate` → `package` が通ります。それ以外の sample は、schema の形や実世界の制約を記録するために、意図的に validation で失敗する、または解決できない package source を参照しています。どのサンプルがどちらかは、失敗をバグと判断する前に [samples/manifests/README_ja.md](../samples/manifests/README_ja.md) を確認してください。手早いローカルの動作確認を超える用途には、実在する package input を持つ組織用のテスト manifest を使用してください。
+リポジトリの sample manifest は、必ずしも E2E 実行できる fixture ではなく、参照用です。ただし例外が 2 つあります: `samples/manifests/Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-arm64.yaml` / `-x64.yaml` は実在する、公開ダウンロード可能な package を指しており、無編集で `plan` → `validate` → `package` が通ります。それ以外の sample は、schema の形や実世界の制約を記録するために、意図的に validation で失敗する、または解決できない package source を参照しています。どのサンプルがどちらかは、失敗をバグと判断する前に [samples/manifests/README_ja.md](../samples/manifests/README_ja.md) を確認してください。手早いローカルの動作確認を超える用途には、実在する package input を持つ組織用のテスト manifest を使用してください。
 
 ## 2. Azure CLI によるローカル認証
 
@@ -218,7 +218,7 @@ dotnet run --configuration Release --project $CliProject -- `
 
 変更 manifest のテストでは `plan --base-ref <base-ref> --output manifest-list.json` を使います。後続手順で changed manifest を再計算しないでください。
 
-自組織の manifest を組む前にワークフローを試すには、`--repo-root samples --manifest manifests/powershell-macos-arm64.yaml` のように実在する manifest を使えます。`--repo-root samples` が必要な理由と、他にどのサンプルが実行可能かは [samples/manifests/README_ja.md](../samples/manifests/README_ja.md) を参照してください。
+自組織の manifest を組む前にワークフローを試すには、`--repo-root samples --manifest manifests/Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-arm64.yaml` のように実在する manifest を使えます。`--repo-root samples` が必要な理由と、他にどのサンプルが実行可能かは [samples/manifests/README_ja.md](../samples/manifests/README_ja.md) を参照してください。
 
 ### 4.3 validate
 

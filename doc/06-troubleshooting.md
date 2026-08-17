@@ -100,6 +100,18 @@ relaypublisher publish --manifest <manifest-path> --package-dir ./out \
 
 After rollback, verify the app in Intune and confirm assignments still match the intended manifest state.
 
+## 3a. Version Upgrade Did Not Update the Existing App
+
+Symptoms after bumping `PackageVersion` for an existing app (doc/05-operation.md §4c):
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| A second app showed up in Intune instead of the existing one being updated | `DisplayName`, `PackageIdentifier`, `Platform`, or `Architecture` changed along with the version, so identity resolution (doc/00-overview.md §6.1) no longer matched the existing app | Restore the original identity fields, republish so the correct app is updated, and remove the extra app manually in the Intune admin center (doc/00-overview.md §6.11 - retirement is out of scope for this tool) |
+| The run reported `skipped (downgrade)` | The manifest version is lower than the version stored in Intune metadata | See §3 above |
+| `publish` succeeded but the content did not change | `inputHash` matched the stored value, so content upload was skipped (doc/00-overview.md §6.7) | Confirm the manifest or its input files actually changed; an unchanged `inputHash` is expected to skip re-upload |
+| macOS: devices still report the old detected version after publish | `Detection.IncludedApps[].BundleVersion` was not updated to match the new release | Fix the manifest and republish |
+| The log shows `superseded by version X` for the older manifest | Expected when a resolved set contains more than one version of the same identity (doc/00-overview.md §6.8) | No action needed - only the highest version is published |
+
 ## 4. GitHub Release Token Is Missing
 
 When a `githubRelease` source uses `Auth.Type: token`, Relaypublisher reads the token from the environment variable named by `Auth.SecretName`.
