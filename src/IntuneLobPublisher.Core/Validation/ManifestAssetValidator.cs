@@ -18,6 +18,11 @@ namespace IntuneLobPublisher.Core.Validation;
 public static class ManifestAssetValidator
 {
     private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
+    private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
+    // A valid UTF-8 character uses at most four bytes. CRLF normalization can only reduce the
+    // byte count, so this bound rejects oversized files before allocating an unbounded buffer.
+    private const long MaxScriptFileBytes = (long)ManifestValues.MaxMacOsAppScriptChars * 4 + 3;
 
     /// <summary>Returns error strings (empty when valid) for the given manifest's file-backed assets.</summary>
     public static IReadOnlyList<string> Validate(IntunePackageManifest manifest, string repositoryRoot)
@@ -73,6 +78,13 @@ public static class ManifestAssetValidator
             return [error];
         }
 
+        var fileLength = new FileInfo(fullPath).Length;
+        if (fileLength > MaxScriptFileBytes)
+        {
+            return [$"{fieldName} '{scriptPath}' is {fileLength} bytes, which is too large to fit within the maximum of "
+                + $"{ManifestValues.MaxMacOsAppScriptChars} characters after UTF-8 decoding and line-ending normalization."];
+        }
+
         var bytes = File.ReadAllBytes(fullPath);
         var errors = new List<string>();
 
@@ -84,19 +96,30 @@ public static class ManifestAssetValidator
             errors.Add($"{fieldName} '{scriptPath}' must not have a UTF-8 byte order mark (BOM).");
         }
 
-        var text = Encoding.UTF8.GetString(bytes);
+        string text;
+        try
+        {
+            text = StrictUtf8.GetString(bytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            return [$"{fieldName} '{scriptPath}' must be valid UTF-8 without invalid byte sequences."];
+        }
 
-        // Graph's documented limit is on the un-encoded script text (doc/01-manifest-schema.md §5.4.2).
-        if (text.Length >= ManifestValues.MaxMacOsAppScriptChars)
+        var normalized = NormalizeLineEndings(text);
+
+        // Graph's documented limit is on the un-encoded script text after the same line-ending
+        // normalization used by ManifestAssetReader (doc/01-manifest-schema.md §5.4.2).
+        if (normalized.Length >= ManifestValues.MaxMacOsAppScriptChars)
         {
             errors.Add(
-                $"{fieldName} '{scriptPath}' is {text.Length} characters, which meets or exceeds the maximum of "
+                $"{fieldName} '{scriptPath}' is {normalized.Length} characters, which meets or exceeds the maximum of "
                 + $"{ManifestValues.MaxMacOsAppScriptChars} characters.");
         }
 
         // hasBom already tells us the decoded text starts with the BOM char (U+FEFF); reuse that
         // instead of re-detecting the BOM a second time via a separate character-level check.
-        var textAfterBom = hasBom ? text[1..] : text;
+        var textAfterBom = hasBom ? normalized[1..] : normalized;
         if (!textAfterBom.StartsWith("#!", StringComparison.Ordinal))
         {
             errors.Add($"{fieldName} '{scriptPath}' must start with a shebang ('#!').");
@@ -104,6 +127,8 @@ public static class ManifestAssetValidator
 
         return errors;
     }
+
+    private static string NormalizeLineEndings(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n');
 
     /// <summary>
     /// Resolves <paramref name="relativePath"/> under <paramref name="repositoryRoot"/> and confirms it

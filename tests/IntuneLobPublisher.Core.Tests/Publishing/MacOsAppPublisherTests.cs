@@ -75,6 +75,13 @@ public sealed class MacOsAppPublisherTests
         File.WriteAllText(fullPath, content);
     }
 
+    private void WriteScript(string relativePath, byte[] content)
+    {
+        var fullPath = Path.Combine(_repoRoot.FullName, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllBytes(fullPath, content);
+    }
+
     private PublishRequest CreateRequest(AppManifest app, IntunePackageManifest manifest) => new(
         manifest,
         app,
@@ -141,6 +148,21 @@ public sealed class MacOsAppPublisherTests
         var app = TestManifests.CreateValidMacOsApp();
         app.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/missing.sh" };
         manifest.Apps = [app];
+
+        var publisher = CreatePublisher(out _);
+
+        await Assert.ThrowsExactlyAsync<ManifestLoadException>(
+            () => publisher.CreateAppAsync(CreateRequest(app, manifest), notes: "{}", CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task CreateAppAsync_InvalidUtf8Script_ThrowsManifestLoadException()
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidMacOsApp();
+        app.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/preinstall.sh" };
+        manifest.Apps = [app];
+        WriteScript(app.Scripts.PreInstall, [.. System.Text.Encoding.UTF8.GetBytes("#!/bin/bash\n"), 0xFF]);
 
         var publisher = CreatePublisher(out _);
 

@@ -66,7 +66,7 @@ public sealed class PlanService
         }
 
         var changedSet = changedFiles
-            .Select(p => p.Replace('\\', '/'))
+            .Select(NormalizeReferencedPath)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var targets = new SortedSet<string>(StringComparer.Ordinal);
@@ -112,8 +112,32 @@ public sealed class PlanService
         }
 
         return EnumerateReferencedFiles(manifest)
-            .Select(p => p.Replace('\\', '/'))
+            .Select(NormalizeReferencedPath)
             .Any(changedSet.Contains);
+    }
+
+    private static string NormalizeReferencedPath(string path)
+    {
+        var segments = path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var normalized = new List<string>(segments.Length);
+        foreach (var segment in segments)
+        {
+            if (segment == ".")
+            {
+                continue;
+            }
+
+            if (segment == "..")
+            {
+                // Invalid manifest paths are reported by validation. Keep them unmatched here so
+                // reverse lookup never turns a malformed, unchanged manifest into a plan failure.
+                return path.Replace('\\', '/');
+            }
+
+            normalized.Add(segment);
+        }
+
+        return string.Join('/', normalized);
     }
 
     private static IEnumerable<string> EnumerateReferencedFiles(IntunePackageManifest manifest)

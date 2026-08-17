@@ -52,7 +52,7 @@ public sealed class PlanServiceTests
         File.WriteAllText(fullPath, yaml);
     }
 
-    private void WriteMacOsManifest(string relativePath, string packageIdentifier)
+    private void WriteMacOsManifest(string relativePath, string packageIdentifier, string scriptDirectory = "scripts/macos/contoso-tool")
     {
         var yaml =
             $"""
@@ -80,8 +80,8 @@ public sealed class PlanServiceTests
                      - BundleId: com.contoso.tool
                        BundleVersion: 1.0.0
                  Scripts:
-                   PreInstall: scripts/macos/contoso-tool/preinstall.sh
-                   PostInstall: scripts/macos/contoso-tool/postinstall.sh
+                   PreInstall: {scriptDirectory}/preinstall.sh
+                   PostInstall: {scriptDirectory}/postinstall.sh
              """;
         var fullPath = Path.Combine(_repoRoot.FullName, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
@@ -158,6 +158,16 @@ public sealed class PlanServiceTests
         WriteMacOsManifest("manifests/tool-c.yaml", "Contoso.ToolC");
 
         var targets = await ResolveAsync(["scripts/macos/contoso-tool/postinstall.sh"]);
+
+        CollectionAssert.AreEqual(new[] { "manifests/tool-c.yaml" }, targets.ToList());
+    }
+
+    [TestMethod]
+    public async Task ResolveTargets_ChangedScriptWithDotPrefix_SelectsReferencingManifest()
+    {
+        WriteMacOsManifest("manifests/tool-c.yaml", "Contoso.ToolC", "./scripts/macos/contoso-tool");
+
+        var targets = await ResolveAsync(["scripts/macos/contoso-tool/preinstall.sh"]);
 
         CollectionAssert.AreEqual(new[] { "manifests/tool-c.yaml" }, targets.ToList());
     }

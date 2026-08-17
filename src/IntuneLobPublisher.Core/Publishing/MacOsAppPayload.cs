@@ -86,12 +86,13 @@ public sealed class MacOsPkgAppPayload : MacOsAppPayloadBase
     /// rather than on <see cref="MacOsAppPayloadBase"/>.
     /// </summary>
     [JsonPropertyName("preInstallScript")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    // Null is intentional: an update must be able to clear a script removed from the manifest.
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
     public MacOsAppScriptPayload? PreInstallScript { get; init; }
 
     /// <summary>From manifest <c>Scripts.PostInstall</c>. See <see cref="PreInstallScript"/> for why this is pkg-only.</summary>
     [JsonPropertyName("postInstallScript")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
     public MacOsAppScriptPayload? PostInstallScript { get; init; }
 }
 
@@ -102,7 +103,7 @@ public sealed class MacOsPkgAppPayload : MacOsAppPayloadBase
 public sealed class MacOsAppScriptPayload
 {
     [JsonPropertyName("@odata.type")]
-    public string ODataType { get; init; } = "#microsoft.graph.macOSAppScript";
+    public string ODataType { get; init; } = "microsoft.graph.macOSAppScript";
 
     /// <summary>Base64-encoded shell script text, CRLF-normalized to LF before encoding.</summary>
     [JsonPropertyName("scriptContent")]

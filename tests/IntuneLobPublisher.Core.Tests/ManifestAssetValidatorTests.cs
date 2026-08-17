@@ -192,6 +192,22 @@ public sealed class ManifestAssetValidatorTests
     }
 
     [TestMethod]
+    public void Validate_CrlfScriptUnderNormalizedCharacterLimit_ReturnsNoErrors()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/contoso-tool/preinstall.sh" };
+        manifest.Apps = [macApp];
+
+        var normalized = "#!/bin/bash\n" + new string('#', ManifestValues.MaxMacOsAppScriptChars - "#!/bin/bash\n".Length - 1);
+        WriteScript(macApp.Scripts.PreInstall, normalized.Replace("\n", "\r\n", StringComparison.Ordinal));
+
+        var errors = ManifestAssetValidator.Validate(manifest, _repoRoot.FullName);
+
+        Assert.IsEmpty(errors);
+    }
+
+    [TestMethod]
     public void Validate_ScriptWithUtf8Bom_ReturnsError()
     {
         var manifest = TestManifests.CreateValid();
@@ -219,6 +235,38 @@ public sealed class ManifestAssetValidatorTests
 
         Assert.HasCount(1, errors);
         StringAssert.Contains(errors[0], "shebang");
+    }
+
+    [TestMethod]
+    public void Validate_ScriptWithInvalidUtf8_ReturnsError()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/contoso-tool/preinstall.sh" };
+        manifest.Apps = [macApp];
+        WriteScript(macApp.Scripts.PreInstall, [0x23, 0x21, 0x2F, 0x62, 0x69, 0x6E, 0x2F, 0x62, 0x61, 0x73, 0x68, 0x0A, 0xFF]);
+
+        var errors = ManifestAssetValidator.Validate(manifest, _repoRoot.FullName);
+
+        Assert.HasCount(1, errors);
+        StringAssert.Contains(errors[0], "valid UTF-8");
+    }
+
+    [TestMethod]
+    public void Validate_ScriptFileTooLargeForCharacterLimit_ReturnsError()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/contoso-tool/preinstall.sh" };
+        manifest.Apps = [macApp];
+        WriteScript(
+            macApp.Scripts.PreInstall,
+            new byte[(int)((long)ManifestValues.MaxMacOsAppScriptChars * 4 + 4)]);
+
+        var errors = ManifestAssetValidator.Validate(manifest, _repoRoot.FullName);
+
+        Assert.HasCount(1, errors);
+        StringAssert.Contains(errors[0], "too large");
     }
 
     [TestMethod]

@@ -135,7 +135,7 @@ public sealed class MacOsAppPayloadMapperTests
 
         Assert.AreEqual("cHJlLWluc3RhbGw=", payload.PreInstallScript?.ScriptContent);
         Assert.AreEqual("cG9zdC1pbnN0YWxs", payload.PostInstallScript?.ScriptContent);
-        Assert.AreEqual("#microsoft.graph.macOSAppScript", payload.PreInstallScript?.ODataType);
+        Assert.AreEqual("microsoft.graph.macOSAppScript", payload.PreInstallScript?.ODataType);
     }
 
     [TestMethod]

@@ -97,20 +97,20 @@ public sealed class GraphMacOsAppClientTests
         await client.CreateAppAsync(payload, useBeta: true, CancellationToken.None);
 
         var body = handler.Requests[0].Body!;
-        StringAssert.Contains(body, "\"preInstallScript\":{\"@odata.type\":\"#microsoft.graph.macOSAppScript\",\"scriptContent\":\"IyEvYmluL2Jhc2g=\"}");
-        StringAssert.Contains(body, "\"postInstallScript\":{\"@odata.type\":\"#microsoft.graph.macOSAppScript\",\"scriptContent\":\"IyEvYmluL2Jhc2gK\"}");
+        StringAssert.Contains(body, "\"preInstallScript\":{\"@odata.type\":\"microsoft.graph.macOSAppScript\",\"scriptContent\":\"IyEvYmluL2Jhc2g=\"}");
+        StringAssert.Contains(body, "\"postInstallScript\":{\"@odata.type\":\"microsoft.graph.macOSAppScript\",\"scriptContent\":\"IyEvYmluL2Jhc2gK\"}");
     }
 
     [TestMethod]
-    public async Task CreateAppAsync_PkgWithoutScripts_OmitsScriptProperties()
+    public async Task CreateAppAsync_PkgWithoutScripts_SerializesNullScriptProperties()
     {
         var (client, handler) = CreateClient(_ => JsonResponse(HttpStatusCode.Created, """{"id":"app-1"}"""));
 
         await client.CreateAppAsync(PkgPayload(), useBeta: true, CancellationToken.None);
 
         var body = handler.Requests[0].Body!;
-        Assert.IsFalse(body.Contains("preInstallScript", StringComparison.Ordinal));
-        Assert.IsFalse(body.Contains("postInstallScript", StringComparison.Ordinal));
+        StringAssert.Contains(body, "\"preInstallScript\":null");
+        StringAssert.Contains(body, "\"postInstallScript\":null");
     }
 
     [TestMethod]
@@ -138,6 +138,8 @@ public sealed class GraphMacOsAppClientTests
 
         Assert.AreEqual("PATCH", handler.Requests[0].Method);
         Assert.AreEqual("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1", handler.Requests[0].Uri);
+        StringAssert.Contains(handler.Requests[0].Body!, "\"preInstallScript\":null");
+        StringAssert.Contains(handler.Requests[0].Body!, "\"postInstallScript\":null");
     }
 
     [TestMethod]

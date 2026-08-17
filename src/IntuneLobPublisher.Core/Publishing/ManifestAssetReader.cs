@@ -17,6 +17,9 @@ public sealed record MacOsAppScripts(string? PreInstall, string? PostInstall);
 /// <summary>Reads manifest-referenced files at publish time. Shared by <see cref="WindowsAppPublisher"/> and <see cref="MacOsAppPublisher"/>.</summary>
 internal static class ManifestAssetReader
 {
+    private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
+    private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
     /// <summary>Reads the top-level <c>Icon</c> file, or null when the manifest has none.</summary>
     public static async Task<byte[]?> ReadIconAsync(PublishRequest request, IntunePackageManifest manifest, CancellationToken cancellationToken)
     {
@@ -77,7 +80,20 @@ internal static class ManifestAssetReader
         }
 
         var bytes = await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false);
-        var text = Encoding.UTF8.GetString(bytes);
+        if (bytes.AsSpan(0, Math.Min(bytes.Length, Utf8Bom.Length)).SequenceEqual(Utf8Bom))
+        {
+            throw new ManifestLoadException($"{fieldName} '{scriptPath}' must not have a UTF-8 byte order mark (BOM).");
+        }
+
+        string text;
+        try
+        {
+            text = StrictUtf8.GetString(bytes);
+        }
+        catch (DecoderFallbackException exception)
+        {
+            throw new ManifestLoadException($"{fieldName} '{scriptPath}' must be valid UTF-8 without invalid byte sequences.", exception);
+        }
         var normalized = NormalizeLineEndings(text);
         if (!string.Equals(normalized, text, StringComparison.Ordinal))
         {
