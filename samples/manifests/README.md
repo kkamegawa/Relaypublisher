@@ -15,9 +15,9 @@ schema shape or constraint rather than a version-upgrade lifecycle.
 
 | Manifest | Status | `validate` | `package` | Notes |
 |---|---|---|---|---|
-| `Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-arm64.yaml` | E2E-runnable, current version | passes | passes (downloads ~68 MB from GitHub, verifies SHA-256) | See below |
-| `Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-x64.yaml` | E2E-runnable, current version | passes | passes (downloads ~73 MB from GitHub, verifies SHA-256) | See below |
-| `Microsoft/Microsoft.PowerShell/7.6.4/powershell-macos-arm64.yaml` | E2E-runnable, previous version | passes | passes (downloads ~68 MB from GitHub, verifies SHA-256) | Same identity as the 7.6.5 manifest above; `publish` treats it as superseded when both are resolved together — see below |
+| `Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-arm64.yaml` | E2E-runnable, current version | passes | passes (downloads ~68 MB from GitHub, verifies SHA-256) | See below; also demonstrates `Scripts.PreInstall`/`PostInstall` (§5.4.2) |
+| `Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-x64.yaml` | E2E-runnable, current version | passes | passes (downloads ~73 MB from GitHub, verifies SHA-256) | See below; also demonstrates `Scripts.PreInstall`/`PostInstall` (§5.4.2) |
+| `Microsoft/Microsoft.PowerShell/7.6.4/powershell-macos-arm64.yaml` | E2E-runnable, previous version | passes | passes (downloads ~68 MB from GitHub, verifies SHA-256) | Same identity as the 7.6.5 manifest above; `publish` treats it as superseded when both are resolved together — see below. Has no `Scripts` block, unlike 7.6.5, to keep both variants (with/without) covered in this directory |
 | `Microsoft/Microsoft.PowerShell/7.6.4/powershell-macos-x64.yaml` | E2E-runnable, previous version | passes | passes (downloads ~73 MB from GitHub, verifies SHA-256) | Same as above |
 | `contoso-tool-windows-x64.yaml` | E2E-runnable | passes | passes (stages local `RepositoryFiles`, builds a real `.intunewin` — requires a Windows machine/runner) | No external download; `.intunewin` build needs `IntuneWinAppUtil.exe`, downloaded automatically |
 | `contoso-tool-windows-arm64.yaml` | E2E-runnable | passes | passes (same as above) | |
@@ -43,6 +43,19 @@ defaults read /Applications/PowerShell.app/Contents/Info CFBundleShortVersionStr
 `Requirements.MinimumOSVersion: "14.0"` is deliberate: it is the lowest version PowerShell 7.6 (LTS) supports, and it is also the lowest version that requires the beta-only `v14_0` Graph flag — exercising the `AppType: pkg` / beta path in `MacOsMinimumOperatingSystemTable`. `AppType: lob` cannot use `14.0` or higher (v1.0 has no `v14_0`/`v15_0` flag).
 
 `Assignments` is intentionally left as `[]` so the file applies unmodified in any tenant. Add your own group before a real (non-dry-run) `publish`:
+
+## Pre/post-install scripts (7.6.5 only)
+
+The 7.6.5 manifests also set `Scripts.PreInstall` / `Scripts.PostInstall`
+([doc/01-manifest-schema.md §5.4.2](../../doc/01-manifest-schema.md)), pointing at
+`samples/scripts/macos/powershell/preinstall.sh` and `postinstall.sh`. These are `AppType: pkg`-only
+Graph properties (`macOSPkgApp.preInstallScript`/`postInstallScript`), so they only apply here, not to
+a hypothetical `AppType: lob` variant.
+
+The sample scripts remove a Homebrew-installed `pwsh` and a stale `pwsh` symlink before install, check
+for 500 MB of free disk space, and — after install — verify `pwsh` is present and add `/usr/local/bin`
+to `/etc/paths.d` so it is on `PATH` in new login shells. They are illustrative, not exhaustively
+tested against every macOS configuration; adapt them before using them in a real tenant.
 
 ```yaml
 Assignments:

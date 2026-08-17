@@ -61,6 +61,13 @@ Apps:
         - BundleId: com.microsoft.powershell
           BundleVersion: 7.6.5
 
+    # Optional, AppType: pkg only (doc/01-manifest-schema.md §5.4.2): pre/post-install
+    # shell scripts, mapped to Graph macOSPkgApp.preInstallScript/postInstallScript.
+    # Paths are relative to --repo-root (samples/, per this file's own README).
+    Scripts:
+      PreInstall: scripts/macos/powershell/preinstall.sh
+      PostInstall: scripts/macos/powershell/postinstall.sh
+
     # Left empty so this manifest applies unmodified in any tenant. Add your own
     # target group(s) before a real (non-dry-run) publish, for example:
     # Assignments:
