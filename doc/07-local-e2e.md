@@ -19,7 +19,7 @@ The repository sample manifests are reference material rather than guaranteed E2
 
 ## 2. Local Azure CLI authentication
 
-Relaypublisher uses `DefaultAzureCredential` for Microsoft Graph and Azure Blob access. For an app-only local E2E test, sign in to Azure CLI as the service principal for the Microsoft Entra app registration. `az login --tenant <tenant-id>` by itself performs an interactive user login and does not test the app registration's application permissions.
+Relaypublisher uses `DefaultAzureCredential` for Microsoft Graph and Azure Blob access. For an app-only local E2E test, sign in to Azure CLI as the service principal for the Microsoft Entra app registration. `az login --tenant <tenant-id>` by itself performs an interactive user login and does not test the app registration's application permissions. The credential chain must also be pinned (see "Pin the credential for the run" below) for the local run to actually exercise this service principal instead of some other signed-in identity.
 
 Before signing in, configure the app registration as follows:
 
@@ -28,7 +28,7 @@ Before signing in, configure the app registration as follows:
 - Prepare either a client secret or a PEM certificate registered on the app. A certificate is preferable when the local environment can protect its private key.
 - If the selected manifest uses Azure Blob, grant the service principal `Storage Blob Data Reader` on the required storage scope.
 
-The app-only Graph token uses the permissions preconfigured on the app registration through the `.default` scope. `DefaultAzureCredential` can then use the Azure CLI service-principal login through its Azure CLI credential.
+The app-only Graph token uses the permissions preconfigured on the app registration through the `.default` scope. `DefaultAzureCredential` *can* then use the Azure CLI service-principal login, but only when the credential chain is pinned - unpinned, a signed-in Visual Studio, VS Code or broker identity can be tried first and silently win instead, producing a 403 that looks identical to a missing permission. See [06-troubleshooting.md](06-troubleshooting.md) section 2a and "Pin the credential for the run" below.
 
 This permission is required for `publish --dry-run` as well, not only for a real publish. A dry-run resolves the existing Intune app before it reports what would change, so it calls `GET /deviceAppManagement/mobileApps` first and fails with 403 without the permission. Do not treat `--dry-run` as a way to rehearse the pipeline before permissions are granted.
 
@@ -81,6 +81,21 @@ az login --service-principal `
   --username $AppId `
   --certificate "C:\path\to\certificate.pem" `
   --tenant $TenantId
+```
+
+### Pin the credential for the run
+
+After signing in, pin `DefaultAzureCredential`'s chain so this run actually uses the service principal
+you just signed in as, rather than any other identity signed in to the same machine (doc/00-overview.md
+section 6.19). This applies to the whole shell session, covers both the Graph publish path and Azure
+Blob downloads, and `publish` prints a warning if it is not set.
+
+```bash
+export AZURE_TOKEN_CREDENTIALS=AzureCliCredential
+```
+
+```powershell
+$env:AZURE_TOKEN_CREDENTIALS = "AzureCliCredential"
 ```
 
 Keep client secrets, private keys, and access tokens out of shell history, logs, manifests, and artifacts. Do not commit the certificate or its private key.

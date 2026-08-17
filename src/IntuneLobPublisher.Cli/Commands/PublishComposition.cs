@@ -29,6 +29,9 @@ internal sealed class PublishComposition : IDisposable
 
     public static PublishComposition Create(GraphClientOptions options, ILoggerFactory loggerFactory)
     {
+        CredentialDeterminismCheck.WarnIfCredentialChainNotPinned(
+            loggerFactory.CreateLogger<PublishComposition>(), Environment.GetEnvironmentVariable);
+
         var httpClient = GraphClientFactory.Create(new DefaultAzureCredential(), options, loggerFactory);
 
         var windowsPublisher = new WindowsAppPublisher(

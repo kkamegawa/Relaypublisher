@@ -61,6 +61,7 @@ Operational notes:
 - Store the tenant ID in `AZURE_TENANT_ID`.
 - If Azure Blob sources are used, also store the subscription ID in `AZURE_SUBSCRIPTION_ID` and grant the CI identity read access to the package storage scope.
 - Use `publish --expected-tenant <tenant-id>` so a token from the wrong tenant fails before any write.
+- Set `AZURE_TOKEN_CREDENTIALS` (see section 3) so `DefaultAzureCredential` resolves deterministically to this identity. `--expected-tenant` cannot detect a wrong identity in the same tenant.
 
 ## 2. Federated Credentials
 
@@ -118,10 +119,25 @@ must be authorized for this pipeline only.
 ### Token acquisition after CI login
 
 `azure/login` in GitHub Actions and `AzureCLI@2` with the workload identity service connection in Azure Pipelines
-establish the Azure CLI login on the runner. Relaypublisher's `DefaultAzureCredential` then uses that CLI session
-(`AzureCliCredential` in the documented CI path) to request the Graph scope
-`https://graph.microsoft.com/.default`. A successful Azure CLI login alone is not a substitute for the required
-Graph application permission and admin consent.
+establish the Azure CLI login on the runner. Relaypublisher's `DefaultAzureCredential` then requests the Graph
+scope `https://graph.microsoft.com/.default` from whichever credential source it resolves first — the Azure CLI
+login is only one candidate in that chain, not a guaranteed one, so set `AZURE_TOKEN_CREDENTIALS` in the job
+environment right after the login step (see section 3). A successful Azure CLI login alone is not a substitute
+for the required Graph application permission and admin consent, and `publish` prints a warning if
+`AZURE_TOKEN_CREDENTIALS` is not set and logs the acquired identity's `appid`/`idtyp`/`roles` on the first Graph
+call.
+
+Bash / zsh, after `azure/login`:
+
+```bash
+export AZURE_TOKEN_CREDENTIALS=AzureCliCredential
+```
+
+PowerShell 7, after `AzureCLI@2`:
+
+```powershell
+$env:AZURE_TOKEN_CREDENTIALS = "AzureCliCredential"
+```
 
 For common failures, see [06-troubleshooting.md](06-troubleshooting.md):
 
@@ -138,6 +154,25 @@ Source provider authentication is controlled by each manifest item's `Auth` bloc
 | `publicHttp` | omitted or `none` | none | The download is anonymous. |
 | `githubRelease` | `token` | the value of `Auth.SecretName`, commonly `GH_RELEASE_PAT` | The token is read from the environment variable with the same name. |
 | `azureBlob` | `workloadIdentity` | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and CI OIDC variables | Access is granted through the federated CI identity. |
+
+### Credential selection (`AZURE_TOKEN_CREDENTIALS`)
+
+`AZURE_TOKEN_CREDENTIALS` is not scoped to one source provider — it is a process-wide environment
+variable that `Azure.Identity` (1.15.0+) reads internally, so setting it once governs every
+`DefaultAzureCredential` construction in the process: the Graph publish path (`publish`) and every
+`azureBlob` download during `package` / `plan`. Recommended value for CI runners and CLI-login-based
+local use is `AzureCliCredential`, which restricts the chain to only the Azure CLI login. Setting it is
+optional — `DefaultAzureCredential` still works without it — but recommended, because an unpinned chain
+can silently resolve to a different signed-in identity (doc/00-overview.md section 6.19,
+[06-troubleshooting.md](06-troubleshooting.md) section 2a). `publish` warns when it is not set.
+
+```bash
+export AZURE_TOKEN_CREDENTIALS=AzureCliCredential
+```
+
+```powershell
+$env:AZURE_TOKEN_CREDENTIALS = "AzureCliCredential"
+```
 
 Example manifest fragment:
 

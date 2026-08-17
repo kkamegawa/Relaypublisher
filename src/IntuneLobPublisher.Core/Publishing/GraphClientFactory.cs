@@ -8,7 +8,7 @@ public static class GraphClientFactory
 {
     public static HttpClient Create(TokenCredential credential, GraphClientOptions options, ILoggerFactory loggerFactory)
     {
-        var authHandler = new GraphAuthenticationHandler(credential, options)
+        var authHandler = new GraphAuthenticationHandler(credential, options, loggerFactory.CreateLogger<GraphAuthenticationHandler>())
         {
             InnerHandler = new SocketsHttpHandler(),
         };

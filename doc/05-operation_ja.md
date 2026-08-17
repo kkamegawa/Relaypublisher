@@ -62,6 +62,7 @@ CI publisher identity 用に Microsoft Entra application registration を 1 つ�
 - Tenant ID は `AZURE_TENANT_ID` に保存します。
 - Azure Blob source を使う場合は subscription ID も `AZURE_SUBSCRIPTION_ID` に保存し、CI identity に package storage scope への read access を付与します。
 - `publish --expected-tenant <tenant-id>` を使い、誤った tenant の token では write 前に fail させます。
+- `AZURE_TOKEN_CREDENTIALS`(§3 参照)を設定し、`DefaultAzureCredential` がこの identity に決定的に解決されるようにします。同じ tenant 内の誤った identity は `--expected-tenant` では検出できません。
 
 ## 2. Federated credentials
 
@@ -116,9 +117,24 @@ Entra federated credential にそのままコピーします。GitHub の issuer
 
 GitHub Actions の `azure/login` と Azure Pipelines の workload identity service connection を使う
 `AzureCLI@2` は runner 上の Azure CLI login を確立します。Relaypublisher の `DefaultAzureCredential` は
-この CI 経路では `AzureCliCredential` を使って Azure CLI session から
-`https://graph.microsoft.com/.default` scope の Graph token を取得します。Azure CLI login だけでは
-Graph application permission と admin consent の代わりになりません。
+そこから最初に解決できた credential source で `https://graph.microsoft.com/.default` scope の Graph
+token を取得します — Azure CLI login は chain の中の1候補に過ぎず、選ばれる保証はありません。login
+step の直後に job environment で `AZURE_TOKEN_CREDENTIALS` を設定してください(§3 参照)。Azure CLI
+login だけでは Graph application permission と admin consent の代わりになりません。`publish` は
+`AZURE_TOKEN_CREDENTIALS` が未設定なら warning を出し、最初の Graph 呼び出しで取得した identity の
+`appid`/`idtyp`/`roles` をログします。
+
+Bash / zsh、`azure/login` の直後:
+
+```bash
+export AZURE_TOKEN_CREDENTIALS=AzureCliCredential
+```
+
+PowerShell 7、`AzureCLI@2` の直後:
+
+```powershell
+$env:AZURE_TOKEN_CREDENTIALS = "AzureCliCredential"
+```
 
 代表的な failure の確認先は [06-troubleshooting.md](06-troubleshooting.md) です。
 
@@ -135,6 +151,25 @@ Source provider の認証は、manifest item ごとの `Auth` block で制御し
 | `publicHttp` | omitted または `none` | なし | Anonymous download です。 |
 | `githubRelease` | `token` | `Auth.SecretName` の値。通常は `GH_RELEASE_PAT` | 同じ名前の environment variable から token を読みます。 |
 | `azureBlob` | `workloadIdentity` | `AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、CI OIDC variables | Federated CI identity で access します。 |
+
+### Credential の選択(`AZURE_TOKEN_CREDENTIALS`)
+
+`AZURE_TOKEN_CREDENTIALS` は特定の source provider に限定された設定ではありません。`Azure.Identity`
+(1.15.0 以降)がプロセス内部で読み取るプロセス全体の環境変数なので、1回設定するだけで、プロセス内の
+すべての `DefaultAzureCredential` 構築 — `publish` の Graph publish 経路、および `package`/`plan` 中の
+すべての `azureBlob` download — に効きます。CI runner や CLI login ベースのローカル利用での推奨値は
+`AzureCliCredential` で、chain を Azure CLI login のみに制限します。設定は任意です(`AZURE_TOKEN_CREDENTIALS`
+なしでも `DefaultAzureCredential` は動作します)が推奨します — pin しない chain は別のサインイン済み
+identity に黙って解決されることがあるためです(doc/00-overview.md §6.19、
+[06-troubleshooting_ja.md](06-troubleshooting_ja.md) §2a)。`publish` は未設定時に warning を出します。
+
+```bash
+export AZURE_TOKEN_CREDENTIALS=AzureCliCredential
+```
+
+```powershell
+$env:AZURE_TOKEN_CREDENTIALS = "AzureCliCredential"
+```
 
 Manifest fragment の例:
 

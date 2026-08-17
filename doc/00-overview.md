@@ -225,7 +225,7 @@ repo:<owner>/<repo>:environment:production
 ```
 
 - Azure Pipelines 用には workload identity federation の service connection に対応する federated credential を追加する。
-- `azure/login` は Azure CLI にログインするだけであり、Graph token は `DefaultAzureCredential`(実体は `AzureCliCredential`)経由で `https://graph.microsoft.com/.default` scope で取得する。この経路を設計上の前提として明記する。
+- `azure/login` は Azure CLI session を確立するだけであり、Graph token は `DefaultAzureCredential` 経由で `https://graph.microsoft.com/.default` scope で取得する。`DefaultAzureCredential` の credential chain 解決順は環境に依存し、`AzureCliCredential` が選ばれる保証はない(6.19 参照)。`AZURE_TOKEN_CREDENTIALS` で明示的に固定することを推奨する。
 - `subscription-id` は Intune 操作自体には不要だが `azure/login` の入力として必要。
 
 ### 6.6 Changed detection (`--changed`) の定義
@@ -401,6 +401,20 @@ Windows 専用の IntuneWin パッケージング境界を検証するテスト�
 - IntuneWin ZIP の展開、パッケージメタデータの読み取り、Graph payload のマッピング、macOS publish などポータブルな挙動を検証するテストは、非 Windows プラットフォームでも引き続き実行される。
 - この設計では専用の Windows CI job は追加しない。Windows 専用のテストカバレッジ自体を実行する必要がある場合のみ、Windows runner が必要になる。
 
+### 6.19 Credential の決定性(`AZURE_TOKEN_CREDENTIALS`)
+
+`DefaultAzureCredential` は複数の credential source(Environment、Workload Identity、Managed Identity、Visual Studio、VS Code、Azure CLI、Azure PowerShell、broker など)を固定順で試す。開発機で `az login --service-principal` していても、同時に Visual Studio / VS Code / broker のいずれかにサインイン済みだと、`DefaultAzureCredential` はそちらの identity を先に選ぶことがある。その identity は同じ tenant であることが多いため 6.12 のテナントガード(`--expected-tenant`)では検出できず、結果として得られる 403 は実際の権限不足と見分けが付かない。
+
+対処方針:
+
+- **CLI に `--credential` option は追加しない。** Azure.Identity 自身が `new DefaultAzureCredential()`(引数なし)でもネイティブに読む環境変数 `AZURE_TOKEN_CREDENTIALS`(1.15.0 以降)を正式な固定手段として文書化する。コード変更なしに `publish` の Graph credential と `package`/`plan` の Azure Blob credential(`AzureBlobDownloader`)の両方の解決を同時に支配できるため、独自オプションを追加する理由がない。
+- `AZURE_TOKEN_CREDENTIALS` が未設定の場合、`publish` は実行の先頭で warning を出す。error にはしない — CI のように chain が実質的に決定的な環境では未設定でも問題は起きないため。
+- Graph token を新規取得するたびに、その token の `appid` / `idtyp` / `roles` を Information レベルで記録する。いずれも secret ではない(GUID・token 種別・permission 名であり、`client-request-id`/`request-id` と同じ扱い)。access token 本体は決してログに出さない。これにより 403 の切り分けに `az rest` を使わずとも、log 上の `appid` を意図した app 登録の client ID と比較するだけで identity の食い違いが分かる。
+
+これは推奨事項であり、AGENTS.md の設計上の不変条件には追加しない。
+
+参照: [Credential chains in the Azure Identity library for .NET](https://learn.microsoft.com/dotnet/azure/sdk/authentication/credential-chains)、[Use deterministic credentials in production environments](https://learn.microsoft.com/dotnet/azure/sdk/authentication/best-practices#use-deterministic-credentials-in-production-environments)。
+
 ---
 
 
@@ -437,3 +451,4 @@ Windows 専用の IntuneWin パッケージング境界を検証するテスト�
 - 更新スキップ判定は `.intunewin` のハッシュではなく決定的 input hash(6.7)。
 - changed detection は validate job で確定し `manifest-list.json` を後続 job に渡す(6.6)。
 - Arm64 は Graph の `allowedArchitectures` で表現する(v1.0 の `applicableArchitectures` enum に arm64 はない)。
+- `DefaultAzureCredential` の credential chain 解決順は環境依存で保証されないため、`AZURE_TOKEN_CREDENTIALS` で明示的に固定する(6.19)。

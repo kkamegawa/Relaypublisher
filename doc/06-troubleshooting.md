@@ -144,21 +144,44 @@ rather than expecting a running process to pick up the new permission.
 
 ### If `roles` is correct and 403 persists
 
-- Confirm the permission itself works, independently of Relaypublisher:
+Relaypublisher logs the identity that acquired the token on every fresh Graph token acquisition, before
+the `roles` check above even applies:
 
-  ```bash
-  az rest --method get --url 'https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?$select=id,displayName&$top=1'
-  ```
+```
+info: IntuneLobPublisher.Core.Publishing.GraphAuthenticationHandler[0] Acquired Graph token for identity
+appid=<guid> idtyp=<type> roles=<permission names>.
+```
 
-  If this succeeds while `publish` still returns 403, the permission is fine and the two calls are not
-  using the same identity. `DefaultAzureCredential` tries several credentials in order and the Azure CLI
-  login is not the first one, so on a developer machine it can pick up a signed-in Visual Studio, VS
-  Code or broker identity instead. That identity is usually in the same tenant, so `--expected-tenant`
-  does not catch it. Pin the credential for the run:
+Compare `appid` with the application (client) ID of the intended app registration - a different value
+means a different identity acquired the token. `idtyp=app` confirms an app-only (client-credentials)
+token; any other value (for example `idtyp=user`, or the claim missing) means a user identity was used
+instead of the service principal. This is the fastest way to confirm the wrong identity was used,
+without falling back to `az rest`.
 
-  ```bash
-  AZURE_TOKEN_CREDENTIALS=AzureCliCredential
-  ```
+If the identity is unexpected, or you want to confirm the permission independently of Relaypublisher:
+
+```bash
+az rest --method get --url 'https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?$select=id,displayName&$top=1'
+```
+
+If this succeeds while `publish` still returns 403, the permission is fine and the two calls are not
+using the same identity. `DefaultAzureCredential` tries several credentials in order and the Azure CLI
+login is not guaranteed to be the one that wins, so on a developer machine it can pick up a signed-in
+Visual Studio, VS Code or broker identity instead. That identity is usually in the same tenant, so
+`--expected-tenant` does not catch it. This is a documented, supported configuration
+([05-operation.md](05-operation.md) section 3, [00-overview.md](00-overview.md) section 6.19), not just a
+workaround: pin the credential chain for every run, not only when troubleshooting.
+
+```bash
+export AZURE_TOKEN_CREDENTIALS=AzureCliCredential
+```
+
+```powershell
+$env:AZURE_TOKEN_CREDENTIALS = "AzureCliCredential"
+```
+
+If `publish` printed a warning starting with `AZURE_TOKEN_CREDENTIALS is not set` before the 403, the
+chain was not pinned - act on that warning and rerun before investigating permissions any further.
 
 - Confirm the tenant has an active Intune license. The Microsoft Graph API for Intune requires one, and
   a tenant without it returns 403 regardless of permissions.
