@@ -24,11 +24,13 @@ Relaypublisher uses `DefaultAzureCredential` for Microsoft Graph and Azure Blob 
 Before signing in, configure the app registration as follows:
 
 - Record the application (client) ID and tenant ID.
-- Grant the Microsoft Graph application permission `DeviceManagementApps.ReadWrite.All` and obtain admin consent.
+- Grant the Microsoft Graph permission `DeviceManagementApps.ReadWrite.All` under **Application permissions** - not the identically named **Delegated** entry - and obtain admin consent. A delegated permission never appears in an app-only token, so it produces a 403 that looks like a missing permission even though the portal shows it as granted. See [06-troubleshooting.md](06-troubleshooting.md) section 2a.
 - Prepare either a client secret or a PEM certificate registered on the app. A certificate is preferable when the local environment can protect its private key.
 - If the selected manifest uses Azure Blob, grant the service principal `Storage Blob Data Reader` on the required storage scope.
 
 The app-only Graph token uses the permissions preconfigured on the app registration through the `.default` scope. `DefaultAzureCredential` can then use the Azure CLI service-principal login through its Azure CLI credential.
+
+This permission is required for `publish --dry-run` as well, not only for a real publish. A dry-run resolves the existing Intune app before it reports what would change, so it calls `GET /deviceAppManagement/mobileApps` first and fails with 403 without the permission. Do not treat `--dry-run` as a way to rehearse the pipeline before permissions are granted.
 
 Bash/zsh with a client secret:
 

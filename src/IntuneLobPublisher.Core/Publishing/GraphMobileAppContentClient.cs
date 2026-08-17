@@ -1,6 +1,4 @@
 using System.Net.Http.Json;
-using System.Text.Json;
-using IntuneLobPublisher.Core.Exceptions;
 
 namespace IntuneLobPublisher.Core.Publishing;
 
@@ -64,10 +62,9 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         var requestUri = AppPath(appId, useBeta) + "/contentVersions";
         using var response = await _httpClient.PostAsJsonAsync(requestUri, new MobileAppContentCreateRequest(), cancellationToken)
             .ConfigureAwait(false);
-        var body = await ReadJsonAsync<MobileAppContentResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
-        return body.Id ?? throw new GraphRequestException(
-            $"Graph returned a content version without an id for '{requestUri}'.",
-            (int)response.StatusCode, GetHeader(response, "client-request-id"), GetHeader(response, "request-id"));
+        var body = await GraphResponseReader.ReadJsonAsync<MobileAppContentResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
+        return body.Id ?? throw GraphResponseReader.BodyFailure(
+            response, $"Graph returned a content version without an id for '{requestUri}'.");
     }
 
     public async Task<string> CreateContentFileAsync(
@@ -76,10 +73,9 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         var requestUri = ContentVersionPath(appId, contentVersionId, useBeta) + "/files";
         var request = new MobileAppContentFileCreateRequest { Name = name, Size = size, SizeEncrypted = sizeEncrypted };
         using var response = await _httpClient.PostAsJsonAsync(requestUri, request, cancellationToken).ConfigureAwait(false);
-        var body = await ReadJsonAsync<MobileAppContentFileResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
-        return body.Id ?? throw new GraphRequestException(
-            $"Graph returned a content file without an id for '{requestUri}'.",
-            (int)response.StatusCode, GetHeader(response, "client-request-id"), GetHeader(response, "request-id"));
+        var body = await GraphResponseReader.ReadJsonAsync<MobileAppContentFileResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
+        return body.Id ?? throw GraphResponseReader.BodyFailure(
+            response, $"Graph returned a content file without an id for '{requestUri}'.");
     }
 
     public async Task<MobileAppContentFileResponse> GetContentFileAsync(
@@ -87,14 +83,14 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
     {
         var requestUri = FilePath(appId, contentVersionId, fileId, useBeta);
         using var response = await _httpClient.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
-        return await ReadJsonAsync<MobileAppContentFileResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
+        return await GraphResponseReader.ReadJsonAsync<MobileAppContentFileResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task RenewUploadAsync(string appId, string contentVersionId, string fileId, bool useBeta, CancellationToken cancellationToken)
     {
         var requestUri = FilePath(appId, contentVersionId, fileId, useBeta) + "/renewUpload";
         using var response = await _httpClient.PostAsync(requestUri, content: null, cancellationToken).ConfigureAwait(false);
-        EnsureSuccess(response, requestUri);
+        await GraphResponseReader.EnsureSuccessAsync(response, requestUri, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task CommitFileAsync(
@@ -103,7 +99,7 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         var requestUri = FilePath(appId, contentVersionId, fileId, useBeta) + "/commit";
         var request = new CommitFileRequest { FileEncryptionInfo = fileEncryptionInfo };
         using var response = await _httpClient.PostAsJsonAsync(requestUri, request, cancellationToken).ConfigureAwait(false);
-        EnsureSuccess(response, requestUri);
+        await GraphResponseReader.EnsureSuccessAsync(response, requestUri, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task PatchCommittedContentVersionAsync(string appId, string contentVersionId, string oDataType, bool useBeta, CancellationToken cancellationToken)
@@ -111,7 +107,7 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         var requestUri = AppPath(appId, useBeta);
         var request = new MobileAppMetadataPatchPayload { ODataType = oDataType, CommittedContentVersion = contentVersionId };
         using var response = await _httpClient.PatchAsync(requestUri, JsonContent.Create(request), cancellationToken).ConfigureAwait(false);
-        EnsureSuccess(response, requestUri);
+        await GraphResponseReader.EnsureSuccessAsync(response, requestUri, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task PatchNotesAsync(string appId, string notes, string oDataType, bool useBeta, CancellationToken cancellationToken)
@@ -119,14 +115,14 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         var requestUri = AppPath(appId, useBeta);
         var request = new MobileAppMetadataPatchPayload { ODataType = oDataType, Notes = notes };
         using var response = await _httpClient.PatchAsync(requestUri, JsonContent.Create(request), cancellationToken).ConfigureAwait(false);
-        EnsureSuccess(response, requestUri);
+        await GraphResponseReader.EnsureSuccessAsync(response, requestUri, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<string> GetPublishingStateAsync(string appId, bool useBeta, CancellationToken cancellationToken)
     {
         var requestUri = AppPath(appId, useBeta) + "?$select=publishingState";
         using var response = await _httpClient.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
-        var body = await ReadJsonAsync<Win32LobAppPublishingStateResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
+        var body = await GraphResponseReader.ReadJsonAsync<Win32LobAppPublishingStateResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
         return body.PublishingState;
     }
 
@@ -140,43 +136,4 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         => $"{ContentVersionPath(appId, contentVersionId, useBeta)}/files/{Uri.EscapeDataString(fileId)}";
 
     private static string VersionSegment(bool useBeta) => useBeta ? "/beta" : "/v1.0";
-
-    private async Task<T> ReadJsonAsync<T>(HttpResponseMessage response, string requestUri, CancellationToken cancellationToken)
-    {
-        EnsureSuccess(response, requestUri);
-
-        var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        T? body;
-        try
-        {
-            body = await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
-        catch (JsonException)
-        {
-            throw new GraphRequestException(
-                $"Graph returned a malformed body for '{requestUri}'.",
-                (int)response.StatusCode, GetHeader(response, "client-request-id"), GetHeader(response, "request-id"));
-        }
-
-        return body ?? throw new GraphRequestException(
-            $"Graph returned an empty body for '{requestUri}'.",
-            (int)response.StatusCode, GetHeader(response, "client-request-id"), GetHeader(response, "request-id"));
-    }
-
-    private static void EnsureSuccess(HttpResponseMessage response, string requestUri)
-    {
-        if (response.IsSuccessStatusCode)
-        {
-            return;
-        }
-
-        throw new GraphRequestException(
-            $"Graph request to '{requestUri}' returned {(int)response.StatusCode}.",
-            (int)response.StatusCode,
-            GetHeader(response, "client-request-id"),
-            GetHeader(response, "request-id"));
-    }
-
-    private static string? GetHeader(HttpResponseMessage response, string name)
-        => response.Headers.TryGetValues(name, out var values) ? values.FirstOrDefault() : null;
 }

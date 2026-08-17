@@ -35,11 +35,15 @@ public sealed class GraphIntuneAppDirectory : IIntuneAppDirectory
             using var response = await _httpClient.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                throw new GraphRequestException(
-                    $"Failed to list Intune mobile apps: GET '{requestUri}' returned {(int)response.StatusCode}.",
-                    (int)response.StatusCode,
-                    GetHeader(response, "client-request-id"),
-                    GetHeader(response, "request-id"));
+                var failure = await GraphErrorReader
+                    .ReadFailureAsync(response, requestUri, cancellationToken).ConfigureAwait(false);
+
+                // Every app entry resolves through this listing, so 401/403 here means the identity
+                // cannot publish anything: report it as identity-wide so the CLI stops the batch
+                // rather than repeating the same permission error once per entry.
+                throw failure.StatusCode is 401 or 403
+                    ? failure.ToAccessDeniedException("Failed to list Intune mobile apps.")
+                    : failure.ToRequestException("Failed to list Intune mobile apps.");
             }
 
             var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
@@ -50,12 +54,20 @@ public sealed class GraphIntuneAppDirectory : IIntuneAppDirectory
             }
             catch (JsonException)
             {
-                throw new GraphRequestException($"Graph returned a malformed body for '{requestUri}'.", (int)response.StatusCode, null, null);
+                throw new GraphRequestException(
+                    $"Graph returned a malformed body for '{requestUri}'.",
+                    (int)response.StatusCode,
+                    GraphErrorReader.GetHeader(response, "client-request-id"),
+                    GraphErrorReader.GetHeader(response, "request-id"));
             }
 
             if (page is null)
             {
-                throw new GraphRequestException($"Graph returned an empty body for '{requestUri}'.", (int)response.StatusCode, null, null);
+                throw new GraphRequestException(
+                    $"Graph returned an empty body for '{requestUri}'.",
+                    (int)response.StatusCode,
+                    GraphErrorReader.GetHeader(response, "client-request-id"),
+                    GraphErrorReader.GetHeader(response, "request-id"));
             }
 
             foreach (var app in page.Value)
@@ -68,9 +80,6 @@ public sealed class GraphIntuneAppDirectory : IIntuneAppDirectory
 
         return results;
     }
-
-    private static string? GetHeader(HttpResponseMessage response, string name)
-        => response.Headers.TryGetValues(name, out var values) ? values.FirstOrDefault() : null;
 
     private sealed class MobileAppListPage
     {

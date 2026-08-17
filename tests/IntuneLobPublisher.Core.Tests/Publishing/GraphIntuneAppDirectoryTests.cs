@@ -82,15 +82,64 @@ public sealed class GraphIntuneAppDirectoryTests
     }
 
     [TestMethod]
-    public async Task ListAppsAsync_ErrorResponse_ThrowsGraphRequestException()
+    [DataRow(HttpStatusCode.Unauthorized, 401)]
+    [DataRow(HttpStatusCode.Forbidden, 403)]
+    public async Task ListAppsAsync_AuthorizationFailure_ThrowsGraphAccessDeniedException(
+        HttpStatusCode statusCode, int expectedStatusCode)
     {
-        var handler = new QueueHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        // Every app entry resolves through this listing, so the CLI treats a failure here as
+        // identity-wide and stops the batch instead of repeating the error once per entry.
+        var handler = new QueueHandler(_ => new HttpResponseMessage(statusCode));
+        var directory = new GraphIntuneAppDirectory(CreateClient(handler));
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphAccessDeniedException>(
+            () => directory.ListAppsAsync(CancellationToken.None));
+
+        Assert.AreEqual(expectedStatusCode, ex.StatusCode);
+        StringAssert.StartsWith(ex.Message, "Failed to list Intune mobile apps.");
+        StringAssert.Contains(ex.Message, "DeviceManagementApps.ReadWrite.All");
+    }
+
+    [TestMethod]
+    public async Task ListAppsAsync_AuthorizationFailure_SurfacesGraphErrorAndCorrelationIds()
+    {
+        var handler = new QueueHandler(_ =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.Forbidden)
+            {
+                Content = new StringContent(
+                    """{"error":{"code":"Forbidden","message":"Application is not authorized to perform this operation."}}""",
+                    Encoding.UTF8,
+                    "application/json"),
+            };
+            response.Headers.Add("client-request-id", "client-1");
+            response.Headers.Add("request-id", "request-1");
+            return response;
+        });
+        var directory = new GraphIntuneAppDirectory(CreateClient(handler));
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphAccessDeniedException>(
+            () => directory.ListAppsAsync(CancellationToken.None));
+
+        Assert.AreEqual("Forbidden", ex.GraphErrorCode);
+        Assert.AreEqual("client-1", ex.ClientRequestId);
+        Assert.AreEqual("request-1", ex.RequestId);
+        StringAssert.Contains(ex.Message, "Application is not authorized to perform this operation.");
+        StringAssert.Contains(ex.Message, "client-request-id=client-1");
+    }
+
+    [TestMethod]
+    public async Task ListAppsAsync_NonAuthorizationErrorResponse_ThrowsGraphRequestException()
+    {
+        // A server-side failure is transient and app-specific, not a reason to stop the whole batch.
+        var handler = new QueueHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
         var directory = new GraphIntuneAppDirectory(CreateClient(handler));
 
         var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(
             () => directory.ListAppsAsync(CancellationToken.None));
 
-        Assert.AreEqual(403, ex.StatusCode);
+        Assert.AreEqual(500, ex.StatusCode);
+        Assert.DoesNotContain("DeviceManagementApps.ReadWrite.All", ex.Message);
     }
 
     [TestMethod]

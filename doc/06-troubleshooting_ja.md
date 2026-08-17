@@ -64,6 +64,116 @@ Recovery:
 2. 失敗した workflow を rerun します。
 3. `--expected-tenant` は維持します。Run を通すために削除しないでください。
 
+## 2a. App 一覧取得で Graph が 403 を返した
+
+```
+error: <package-identifier> macos-arm64: Failed to list Intune mobile apps. Graph request to
+'/beta/deviceAppManagement/mobileApps?$select=id,displayName,notes' returned 403 (Forbidden): ...
+```
+
+`GET /deviceAppManagement/mobileApps` は、`publish --dry-run` を含むすべての publish で最初に実行される
+Graph 呼び出しです(後述の「dry-run でも Graph 権限が必要な理由」を参照)。すべての app entry がこの呼び出しを
+経由するため、ここでの 401/403 は identity 全体の問題として扱い、entry ごとに同じ error を繰り返さずに
+batch を中断します。
+
+まず 2 つの failure class を切り分けます。
+
+- **401** - token を取得できなかった、または token が拒否された。CI login step と `--expected-tenant` を
+  確認します(section 2)。
+- **403** - token は有効だが identity に権限がない。以下に進みます。
+
+### Token が実際に何を持っているか確認する
+
+App-only token は **application** permission を `roles` claim に持ちます。`roles` が存在しない、または
+`DeviceManagementApps.ReadWrite.All`(あるいは `DeviceManagementApps.Read.All`)を含まない場合、403 の
+説明がつきます。Access token 自体は secret として扱い、issue・chat・log に貼らないでください。
+
+Bash / zsh:
+
+```bash
+TOKEN=$(az account get-access-token --resource https://graph.microsoft.com --query accessToken -o tsv)
+PAYLOAD=$(printf '%s' "$TOKEN" | cut -d. -f2 | tr '_-' '/+')
+while [ $(( ${#PAYLOAD} % 4 )) -ne 0 ]; do PAYLOAD="${PAYLOAD}="; done
+printf '%s' "$PAYLOAD" | base64 -d | grep -o '"roles":\[[^]]*\]'
+unset TOKEN PAYLOAD
+```
+
+PowerShell 7:
+
+```powershell
+$Token = az account get-access-token --resource https://graph.microsoft.com --query accessToken -o tsv
+$Payload = $Token.Split('.')[1].Replace('-', '+').Replace('_', '/')
+$Payload = $Payload.PadRight([int][Math]::Ceiling($Payload.Length / 4) * 4, '=')
+$Claims = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Payload)) | ConvertFrom-Json
+$Claims.roles
+$Token = $null
+```
+
+### 最も多い原因: permission が application ではなく delegated になっている
+
+Microsoft Graph の `DeviceManagementApps.ReadWrite.All` には 2 つの形式があり、ポータルではどちらも同じ
+名前で表示されます。ここで機能するのは一方だけです。
+
+| ポータルの permission type | Token claim | Relaypublisher で使えるか |
+|---|---|---|
+| 委任済み (Delegated) | `scp`(user token のみ) | 使えない |
+| アプリケーション (Application) | `roles`(app-only token) | 使える |
+
+Relaypublisher は service principal として client credentials flow で認証するため、得られるのは app-only
+token です。Delegated permission はこの token に一切現れないので、ポータル上で「付与済み」「管理者の同意
+済み」と表示されていても Graph は 403 を返します。Entra 管理センターで app registration の
+**API のアクセス許可** ブレードを開き、`DeviceManagementApps.ReadWrite.All` の **種類** 列が
+**アプリケーション** であることを確認してください。**委任済み** になっている場合は、
+**アプリケーションの許可** から同じ permission を追加し直して管理者の同意を与えます。委任済みの entry は
+その後削除して構いません。
+
+`ReadWrite.All` は read を含むため、`DeviceManagementApps.Read.All` を併せて追加する必要はありません。
+
+### Permission を変更した後
+
+同意は発行済みの token には反映されません。サインアウトしてから再度サインインし、新しい token を取得して
+から rerun します。
+
+```bash
+az account clear
+az login --service-principal --username <application-client-id> --tenant <tenant-id> --certificate <certificate-path>
+```
+
+Relaypublisher は 1 回の run の間 token を in-process で cache するため、実行中の process が新しい
+permission を拾うことを期待せず、コマンドを実行し直してください。
+
+### `roles` が正しいのに 403 が続く場合
+
+- Relaypublisher とは独立に、permission 自体が機能するか確認します。
+
+  ```bash
+  az rest --method get --url 'https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?$select=id,displayName&$top=1'
+  ```
+
+  これが成功するのに `publish` は 403 のままなら、permission は正しく、2 つの呼び出しが同じ identity を
+  使っていません。`DefaultAzureCredential` は複数の credential を順に試し、Azure CLI login は最初では
+  ないため、開発機ではサインイン済みの Visual Studio・VS Code・broker の identity を先に拾うことが
+  あります。その identity は通常同じ tenant にあるので `--expected-tenant` では検出できません。Run
+  単位で credential を固定します。
+
+  ```bash
+  AZURE_TOKEN_CREDENTIALS=AzureCliCredential
+  ```
+
+- Tenant に有効な Intune license があるか確認します。Intune の Microsoft Graph API は license を必要と
+  し、license がない tenant は permission に関係なく 403 を返します。
+- Tenant で `/beta/` endpoint が利用できるか確認します。App 一覧取得は `macOSPkgApp` が漏れないように
+  beta を使っています。関連する pkg 固有の failure は section 6a を参照してください。
+- Support case を開くときは error message 中の `client-request-id` と `request-id` を報告します。
+  Relaypublisher は両方を message に含めます。これらは correlation id であり secret ではありません。
+
+### dry-run でも Graph 権限が必要な理由
+
+`publish --dry-run` は、何が変わるかを判断する前に既存の Intune app を解決します。Dry-run の出力は app が
+新規作成されるか更新されるかを示し、published version と比較するため、解決が必須だからです。この解決は
+dry-run の分岐より前で行われるので、`--dry-run` にも実際の publish と同じ Graph read 権限が必要です。
+権限を付与せずに pipeline を試すために dry-run を使うことはできません。
+
 ## 3. Downgrade が skip された
 
 Relaypublisher は既定で、manifest の `PackageVersion` が Intune management metadata に保存された version より低い場合、publish を skip します。
@@ -179,8 +289,9 @@ Publish が package metadata missing を報告した場合:
   `client-request-id`/`request-id` を添えて issue を起票する。
 - **macOS `AppType: pkg` entry に特有の 403/404(`GraphRequestException`)**: pkg app の作成・更新・
   content upload はすべて Graph **beta** 経由で行われる(`macOSPkgApp` は v1.0 に存在しない)。service
-  principal の Graph 権限とテナントの beta API 可用性を確認する。Windows や `AppType: lob`(v1.0 のまま)の
-  publish には影響しない。
+  principal の Graph 権限(section 2a)とテナントの beta API 可用性を確認する。Windows や
+  `AppType: lob`(v1.0 のまま)の publish には影響しないため、pkg entry だけが失敗し batch は継続する。
+  App 一覧取得の 403 が run 全体を止めるのとは異なる。
 - **デバイス側エラー `2016214710`("The preinstall script provided by the admin failed")**:
   `Scripts.PreInstall` のスクリプトがデバイス上で非 0 終了した。スクリプトが前提条件を待っている場合の想定内
   挙動のこともあり、Intune は次回 device check-in で再試行する。継続して失敗する場合はスクリプトのロジックと

@@ -24,11 +24,13 @@ Relaypublisher は Microsoft Graph と Azure Blob へのアクセスに `Default
 ログイン前に app 登録を次のように構成します。
 
 - application (client) ID と tenant ID を確認します。
-- Microsoft Graph の application permission `DeviceManagementApps.ReadWrite.All` を付与し、admin consent を取得します。
+- Microsoft Graph の `DeviceManagementApps.ReadWrite.All` を **アプリケーションの許可 (Application permissions)** から付与し、admin consent を取得します。同名の **委任済み (Delegated)** の方ではありません。委任済みの permission は app-only token に一切現れないため、ポータル上は付与済みに見えても permission 不足と同じ 403 になります。[06-troubleshooting_ja.md](06-troubleshooting_ja.md) の section 2a を参照してください。
 - client secret または app に登録した PEM 証明書を準備します。ローカル環境で秘密鍵を保護できる場合は、証明書の利用を推奨します。
 - 選択した manifest が Azure Blob を使う場合は、必要な storage scope で service principal に `Storage Blob Data Reader` を付与します。
 
 app-only の Graph token は `.default` scope により app 登録に事前設定された permission を使用します。そのため `DefaultAzureCredential` は Azure CLI の service principal ログインを Azure CLI credential 経由で利用できます。
+
+この permission は実際の publish だけでなく `publish --dry-run` にも必要です。dry-run は何が変わるかを報告する前に既存の Intune app を解決するため、最初に `GET /deviceAppManagement/mobileApps` を呼び出し、permission がなければ 403 で失敗します。permission を付与する前に pipeline を試す手段として `--dry-run` を使うことはできません。
 
 client secret を使う Bash/zsh の例:
 

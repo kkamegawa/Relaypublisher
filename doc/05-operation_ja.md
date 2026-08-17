@@ -47,7 +47,12 @@ CI publisher identity 用に Microsoft Entra application registration を 1 つ�
 必要な設定:
 
 - Account type: 対象 tenant の single tenant。
-- Microsoft Graph application permission: `DeviceManagementApps.ReadWrite.All`。
+- Microsoft Graph application permission: `DeviceManagementApps.ReadWrite.All`。**委任済み
+  (Delegated)** ではなく **アプリケーションの許可 (Application permissions)** から追加してください。
+  ポータルは同じ名前を両方に表示します。Relaypublisher は service principal としてサインインし、
+  app-only token は application permission のみ(`roles` claim)を持つため、委任済みで登録すると管理者の
+  同意を与えても 403 になります。[06-troubleshooting_ja.md](06-troubleshooting_ja.md) の section 2a を
+  参照してください。
 - Admin consent: 初回 production publish 前に tenant administrator が付与します。
 - 推奨 CI setup では client secret は不要です。workload identity federation を使います。
 

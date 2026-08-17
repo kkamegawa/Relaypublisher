@@ -64,6 +64,116 @@ Recovery:
 2. Rerun the failed workflow.
 3. Keep `--expected-tenant`; do not remove it to make the run pass.
 
+## 2a. Graph Returned 403 on the App Listing
+
+```
+error: <package-identifier> macos-arm64: Failed to list Intune mobile apps. Graph request to
+'/beta/deviceAppManagement/mobileApps?$select=id,displayName,notes' returned 403 (Forbidden): ...
+```
+
+`GET /deviceAppManagement/mobileApps` is the first Graph call of every publish, including
+`publish --dry-run` (see "Why dry-run needs Graph permission" below). Every app entry resolves through
+it, so Relaypublisher treats 401/403 here as identity-wide and stops the batch instead of repeating the
+same error once per entry.
+
+First separate the two failure classes:
+
+- **401** - the token could not be obtained, or it was rejected. Check the CI login step and
+  `--expected-tenant` (section 2).
+- **403** - the token is valid but the identity is not permitted. Continue below.
+
+### Check what the token actually carries
+
+An app-only token carries **application** permissions in its `roles` claim. If `roles` is missing or
+does not contain `DeviceManagementApps.ReadWrite.All` (or `DeviceManagementApps.Read.All`), the 403 is
+explained. Treat the access token itself as a secret: do not paste it into an issue, a chat, or a log.
+
+Bash / zsh:
+
+```bash
+TOKEN=$(az account get-access-token --resource https://graph.microsoft.com --query accessToken -o tsv)
+PAYLOAD=$(printf '%s' "$TOKEN" | cut -d. -f2 | tr '_-' '/+')
+while [ $(( ${#PAYLOAD} % 4 )) -ne 0 ]; do PAYLOAD="${PAYLOAD}="; done
+printf '%s' "$PAYLOAD" | base64 -d | grep -o '"roles":\[[^]]*\]'
+unset TOKEN PAYLOAD
+```
+
+PowerShell 7:
+
+```powershell
+$Token = az account get-access-token --resource https://graph.microsoft.com --query accessToken -o tsv
+$Payload = $Token.Split('.')[1].Replace('-', '+').Replace('_', '/')
+$Payload = $Payload.PadRight([int][Math]::Ceiling($Payload.Length / 4) * 4, '=')
+$Claims = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Payload)) | ConvertFrom-Json
+$Claims.roles
+$Token = $null
+```
+
+### Most common cause: the permission is delegated, not application
+
+Microsoft Graph offers `DeviceManagementApps.ReadWrite.All` in two forms, and the portal shows both
+under the same name. Only one of them works here:
+
+| Portal permission type | Token claim | Works for Relaypublisher |
+|---|---|---|
+| Delegated | `scp` (user tokens only) | No |
+| Application | `roles` (app-only tokens) | Yes |
+
+Relaypublisher authenticates as a service principal with the client credentials flow, which produces an
+app-only token. A delegated permission never appears in such a token, so Graph answers 403 even when
+the portal shows the permission as granted and admin-consented. In the Entra admin center, open the app
+registration's **API permissions** blade and confirm the **Type** column reads **Application** for
+`DeviceManagementApps.ReadWrite.All`. If it reads **Delegated**, add the permission again under
+**Application permissions** and grant admin consent; the delegated entry can then be removed.
+
+`ReadWrite.All` includes read access, so `DeviceManagementApps.Read.All` does not need to be added
+alongside it.
+
+### After changing permissions
+
+Consent does not update tokens that were already issued. Sign out and back in so a fresh token is
+acquired, then rerun:
+
+```bash
+az account clear
+az login --service-principal --username <application-client-id> --tenant <tenant-id> --certificate <certificate-path>
+```
+
+Relaypublisher also caches the token in-process for the lifetime of one run, so rerun the command
+rather than expecting a running process to pick up the new permission.
+
+### If `roles` is correct and 403 persists
+
+- Confirm the permission itself works, independently of Relaypublisher:
+
+  ```bash
+  az rest --method get --url 'https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?$select=id,displayName&$top=1'
+  ```
+
+  If this succeeds while `publish` still returns 403, the permission is fine and the two calls are not
+  using the same identity. `DefaultAzureCredential` tries several credentials in order and the Azure CLI
+  login is not the first one, so on a developer machine it can pick up a signed-in Visual Studio, VS
+  Code or broker identity instead. That identity is usually in the same tenant, so `--expected-tenant`
+  does not catch it. Pin the credential for the run:
+
+  ```bash
+  AZURE_TOKEN_CREDENTIALS=AzureCliCredential
+  ```
+
+- Confirm the tenant has an active Intune license. The Microsoft Graph API for Intune requires one, and
+  a tenant without it returns 403 regardless of permissions.
+- Confirm the `/beta/` endpoint is available in the tenant. The app listing uses beta so that
+  `macOSPkgApp` entries are not silently omitted; see section 6a for the related pkg-only failure.
+- Report the `client-request-id` and `request-id` values from the error message when opening a support
+  case. Relaypublisher includes both in the message; they are correlation ids, not secrets.
+
+### Why dry-run needs Graph permission
+
+`publish --dry-run` resolves the existing Intune app before it decides what would change - it has to,
+because the dry-run output states whether an app would be created or updated and compares the published
+version. That resolution happens before the dry-run branch, so `--dry-run` requires the same Graph read
+access as a real publish. A dry-run cannot be used to test the pipeline without granting permissions.
+
 ## 3. Downgrade Was Skipped
 
 By default, Relaypublisher skips a publish when the manifest `PackageVersion` is lower than the version stored in Intune management metadata.
@@ -179,8 +289,10 @@ If publish reports missing package metadata:
   Graph error and `client-request-id`/`request-id` from the log rather than retrying blindly.
 - **`GraphRequestException` with a 403/404 specific to macOS `AppType: pkg` entries**: pkg apps are
   created, updated, and content-uploaded entirely through Graph **beta** (`macOSPkgApp` does not exist in
-  v1.0). Confirm the service principal's Graph permissions and the tenant's beta API availability; this
-  does not affect Windows or `AppType: lob` publishes, which stay on v1.0.
+  v1.0). Confirm the service principal's Graph permissions (section 2a) and the tenant's beta API
+  availability; this does not affect Windows or `AppType: lob` publishes, which stay on v1.0, so it
+  fails only the pkg entries and lets the rest of the batch continue - unlike a 403 on the app listing,
+  which stops the whole run.
 - **Device error `2016214710` ("The preinstall script provided by the admin failed")**: the
   `Scripts.PreInstall` script returned a non-zero exit code on the device. This may be expected if the
   script is waiting for a precondition; Intune retries it at the next device check-in. If it persists,
