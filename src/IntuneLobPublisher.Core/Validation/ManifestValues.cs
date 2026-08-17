@@ -49,6 +49,15 @@ public static partial class ManifestValues
     /// </summary>
     public const int MaxMacOsAppScriptChars = 15360;
 
+    /// <summary>
+    /// Upper bound on a pre/post-install script file's raw byte size, checked before reading it into
+    /// memory. A valid UTF-8 character uses at most four bytes, and CRLF normalization can only reduce
+    /// the character count, so this bound safely rejects an oversized file before allocating an
+    /// unbounded buffer. Shared by <c>ManifestAssetValidator</c> (validate-time) and
+    /// <c>ManifestAssetReader</c> (publish-time, the last local gate before the Graph call).
+    /// </summary>
+    public const long MaxMacOsAppScriptBytes = (long)MaxMacOsAppScriptChars * 4 + 3;
+
     [GeneratedRegex("^[0-9a-fA-F]{64}$")]
     private static partial Regex Sha256Regex();
 

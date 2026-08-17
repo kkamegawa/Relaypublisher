@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Publishing;
 
@@ -96,9 +97,16 @@ public sealed class GraphMacOsAppClientTests
 
         await client.CreateAppAsync(payload, useBeta: true, CancellationToken.None);
 
-        var body = handler.Requests[0].Body!;
-        StringAssert.Contains(body, "\"preInstallScript\":{\"@odata.type\":\"microsoft.graph.macOSAppScript\",\"scriptContent\":\"IyEvYmluL2Jhc2g=\"}");
-        StringAssert.Contains(body, "\"postInstallScript\":{\"@odata.type\":\"microsoft.graph.macOSAppScript\",\"scriptContent\":\"IyEvYmluL2Jhc2gK\"}");
+        // Parses the body instead of substring-matching the raw JSON, so this stays valid regardless
+        // of System.Text.Json's property ordering/formatting.
+        using var document = JsonDocument.Parse(handler.Requests[0].Body!);
+        var preInstallScript = document.RootElement.GetProperty("preInstallScript");
+        Assert.AreEqual("microsoft.graph.macOSAppScript", preInstallScript.GetProperty("@odata.type").GetString());
+        Assert.AreEqual("IyEvYmluL2Jhc2g=", preInstallScript.GetProperty("scriptContent").GetString());
+
+        var postInstallScript = document.RootElement.GetProperty("postInstallScript");
+        Assert.AreEqual("microsoft.graph.macOSAppScript", postInstallScript.GetProperty("@odata.type").GetString());
+        Assert.AreEqual("IyEvYmluL2Jhc2gK", postInstallScript.GetProperty("scriptContent").GetString());
     }
 
     [TestMethod]

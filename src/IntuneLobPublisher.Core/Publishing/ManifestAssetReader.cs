@@ -2,6 +2,7 @@ using System.Text;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Staging;
+using IntuneLobPublisher.Core.Validation;
 using Microsoft.Extensions.Logging;
 
 namespace IntuneLobPublisher.Core.Publishing;
@@ -79,6 +80,18 @@ internal static class ManifestAssetReader
             throw new ManifestLoadException($"{fieldName} '{scriptPath}' does not exist under '{request.RepositoryRoot}'.");
         }
 
+        // Re-check the same constraints ManifestAssetValidator enforces at validate time: this method
+        // is the last local gate before the script reaches Graph, and is reachable directly through
+        // MacOsAppPublisher without going through the CLI's validate step first, so a file that grew,
+        // lost its shebang, or was never validated must still be caught here rather than uploaded as-is.
+        var fileLength = new FileInfo(fullPath).Length;
+        if (fileLength > ManifestValues.MaxMacOsAppScriptBytes)
+        {
+            throw new ManifestLoadException(
+                $"{fieldName} '{scriptPath}' is {fileLength} bytes, which is too large to fit within the maximum of "
+                + $"{ManifestValues.MaxMacOsAppScriptChars} characters after UTF-8 decoding and line-ending normalization.");
+        }
+
         var bytes = await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false);
         if (bytes.AsSpan(0, Math.Min(bytes.Length, Utf8Bom.Length)).SequenceEqual(Utf8Bom))
         {
@@ -100,6 +113,19 @@ internal static class ManifestAssetReader
             logger.LogInformation(
                 "{Field} '{ScriptPath}' had CRLF/CR line endings; normalized to LF before encoding for Graph.",
                 fieldName, scriptPath);
+        }
+
+        if (normalized.Length >= ManifestValues.MaxMacOsAppScriptChars)
+        {
+            throw new ManifestLoadException(
+                $"{fieldName} '{scriptPath}' is {normalized.Length} characters, which meets or exceeds the maximum of "
+                + $"{ManifestValues.MaxMacOsAppScriptChars} characters.");
+        }
+
+        // A BOM would already have thrown above, so the decoded text here never starts with U+FEFF.
+        if (!normalized.StartsWith("#!", StringComparison.Ordinal))
+        {
+            throw new ManifestLoadException($"{fieldName} '{scriptPath}' must start with a shebang ('#!').");
         }
 
         return Convert.ToBase64String(Encoding.UTF8.GetBytes(normalized));

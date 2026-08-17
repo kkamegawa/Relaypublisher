@@ -1,6 +1,7 @@
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Publishing;
+using IntuneLobPublisher.Core.Validation;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IntuneLobPublisher.Core.Tests.Publishing;
@@ -163,6 +164,38 @@ public sealed class MacOsAppPublisherTests
         app.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/preinstall.sh" };
         manifest.Apps = [app];
         WriteScript(app.Scripts.PreInstall, [.. System.Text.Encoding.UTF8.GetBytes("#!/bin/bash\n"), 0xFF]);
+
+        var publisher = CreatePublisher(out _);
+
+        await Assert.ThrowsExactlyAsync<ManifestLoadException>(
+            () => publisher.CreateAppAsync(CreateRequest(app, manifest), notes: "{}", CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task CreateAppAsync_ScriptWithoutShebang_ThrowsManifestLoadException()
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidMacOsApp();
+        app.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/preinstall.sh" };
+        manifest.Apps = [app];
+        WriteScript(app.Scripts.PreInstall, "echo pre\n");
+
+        var publisher = CreatePublisher(out _);
+
+        await Assert.ThrowsExactlyAsync<ManifestLoadException>(
+            () => publisher.CreateAppAsync(CreateRequest(app, manifest), notes: "{}", CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task CreateAppAsync_ScriptTooLarge_ThrowsManifestLoadException()
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidMacOsApp();
+        app.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/preinstall.sh" };
+        manifest.Apps = [app];
+        // Bigger than any valid UTF-8 encoding of a script within the character limit, so the reader's
+        // size guard (mirroring ManifestAssetValidator's) rejects it before ever reading it as text.
+        WriteScript(app.Scripts.PreInstall, new byte[(int)(ManifestValues.MaxMacOsAppScriptBytes + 1)]);
 
         var publisher = CreatePublisher(out _);
 

@@ -20,10 +20,6 @@ public static class ManifestAssetValidator
     private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
-    // A valid UTF-8 character uses at most four bytes. CRLF normalization can only reduce the
-    // byte count, so this bound rejects oversized files before allocating an unbounded buffer.
-    private const long MaxScriptFileBytes = (long)ManifestValues.MaxMacOsAppScriptChars * 4 + 3;
-
     /// <summary>Returns error strings (empty when valid) for the given manifest's file-backed assets.</summary>
     public static IReadOnlyList<string> Validate(IntunePackageManifest manifest, string repositoryRoot)
     {
@@ -79,7 +75,7 @@ public static class ManifestAssetValidator
         }
 
         var fileLength = new FileInfo(fullPath).Length;
-        if (fileLength > MaxScriptFileBytes)
+        if (fileLength > ManifestValues.MaxMacOsAppScriptBytes)
         {
             return [$"{fieldName} '{scriptPath}' is {fileLength} bytes, which is too large to fit within the maximum of "
                 + $"{ManifestValues.MaxMacOsAppScriptChars} characters after UTF-8 decoding and line-ending normalization."];
