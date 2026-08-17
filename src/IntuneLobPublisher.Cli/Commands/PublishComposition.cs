@@ -43,7 +43,8 @@ internal sealed class PublishComposition : IDisposable
             new MobileAppContentUploadOrchestrator(
                 new GraphMobileAppContentClient(httpClient),
                 new AzureStorageBlockBlobUploader()),
-            new PkgContentPreparer());
+            new PkgContentPreparer(),
+            loggerFactory.CreateLogger<MacOsAppPublisher>());
 
         var platformPublishers = new Dictionary<string, IPlatformAppPublisher>(StringComparer.Ordinal)
         {

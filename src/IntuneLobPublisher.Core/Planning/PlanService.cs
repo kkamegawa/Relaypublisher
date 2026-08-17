@@ -130,6 +130,16 @@ public sealed class PlanService
                 yield return scriptFile;
             }
 
+            if (app.Scripts?.PreInstall is { } preInstall)
+            {
+                yield return preInstall;
+            }
+
+            if (app.Scripts?.PostInstall is { } postInstall)
+            {
+                yield return postInstall;
+            }
+
             if (app.Package is { } package)
             {
                 foreach (var file in package.RepositoryFiles)

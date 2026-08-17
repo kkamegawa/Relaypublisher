@@ -1,4 +1,5 @@
 using IntuneLobPublisher.Core.Packaging;
+using Microsoft.Extensions.Logging;
 
 namespace IntuneLobPublisher.Core.Publishing;
 
@@ -13,27 +14,32 @@ public sealed class MacOsAppPublisher : IPlatformAppPublisher
     private readonly IMacOsAppClient _appClient;
     private readonly IMobileAppContentUploadOrchestrator _contentOrchestrator;
     private readonly IUploadableContentExtractor _extractor;
+    private readonly ILogger<MacOsAppPublisher> _logger;
 
     public MacOsAppPublisher(
         IMacOsAppClient appClient,
         IMobileAppContentUploadOrchestrator contentOrchestrator,
-        IUploadableContentExtractor extractor)
+        IUploadableContentExtractor extractor,
+        ILogger<MacOsAppPublisher> logger)
     {
         _appClient = appClient;
         _contentOrchestrator = contentOrchestrator;
         _extractor = extractor;
+        _logger = logger;
     }
 
     public async Task EnsureMappableAsync(PublishRequest request, CancellationToken cancellationToken)
     {
         var iconBytes = await ManifestAssetReader.ReadIconAsync(request, request.Manifest, cancellationToken).ConfigureAwait(false);
-        MacOsAppPayloadMapper.Map(request.Manifest, request.App, iconBytes);
+        var scripts = await ManifestAssetReader.ReadMacOsScriptsAsync(request, request.App, _logger, cancellationToken).ConfigureAwait(false);
+        MacOsAppPayloadMapper.Map(request.Manifest, request.App, iconBytes, scripts);
     }
 
     public async Task<string> CreateAppAsync(PublishRequest request, string notes, CancellationToken cancellationToken)
     {
         var iconBytes = await ManifestAssetReader.ReadIconAsync(request, request.Manifest, cancellationToken).ConfigureAwait(false);
-        var payload = MacOsAppPayloadMapper.Map(request.Manifest, request.App, iconBytes, notes);
+        var scripts = await ManifestAssetReader.ReadMacOsScriptsAsync(request, request.App, _logger, cancellationToken).ConfigureAwait(false);
+        var payload = MacOsAppPayloadMapper.Map(request.Manifest, request.App, iconBytes, scripts, notes);
         var target = MacOsAppPayloadMapper.ResolveTarget(request.App);
         return await _appClient.CreateAppAsync(payload, target.UseBeta, cancellationToken).ConfigureAwait(false);
     }
@@ -41,7 +47,8 @@ public sealed class MacOsAppPublisher : IPlatformAppPublisher
     public async Task UpdateAppAsync(string appId, PublishRequest request, CancellationToken cancellationToken)
     {
         var iconBytes = await ManifestAssetReader.ReadIconAsync(request, request.Manifest, cancellationToken).ConfigureAwait(false);
-        var payload = MacOsAppPayloadMapper.Map(request.Manifest, request.App, iconBytes);
+        var scripts = await ManifestAssetReader.ReadMacOsScriptsAsync(request, request.App, _logger, cancellationToken).ConfigureAwait(false);
+        var payload = MacOsAppPayloadMapper.Map(request.Manifest, request.App, iconBytes, scripts);
         var target = MacOsAppPayloadMapper.ResolveTarget(request.App);
         await _appClient.UpdateAppAsync(appId, payload, target.UseBeta, cancellationToken).ConfigureAwait(false);
     }

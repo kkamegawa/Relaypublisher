@@ -77,6 +77,43 @@ public sealed class GraphMacOsAppClientTests
     }
 
     [TestMethod]
+    public async Task CreateAppAsync_PkgWithScripts_IncludesMacOsAppScriptProperties()
+    {
+        var (client, handler) = CreateClient(_ => JsonResponse(HttpStatusCode.Created, """{"id":"app-1"}"""));
+        var payload = new MacOsPkgAppPayload
+        {
+            DisplayName = "Contoso Tool [macOS Arm64]",
+            Description = "Internal tool.",
+            Publisher = "Contoso Ltd.",
+            FileName = "contoso-tool-arm64.pkg",
+            MinimumSupportedOperatingSystem = new MacOsMinimumOperatingSystemPayload { V14_0 = true },
+            PrimaryBundleId = "com.contoso.tool",
+            PrimaryBundleVersion = "1.2.3",
+            IncludedApps = [new MacOsIncludedAppPayload { BundleId = "com.contoso.tool", BundleVersion = "1.2.3" }],
+            PreInstallScript = new MacOsAppScriptPayload { ScriptContent = "IyEvYmluL2Jhc2g=" },
+            PostInstallScript = new MacOsAppScriptPayload { ScriptContent = "IyEvYmluL2Jhc2gK" },
+        };
+
+        await client.CreateAppAsync(payload, useBeta: true, CancellationToken.None);
+
+        var body = handler.Requests[0].Body!;
+        StringAssert.Contains(body, "\"preInstallScript\":{\"@odata.type\":\"#microsoft.graph.macOSAppScript\",\"scriptContent\":\"IyEvYmluL2Jhc2g=\"}");
+        StringAssert.Contains(body, "\"postInstallScript\":{\"@odata.type\":\"#microsoft.graph.macOSAppScript\",\"scriptContent\":\"IyEvYmluL2Jhc2gK\"}");
+    }
+
+    [TestMethod]
+    public async Task CreateAppAsync_PkgWithoutScripts_OmitsScriptProperties()
+    {
+        var (client, handler) = CreateClient(_ => JsonResponse(HttpStatusCode.Created, """{"id":"app-1"}"""));
+
+        await client.CreateAppAsync(PkgPayload(), useBeta: true, CancellationToken.None);
+
+        var body = handler.Requests[0].Body!;
+        Assert.IsFalse(body.Contains("preInstallScript", StringComparison.Ordinal));
+        Assert.IsFalse(body.Contains("postInstallScript", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public async Task CreateAppAsync_Lob_PostsToV1WithMacOsLobAppODataTypeAndChildApps()
     {
         var (client, handler) = CreateClient(_ => JsonResponse(HttpStatusCode.Created, """{"id":"app-2"}"""));

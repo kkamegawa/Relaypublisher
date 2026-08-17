@@ -28,6 +28,11 @@ public static class MacOsAppPayloadMapper
     /// <param name="manifest">The root manifest, for top-level app info (description/publisher/owner/etc).</param>
     /// <param name="app">The platform/architecture-specific entry being published.</param>
     /// <param name="iconBytes">Raw icon bytes read from the repository, or null when the manifest has no `Icon` / it was not supplied.</param>
+    /// <param name="scripts">
+    /// Base64-encoded pre/post-install script content read from the repository, or null when the app
+    /// entry has no `Scripts` block. Ignored for `AppType: lob` - Graph's `macOSLobApp` has no such
+    /// property (doc/00-overview.md §6.13), and validation forbids `Scripts` there in the first place.
+    /// </param>
     /// <param name="notes">Management metadata JSON for the `notes` field, set only on create requests.</param>
     /// <exception cref="Exceptions.UnsupportedMacOsVersionException">`Requirements.MinimumOSVersion` has no known mapping, or needs a beta-only flag unavailable to `AppType: lob`.</exception>
     /// <exception cref="Exceptions.UnsupportedIconFormatException">`iconBytes` was supplied but `Icon`'s extension is not recognized.</exception>
@@ -35,6 +40,7 @@ public static class MacOsAppPayloadMapper
         IntunePackageManifest manifest,
         AppManifest app,
         byte[]? iconBytes,
+        MacOsAppScripts? scripts = null,
         string? notes = null)
     {
         var target = ResolveTarget(app);
@@ -63,6 +69,12 @@ public static class MacOsAppPayloadMapper
                 IncludedApps = includedApps
                     .Select(a => new MacOsIncludedAppPayload { BundleId = a.BundleId!, BundleVersion = a.BundleVersion! })
                     .ToList(),
+                PreInstallScript = scripts?.PreInstall is { } preInstall
+                    ? new MacOsAppScriptPayload { ScriptContent = preInstall }
+                    : null,
+                PostInstallScript = scripts?.PostInstall is { } postInstall
+                    ? new MacOsAppScriptPayload { ScriptContent = postInstall }
+                    : null,
             };
         }
 

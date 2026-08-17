@@ -79,6 +79,34 @@ public sealed class MacOsPkgAppPayload : MacOsAppPayloadBase
 
     [JsonPropertyName("includedApps")]
     public required List<MacOsIncludedAppPayload> IncludedApps { get; init; }
+
+    /// <summary>
+    /// From manifest <c>Scripts.PreInstall</c>. Only <c>macOSPkgApp</c> has this property - Graph's
+    /// <c>macOSLobApp</c> / <c>macOSDmgApp</c> do not (doc/00-overview.md §6.13), so it lives here
+    /// rather than on <see cref="MacOsAppPayloadBase"/>.
+    /// </summary>
+    [JsonPropertyName("preInstallScript")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MacOsAppScriptPayload? PreInstallScript { get; init; }
+
+    /// <summary>From manifest <c>Scripts.PostInstall</c>. See <see cref="PreInstallScript"/> for why this is pkg-only.</summary>
+    [JsonPropertyName("postInstallScript")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MacOsAppScriptPayload? PostInstallScript { get; init; }
+}
+
+/// <summary>
+/// Write model for the Graph <c>macOSAppScript</c> complex type: a single base64-encoded shell
+/// script (doc/01-manifest-schema.md §5.4.2). https://learn.microsoft.com/graph/api/resources/intune-apps-macosappscript.
+/// </summary>
+public sealed class MacOsAppScriptPayload
+{
+    [JsonPropertyName("@odata.type")]
+    public string ODataType { get; init; } = "#microsoft.graph.macOSAppScript";
+
+    /// <summary>Base64-encoded shell script text, CRLF-normalized to LF before encoding.</summary>
+    [JsonPropertyName("scriptContent")]
+    public required string ScriptContent { get; init; }
 }
 
 /// <summary>
