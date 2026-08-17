@@ -181,6 +181,17 @@ Publish が package metadata missing を報告した場合:
   content upload はすべて Graph **beta** 経由で行われる(`macOSPkgApp` は v1.0 に存在しない)。service
   principal の Graph 権限とテナントの beta API 可用性を確認する。Windows や `AppType: lob`(v1.0 のまま)の
   publish には影響しない。
+- **デバイス側エラー `2016214710`("The preinstall script provided by the admin failed")**:
+  `Scripts.PreInstall` のスクリプトがデバイス上で非 0 終了した。スクリプトが前提条件を待っている場合の想定内
+  挙動のこともあり、Intune は次回 device check-in で再試行する。継続して失敗する場合はスクリプトのロジックと
+  終了コードを確認する — Relaypublisher はスクリプトの実行時挙動を検知できず、内容が正しくアップロードされた
+  ことしか保証しない。`Scripts.PostInstall` の失敗はこの形では一切報告されない。終了コードに関わらず app は
+  "success" のまま表示される(doc/01-manifest-schema.md §5.4.2)。
+- **`ManifestLoadException`(`Scripts.PreInstall` / `Scripts.PostInstall` が "does not exist")**:
+  publish 時に `--repo-root` からスクリプトのパスが解決できない。`Icon` の存在確認
+  (doc/01-manifest-schema.md §5.4.1)と同じ仕組みをスクリプトにも適用したもの。`validate` は Graph 呼び出し前に
+  これを検出するため、`publish` でのみ表面化する場合は 2 つのコマンド間で repository root や作業ディレクトリが
+  異なっている可能性が高い。
 
 ## 7. Safe rerun rules
 

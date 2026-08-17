@@ -181,6 +181,18 @@ If publish reports missing package metadata:
   created, updated, and content-uploaded entirely through Graph **beta** (`macOSPkgApp` does not exist in
   v1.0). Confirm the service principal's Graph permissions and the tenant's beta API availability; this
   does not affect Windows or `AppType: lob` publishes, which stay on v1.0.
+- **Device error `2016214710` ("The preinstall script provided by the admin failed")**: the
+  `Scripts.PreInstall` script returned a non-zero exit code on the device. This may be expected if the
+  script is waiting for a precondition; Intune retries it at the next device check-in. If it persists,
+  check the script's logic and exit codes - Relaypublisher cannot see the script's runtime behavior, only
+  that its content was uploaded correctly. A `Scripts.PostInstall` failure is never reported this way; the
+  app still shows "success" regardless of the post-install script's exit code
+  (doc/01-manifest-schema.md §5.4.2).
+- **`ManifestLoadException` mentioning `Scripts.PreInstall` / `Scripts.PostInstall` "does not exist"**:
+  the script path in the manifest does not resolve under `--repo-root` at publish time. This mirrors the
+  `Icon` existence check (doc/01-manifest-schema.md §5.4.1) but for scripts; `validate` catches this before
+  any Graph call, so if it surfaces only at `publish` the repository root or working directory likely
+  differs between the two commands.
 
 ## 7. Safe Rerun Rules
 

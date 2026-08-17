@@ -30,6 +30,8 @@
 - [issues/issue-016-management-metadata-notes-observability.md](issues/issue-016-management-metadata-notes-observability.md) - notes-size observability
 - [issues/issue-017-macos-sample-status-clarification.md](issues/issue-017-macos-sample-status-clarification.md) - macOS sample status clarification
 - [issues/issue-018-input-hash-specification.md](issues/issue-018-input-hash-specification.md) - inputHash normalization specification
+- [issues/issue-019-nuget-global-tool-distribution.md](issues/issue-019-nuget-global-tool-distribution.md) - NuGet global tool distribution
+- [issues/issue-020-macos-pkg-install-scripts.md](issues/issue-020-macos-pkg-install-scripts.md) - macOS pre/post-install script support
 
 ## 履歴
 

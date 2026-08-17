@@ -34,6 +34,7 @@ dotnet tool install --global relaypublisher
 | Icon | 任意 | 任意 | 必須 |
 | `Intent: uninstall` | 対応 | 非対応 | 対応 |
 | 検出方法 | PowerShell script | `IncludedApps`(bundleId + version) | `IncludedApps`(bundleId + version) |
+| pre/post install script | 対象外 | 対応(`Scripts`、任意) | 非対応 |
 
 macOS manifest の詳細な形式と validation ルールは [doc/01-manifest-schema.md](doc/01-manifest-schema.md) §5.3-5.4 を、
 設計の背景(`macOSPkgApp` が Graph beta を必要とする理由を含む)は [doc/00-overview.md](doc/00-overview.md) §6.13 を参照してください。

@@ -52,6 +52,42 @@ public sealed class PlanServiceTests
         File.WriteAllText(fullPath, yaml);
     }
 
+    private void WriteMacOsManifest(string relativePath, string packageIdentifier, string scriptDirectory = "scripts/macos/contoso-tool")
+    {
+        var yaml =
+            $"""
+             SchemaVersion: "1.0"
+             PackageIdentifier: {packageIdentifier}
+             PackageName: {packageIdentifier}
+             Publisher: Contoso Ltd.
+             Description: Sample
+             PackageVersion: 1.0.0
+             Apps:
+               - Platform: macos
+                 Architecture: arm64
+                 InstallerType: pkg
+                 AppType: pkg
+                 DisplayName: {packageIdentifier} [macOS Arm64]
+                 Source:
+                   Type: publicHttp
+                   Url: https://example.com/downloads/{packageIdentifier}.pkg
+                   Destination: contoso-tool-arm64.pkg
+                   Sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                 Requirements:
+                   MinimumOSVersion: "14.0"
+                 Detection:
+                   IncludedApps:
+                     - BundleId: com.contoso.tool
+                       BundleVersion: 1.0.0
+                 Scripts:
+                   PreInstall: {scriptDirectory}/preinstall.sh
+                   PostInstall: {scriptDirectory}/postinstall.sh
+             """;
+        var fullPath = Path.Combine(_repoRoot.FullName, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllText(fullPath, yaml);
+    }
+
     private sealed class FakeGitDiffRunner(IReadOnlyList<string>? changedFiles) : IGitDiffRunner
     {
         public Task<IReadOnlyList<string>?> GetChangedFilesAsync(
@@ -104,6 +140,36 @@ public sealed class PlanServiceTests
     {
         var targets = await ResolveAsync(["scripts/windows/common/detect.ps1"]);
         Assert.HasCount(2, targets);
+    }
+
+    [TestMethod]
+    public async Task ResolveTargets_ChangedPreInstallScript_SelectsReferencingManifest()
+    {
+        WriteMacOsManifest("manifests/tool-c.yaml", "Contoso.ToolC");
+
+        var targets = await ResolveAsync(["scripts/macos/contoso-tool/preinstall.sh"]);
+
+        CollectionAssert.AreEqual(new[] { "manifests/tool-c.yaml" }, targets.ToList());
+    }
+
+    [TestMethod]
+    public async Task ResolveTargets_ChangedPostInstallScript_SelectsReferencingManifest()
+    {
+        WriteMacOsManifest("manifests/tool-c.yaml", "Contoso.ToolC");
+
+        var targets = await ResolveAsync(["scripts/macos/contoso-tool/postinstall.sh"]);
+
+        CollectionAssert.AreEqual(new[] { "manifests/tool-c.yaml" }, targets.ToList());
+    }
+
+    [TestMethod]
+    public async Task ResolveTargets_ChangedScriptWithDotPrefix_SelectsReferencingManifest()
+    {
+        WriteMacOsManifest("manifests/tool-c.yaml", "Contoso.ToolC", "./scripts/macos/contoso-tool");
+
+        var targets = await ResolveAsync(["scripts/macos/contoso-tool/preinstall.sh"]);
+
+        CollectionAssert.AreEqual(new[] { "manifests/tool-c.yaml" }, targets.ToList());
     }
 
     [TestMethod]

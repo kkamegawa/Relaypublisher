@@ -15,9 +15,9 @@
 
 | Manifest | 位置づけ | `validate` | `package` | 備考 |
 |---|---|---|---|---|
-| `Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-arm64.yaml` | E2E 実行可能・現行バージョン | 通る | 通る(GitHub から約 68 MB をダウンロードし SHA-256 を検証) | 詳細は下記 |
-| `Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-x64.yaml` | E2E 実行可能・現行バージョン | 通る | 通る(GitHub から約 73 MB をダウンロードし SHA-256 を検証) | 詳細は下記 |
-| `Microsoft/Microsoft.PowerShell/7.6.4/powershell-macos-arm64.yaml` | E2E 実行可能・旧バージョン | 通る | 通る(GitHub から約 68 MB をダウンロードし SHA-256 を検証) | 上記 7.6.5 の manifest と同一 identity。両方を解決すると `publish` はこちらを superseded として扱う — 詳細は下記 |
+| `Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-arm64.yaml` | E2E 実行可能・現行バージョン | 通る | 通る(GitHub から約 68 MB をダウンロードし SHA-256 を検証) | 詳細は下記。`Scripts.PreInstall`/`PostInstall`(§5.4.2)のサンプルでもある |
+| `Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-x64.yaml` | E2E 実行可能・現行バージョン | 通る | 通る(GitHub から約 73 MB をダウンロードし SHA-256 を検証) | 詳細は下記。`Scripts.PreInstall`/`PostInstall`(§5.4.2)のサンプルでもある |
+| `Microsoft/Microsoft.PowerShell/7.6.4/powershell-macos-arm64.yaml` | E2E 実行可能・旧バージョン | 通る | 通る(GitHub から約 68 MB をダウンロードし SHA-256 を検証) | 上記 7.6.5 の manifest と同一 identity。両方を解決すると `publish` はこちらを superseded として扱う — 詳細は下記。7.6.5 と異なり `Scripts` は無し(あり/なし両方をこのディレクトリでカバーするため) |
 | `Microsoft/Microsoft.PowerShell/7.6.4/powershell-macos-x64.yaml` | E2E 実行可能・旧バージョン | 通る | 通る(GitHub から約 73 MB をダウンロードし SHA-256 を検証) | 上記と同様 |
 | `contoso-tool-windows-x64.yaml` | E2E 実行可能 | 通る | 通る(ローカルの `RepositoryFiles` を staging し、実際に `.intunewin` を生成 — Windows マシン/runner が必要) | 外部ダウンロードは無し。`.intunewin` 生成には `IntuneWinAppUtil.exe` が必要だが自動ダウンロードされる |
 | `contoso-tool-windows-arm64.yaml` | E2E 実行可能 | 通る | 通る(上記と同様) | |
@@ -43,6 +43,19 @@ defaults read /Applications/PowerShell.app/Contents/Info CFBundleShortVersionStr
 `Requirements.MinimumOSVersion: "14.0"` は意図的な選択です。PowerShell 7.6 (LTS) が対応する最小バージョンであり、同時に beta 専用の Graph フラグ `v14_0` を要求する最小バージョンでもあるため、`AppType: pkg`(beta)経路を `MacOsMinimumOperatingSystemTable` で正しく通します。`AppType: lob` は v1.0 に `v14_0`/`v15_0` フラグが無いため `14.0` 以上を使えません。
 
 `Assignments` はどの tenant でも無編集で使えるよう、意図的に `[]` のままにしています。実際の(dry-run でない)`publish` 前に、自組織の group を追加してください。
+
+## pre/post-install script(7.6.5 のみ)
+
+7.6.5 の manifest はさらに `Scripts.PreInstall` / `Scripts.PostInstall`
+([doc/01-manifest-schema.md §5.4.2](../../doc/01-manifest-schema.md))を設定しており、
+`samples/scripts/macos/powershell/preinstall.sh` と `postinstall.sh` を参照しています。これらは
+`AppType: pkg` 限定の Graph プロパティ(`macOSPkgApp.preInstallScript`/`postInstallScript`)なので、
+ここにのみ適用され、仮に `AppType: lob` のバリアントがあったとしても適用されません。
+
+サンプルスクリプトは、インストール前に Homebrew 版 `pwsh` と古い `pwsh` symlink を削除し、500 MB の空き
+容量を確認します。インストール後は `pwsh` の存在を確認し、`/usr/local/bin` を `/etc/paths.d` に追加して
+新しいログインシェルで `PATH` に載るようにします。あくまで説明用であり、あらゆる macOS 構成で網羅的に
+テストされているわけではないため、実際のテナントで使う前に調整してください。
 
 ```yaml
 Assignments:

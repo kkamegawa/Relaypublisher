@@ -192,6 +192,11 @@ Apps:
         - BundleId: com.contoso.tool
           BundleVersion: 1.2.3
 
+    # 任意。AppType: pkg のみ(§5.4.2 参照)
+    Scripts:
+      PreInstall: scripts/macos/contoso-tool/preinstall.sh
+      PostInstall: scripts/macos/contoso-tool/postinstall.sh
+
     Assignments:
       - Target: group
         GroupId: "00000000-0000-0000-0000-000000000003"
@@ -206,13 +211,14 @@ Apps:
 | サイズ上限 | 2 GB | 8 GB |
 | Icon | 必須 | 任意 |
 | uninstall intent | 可 | 非対応 |
-| pre/post install script | 不可 | 可 |
+| pre/post install script | 不可 | 可(`Scripts`、§5.4.2) |
 
 validation ルール:
 
 - `IncludedApps` は 1 件以上必須。先頭要素がレポート表示に使われる。
 - `AppType: pkg` の app に `Intent: uninstall` があれば fail。
 - `AppType: lob` の場合、top-level `Icon` を必須とする。
+- `AppType: lob` または `Platform: windows` の app entry に `Scripts` があれば fail(§5.4.2)。
 
 ### 5.4.1 Icon の制約(issue #63)
 
@@ -224,6 +230,45 @@ top-level `Icon`(§2 参照)には次の制約がある。`validate` / `package`
 - `AppType: lob` の app が 1 つでもある場合、top-level `Icon` は必須(§5.4)。
 
 自動リサイズ・変換は行わない。要件を満たす画像を事前に用意すること。
+
+### 5.4.2 pre/post install script の制約(issue #86)
+
+`AppType: pkg` の app entry は、任意で `Scripts` ブロックを持てる。Graph `macOSPkgApp` の
+`preInstallScript` / `postInstallScript`(型 `macOSAppScript`、`scriptContent` は base64 エンコードされた
+shell script)に対応する。`macOSLobApp` / `macOSDmgApp` にはこのプロパティ自体が存在しない。
+
+```yaml
+Scripts:
+  PreInstall: scripts/macos/contoso-tool/preinstall.sh   # 任意
+  PostInstall: scripts/macos/contoso-tool/postinstall.sh # 任意
+```
+
+- 値は `--repo-root` からの相対パス(`Icon` / `Detection.ScriptFile` と同じ扱い)。
+- `PreInstall` / `PostInstall` は片方だけの指定も可。ただし `Scripts` ブロックがある場合、両方 null は fail。
+
+validation ルール(`validate` / `package` / `publish` はすべて、Graph 呼び出し前にこれらを検証する):
+
+- `Platform: windows` または `AppType: lob` に `Scripts` があれば fail。
+- パスが path traversal / 絶対パスであれば fail。
+- 拡張子が `.sh` 以外であれば fail。
+- `--repo-root` からの相対パスにファイルが実在しなければ fail。
+- 15360 文字(Graph の documented limit)以上であれば fail。
+- UTF-8 BOM 付きであれば fail(shebang の前に BOM があると起動しない)。
+- shebang(`#!`)で始まらなければ fail。
+
+publish 時の挙動:
+
+- スクリプト本文は決定的 **inputHash には含めない**(`Icon` / `Detection.ScriptFile` と同じ前例)。app
+  メタデータの更新は publish のたび無条件に実行されるため、スクリプトのみの変更は `.pkg` の再アップロードを
+  伴わずに反映される。
+- 改行コードは base64 化の直前に CRLF / CR → LF へ正規化する(正規化が発生した場合は情報ログを出す)。
+- `plan --base-ref` の changed detection は `scripts/**` の変更も対象 manifest の逆引きに含める。
+
+運用前提(doc/05-operation.md も参照):
+
+- Intune management agent for macOS **2309.007 以降**が必要。
+- pre-install script が非 0 終了で app は "failed" となり、次回 device check-in で再試行される。
+- post-install script の失敗は報告されない(app は "success" のまま)。
 
 ### 5.5 Assignment schema
 

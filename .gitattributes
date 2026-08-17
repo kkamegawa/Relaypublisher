@@ -1,0 +1,5 @@
+# Shell scripts must stay LF regardless of the checkout platform's core.autocrlf setting:
+# a CRLF .sh breaks the shebang on macOS/Linux. Relaypublisher's own publish flow normalizes
+# CRLF/CR to LF for macOS Scripts.PreInstall/PostInstall content before upload
+# (doc/01-manifest-schema.md §5.4.2), but samples are also meant to be copied as-is.
+*.sh text eol=lf

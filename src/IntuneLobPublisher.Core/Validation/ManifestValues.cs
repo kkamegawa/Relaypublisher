@@ -40,6 +40,24 @@ public static partial class ManifestValues
     /// <summary>Operational upper bound on Icon file size, so oversized icons fail before a Graph call.</summary>
     public const long MaxIconBytes = 1 * 1024 * 1024;
 
+    /// <summary>File extension required for macOS pre/post-install scripts (doc/01-manifest-schema.md §5.4.2).</summary>
+    public const string MacOsScriptExtension = ".sh";
+
+    /// <summary>
+    /// Graph's documented limit for <c>macOSAppScript.scriptContent</c> (the un-encoded script text,
+    /// not its base64 form): https://learn.microsoft.com/intune/app-management/deployment/add-unmanaged-pkg-macos.
+    /// </summary>
+    public const int MaxMacOsAppScriptChars = 15360;
+
+    /// <summary>
+    /// Upper bound on a pre/post-install script file's raw byte size, checked before reading it into
+    /// memory. A valid UTF-8 character uses at most four bytes, and CRLF normalization can only reduce
+    /// the character count, so this bound safely rejects an oversized file before allocating an
+    /// unbounded buffer. Shared by <c>ManifestAssetValidator</c> (validate-time) and
+    /// <c>ManifestAssetReader</c> (publish-time, the last local gate before the Graph call).
+    /// </summary>
+    public const long MaxMacOsAppScriptBytes = (long)MaxMacOsAppScriptChars * 4 + 3;
+
     [GeneratedRegex("^[0-9a-fA-F]{64}$")]
     private static partial Regex Sha256Regex();
 

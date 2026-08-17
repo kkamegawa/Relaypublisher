@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Publishing;
 
@@ -77,6 +78,50 @@ public sealed class GraphMacOsAppClientTests
     }
 
     [TestMethod]
+    public async Task CreateAppAsync_PkgWithScripts_IncludesMacOsAppScriptProperties()
+    {
+        var (client, handler) = CreateClient(_ => JsonResponse(HttpStatusCode.Created, """{"id":"app-1"}"""));
+        var payload = new MacOsPkgAppPayload
+        {
+            DisplayName = "Contoso Tool [macOS Arm64]",
+            Description = "Internal tool.",
+            Publisher = "Contoso Ltd.",
+            FileName = "contoso-tool-arm64.pkg",
+            MinimumSupportedOperatingSystem = new MacOsMinimumOperatingSystemPayload { V14_0 = true },
+            PrimaryBundleId = "com.contoso.tool",
+            PrimaryBundleVersion = "1.2.3",
+            IncludedApps = [new MacOsIncludedAppPayload { BundleId = "com.contoso.tool", BundleVersion = "1.2.3" }],
+            PreInstallScript = new MacOsAppScriptPayload { ScriptContent = "IyEvYmluL2Jhc2g=" },
+            PostInstallScript = new MacOsAppScriptPayload { ScriptContent = "IyEvYmluL2Jhc2gK" },
+        };
+
+        await client.CreateAppAsync(payload, useBeta: true, CancellationToken.None);
+
+        // Parses the body instead of substring-matching the raw JSON, so this stays valid regardless
+        // of System.Text.Json's property ordering/formatting.
+        using var document = JsonDocument.Parse(handler.Requests[0].Body!);
+        var preInstallScript = document.RootElement.GetProperty("preInstallScript");
+        Assert.AreEqual("microsoft.graph.macOSAppScript", preInstallScript.GetProperty("@odata.type").GetString());
+        Assert.AreEqual("IyEvYmluL2Jhc2g=", preInstallScript.GetProperty("scriptContent").GetString());
+
+        var postInstallScript = document.RootElement.GetProperty("postInstallScript");
+        Assert.AreEqual("microsoft.graph.macOSAppScript", postInstallScript.GetProperty("@odata.type").GetString());
+        Assert.AreEqual("IyEvYmluL2Jhc2gK", postInstallScript.GetProperty("scriptContent").GetString());
+    }
+
+    [TestMethod]
+    public async Task CreateAppAsync_PkgWithoutScripts_SerializesNullScriptProperties()
+    {
+        var (client, handler) = CreateClient(_ => JsonResponse(HttpStatusCode.Created, """{"id":"app-1"}"""));
+
+        await client.CreateAppAsync(PkgPayload(), useBeta: true, CancellationToken.None);
+
+        var body = handler.Requests[0].Body!;
+        StringAssert.Contains(body, "\"preInstallScript\":null");
+        StringAssert.Contains(body, "\"postInstallScript\":null");
+    }
+
+    [TestMethod]
     public async Task CreateAppAsync_Lob_PostsToV1WithMacOsLobAppODataTypeAndChildApps()
     {
         var (client, handler) = CreateClient(_ => JsonResponse(HttpStatusCode.Created, """{"id":"app-2"}"""));
@@ -101,6 +146,8 @@ public sealed class GraphMacOsAppClientTests
 
         Assert.AreEqual("PATCH", handler.Requests[0].Method);
         Assert.AreEqual("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1", handler.Requests[0].Uri);
+        StringAssert.Contains(handler.Requests[0].Body!, "\"preInstallScript\":null");
+        StringAssert.Contains(handler.Requests[0].Body!, "\"postInstallScript\":null");
     }
 
     [TestMethod]

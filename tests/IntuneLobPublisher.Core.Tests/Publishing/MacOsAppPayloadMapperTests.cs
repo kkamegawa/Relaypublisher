@@ -124,4 +124,54 @@ public sealed class MacOsAppPayloadMapperTests
 
         Assert.IsTrue(payload.MinimumSupportedOperatingSystem.V13_0);
     }
+
+    [TestMethod]
+    public void Map_PkgWithScripts_SetsPreAndPostInstallScriptContent()
+    {
+        var manifest = CreateManifest(appType: null);
+        var scripts = new MacOsAppScripts(PreInstall: "cHJlLWluc3RhbGw=", PostInstall: "cG9zdC1pbnN0YWxs");
+
+        var payload = (MacOsPkgAppPayload)MacOsAppPayloadMapper.Map(manifest, manifest.Apps[0], iconBytes: null, scripts: scripts);
+
+        Assert.AreEqual("cHJlLWluc3RhbGw=", payload.PreInstallScript?.ScriptContent);
+        Assert.AreEqual("cG9zdC1pbnN0YWxs", payload.PostInstallScript?.ScriptContent);
+        Assert.AreEqual("microsoft.graph.macOSAppScript", payload.PreInstallScript?.ODataType);
+    }
+
+    [TestMethod]
+    public void Map_PkgWithOnlyPreInstallScript_LeavesPostInstallScriptNull()
+    {
+        var manifest = CreateManifest(appType: null);
+        var scripts = new MacOsAppScripts(PreInstall: "cHJlLWluc3RhbGw=", PostInstall: null);
+
+        var payload = (MacOsPkgAppPayload)MacOsAppPayloadMapper.Map(manifest, manifest.Apps[0], iconBytes: null, scripts: scripts);
+
+        Assert.IsNotNull(payload.PreInstallScript);
+        Assert.IsNull(payload.PostInstallScript);
+    }
+
+    [TestMethod]
+    public void Map_PkgWithoutScripts_LeavesScriptPropertiesNull()
+    {
+        var manifest = CreateManifest(appType: null);
+
+        var payload = (MacOsPkgAppPayload)MacOsAppPayloadMapper.Map(manifest, manifest.Apps[0], iconBytes: null);
+
+        Assert.IsNull(payload.PreInstallScript);
+        Assert.IsNull(payload.PostInstallScript);
+    }
+
+    [TestMethod]
+    public void Map_Lob_NeverExposesScriptProperties()
+    {
+        // AppType: lob has no preInstallScript/postInstallScript on Graph, and validation forbids
+        // Scripts there in the first place - the mapper simply has nowhere to put them on MacOsLobAppPayload.
+        var manifest = CreateManifest(appType: "lob");
+        var app = manifest.Apps[0];
+        app.Requirements!.MinimumOSVersion = "13.0";
+
+        var payload = MacOsAppPayloadMapper.Map(manifest, app, iconBytes: null);
+
+        Assert.IsInstanceOfType<MacOsLobAppPayload>(payload);
+    }
 }
