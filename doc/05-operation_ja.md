@@ -298,6 +298,12 @@ macOS 対応(doc/00-overview.md §6.13)には `AppType` によって Graph・運
 - `.pkg` の content は publish 時にその場で暗号化される(macOS には IntuneWinAppUtil に相当する packaging 時
   ツールが無い)。そのため Windows のように「暗号化済み package を再生成する」個別の手順は無く、`publish` を
   再実行すればその時点で staging されている `.pkg` が再暗号化される。
+- `AppType: pkg` 限定: 任意の `Scripts.PreInstall` / `Scripts.PostInstall` ブロックは Graph の
+  `preInstallScript` / `postInstallScript` に対応する(doc/01-manifest-schema.md §5.4.2)。デバイス側で
+  Intune management agent for macOS **2309.007 以降**が必要。pre-install script が非 0 終了で app install は
+  失敗し(次回 device check-in で再試行)、post-install script の失敗は一切報告されない(app は "success" の
+  まま)。スクリプト本文は決定的 inputHash に含まれないため、スクリプトを編集して `publish` を再実行しても
+  (数 GB になり得る)`.pkg` の再アップロードは発生しない。
 
 ## 4c. 既存 app を新しいバージョンに更新する
 

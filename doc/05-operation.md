@@ -305,6 +305,12 @@ characteristics:
 - `.pkg` content is encrypted in-process at publish time (no packaging-time tool like IntuneWinAppUtil
   exists for macOS), so unlike Windows there is no separate "regenerate the encrypted package" step to
   re-run after a content change; re-running `publish` re-encrypts the currently staged `.pkg`.
+- `AppType: pkg` only: an optional `Scripts.PreInstall` / `Scripts.PostInstall` block maps to Graph
+  `preInstallScript` / `postInstallScript` (doc/01-manifest-schema.md §5.4.2). Requires the Intune
+  management agent for macOS **2309.007 or later** on the device. A non-zero pre-install exit code fails
+  the app install (retried at the next device check-in); a post-install failure is not reported at all -
+  the app still shows "success". Script content is not part of the deterministic inputHash, so editing a
+  script and re-running `publish` updates it without re-uploading the (possibly multi-GB) `.pkg`.
 
 ## 4c. Updating an Existing App to a New Version
 

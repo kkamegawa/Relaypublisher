@@ -34,6 +34,7 @@ The Japanese translation is available in [README_ja.md](README_ja.md).
 | Icon | Optional | Optional | Required |
 | `Intent: uninstall` | Supported | Not supported | Supported |
 | Detection | PowerShell script | `IncludedApps` (bundleId + version) | `IncludedApps` (bundleId + version) |
+| Pre/post install script | Not applicable | Supported (`Scripts`, optional) | Not supported |
 
 See [doc/01-manifest-schema.md](doc/01-manifest-schema.md) §5.3-5.4 for the full macOS manifest shape
 and validation rules, and [doc/00-overview.md](doc/00-overview.md) §6.13 for the design rationale
