@@ -1,3 +1,5 @@
+using System.Text;
+using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Validation;
 
 namespace IntuneLobPublisher.Core.Tests;
@@ -18,6 +20,26 @@ public sealed class ManifestAssetValidatorTests
         var fullPath = Path.Combine(_repoRoot.FullName, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         File.WriteAllBytes(fullPath, new byte[sizeBytes]);
+    }
+
+    private void WriteScript(string relativePath, byte[] content)
+    {
+        var fullPath = Path.Combine(_repoRoot.FullName, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllBytes(fullPath, content);
+    }
+
+    private void WriteScript(string relativePath, string content, bool withBom = false)
+    {
+        // Encoding.GetBytes() never emits the preamble regardless of encoderShouldEmitUTF8Identifier
+        // (only stream-writing APIs consult GetPreamble()), so the BOM is prepended explicitly here.
+        var bytes = Encoding.UTF8.GetBytes(content);
+        if (withBom)
+        {
+            bytes = [.. Encoding.UTF8.GetPreamble(), .. bytes];
+        }
+
+        WriteScript(relativePath, bytes);
     }
 
     [TestMethod]
@@ -89,5 +111,132 @@ public sealed class ManifestAssetValidatorTests
         var errors = ManifestAssetValidator.Validate(manifest, _repoRoot.FullName);
 
         Assert.HasCount(1, errors);
+    }
+
+    [TestMethod]
+    public void Validate_NoScripts_ReturnsNoErrors()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidMacOsApp()];
+
+        var errors = ManifestAssetValidator.Validate(manifest, _repoRoot.FullName);
+
+        Assert.IsEmpty(errors);
+    }
+
+    [TestMethod]
+    public void Validate_ValidScripts_ReturnsNoErrors()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest
+        {
+            PreInstall = "scripts/macos/contoso-tool/preinstall.sh",
+            PostInstall = "scripts/macos/contoso-tool/postinstall.sh",
+        };
+        manifest.Apps = [macApp];
+        WriteScript(macApp.Scripts.PreInstall, "#!/bin/bash\necho pre\n");
+        WriteScript(macApp.Scripts.PostInstall, "#!/bin/bash\necho post\n");
+
+        var errors = ManifestAssetValidator.Validate(manifest, _repoRoot.FullName);
+
+        Assert.IsEmpty(errors);
+    }
+
+    [TestMethod]
+    public void Validate_MissingScript_ReturnsError()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/contoso-tool/preinstall.sh" };
+        manifest.Apps = [macApp];
+
+        var errors = ManifestAssetValidator.Validate(manifest, _repoRoot.FullName);
+
+        Assert.HasCount(1, errors);
+        StringAssert.Contains(errors[0], "does not exist");
+    }
+
+    [TestMethod]
+    public void Validate_ScriptAtCharacterLimit_ReturnsError()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/contoso-tool/preinstall.sh" };
+        manifest.Apps = [macApp];
+
+        // "#!/bin/bash\n" then padding so the total length is exactly the (excluded) limit.
+        var body = "#!/bin/bash\n" + new string('#', ManifestValues.MaxMacOsAppScriptChars - "#!/bin/bash\n".Length);
+        WriteScript(macApp.Scripts.PreInstall, body);
+
+        var errors = ManifestAssetValidator.Validate(manifest, _repoRoot.FullName);
+
+        Assert.HasCount(1, errors);
+        StringAssert.Contains(errors[0], "meets or exceeds the maximum");
+    }
+
+    [TestMethod]
+    public void Validate_ScriptUnderCharacterLimit_ReturnsNoErrors()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/contoso-tool/preinstall.sh" };
+        manifest.Apps = [macApp];
+
+        var body = "#!/bin/bash\n" + new string('#', ManifestValues.MaxMacOsAppScriptChars - "#!/bin/bash\n".Length - 1);
+        WriteScript(macApp.Scripts.PreInstall, body);
+
+        var errors = ManifestAssetValidator.Validate(manifest, _repoRoot.FullName);
+
+        Assert.IsEmpty(errors);
+    }
+
+    [TestMethod]
+    public void Validate_ScriptWithUtf8Bom_ReturnsError()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/contoso-tool/preinstall.sh" };
+        manifest.Apps = [macApp];
+        WriteScript(macApp.Scripts.PreInstall, "#!/bin/bash\necho pre\n", withBom: true);
+
+        var errors = ManifestAssetValidator.Validate(manifest, _repoRoot.FullName);
+
+        Assert.HasCount(1, errors);
+        StringAssert.Contains(errors[0], "byte order mark");
+    }
+
+    [TestMethod]
+    public void Validate_ScriptWithoutShebang_ReturnsError()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/contoso-tool/preinstall.sh" };
+        manifest.Apps = [macApp];
+        WriteScript(macApp.Scripts.PreInstall, "echo pre\n");
+
+        var errors = ManifestAssetValidator.Validate(manifest, _repoRoot.FullName);
+
+        Assert.HasCount(1, errors);
+        StringAssert.Contains(errors[0], "shebang");
+    }
+
+    [TestMethod]
+    public void Validate_BothScriptsInvalid_ReturnsErrorsForEach()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest
+        {
+            PreInstall = "scripts/macos/contoso-tool/preinstall.sh",
+            PostInstall = "scripts/macos/contoso-tool/postinstall.sh",
+        };
+        manifest.Apps = [macApp];
+        WriteScript(macApp.Scripts.PreInstall, "echo pre\n");
+        WriteScript(macApp.Scripts.PostInstall, "echo post\n");
+
+        var errors = ManifestAssetValidator.Validate(manifest, _repoRoot.FullName);
+
+        Assert.HasCount(2, errors);
     }
 }

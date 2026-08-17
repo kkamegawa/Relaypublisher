@@ -508,4 +508,92 @@ public sealed class ManifestValidationTests
 
         AssertInvalid(manifest, "AppType must not be set for Platform 'windows'");
     }
+
+    [TestMethod]
+    public void Validate_MacOsPkgWithScripts_Passes()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest
+        {
+            PreInstall = "scripts/macos/contoso-tool/preinstall.sh",
+            PostInstall = "scripts/macos/contoso-tool/postinstall.sh",
+        };
+        manifest.Apps = [macApp];
+
+        var result = _validator.Validate(manifest);
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => $"{e.PropertyName}: {e.ErrorMessage}")));
+    }
+
+    [TestMethod]
+    public void Validate_MacOsPkgWithOnlyPreInstallScript_Passes()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/contoso-tool/preinstall.sh" };
+        manifest.Apps = [macApp];
+
+        var result = _validator.Validate(manifest);
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => $"{e.PropertyName}: {e.ErrorMessage}")));
+    }
+
+    [TestMethod]
+    public void Validate_WindowsAppWithScripts_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Scripts = new MacOsScriptsManifest { PreInstall = "scripts/windows/preinstall.sh" };
+
+        AssertInvalid(manifest, "Scripts must not be set for Platform 'windows'");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsLobWithScripts_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Icon = "assets/icons/contoso-tool.png";
+        var macApp = TestManifests.CreateValidMacOsApp(appType: "lob");
+        macApp.Scripts = new MacOsScriptsManifest { PreInstall = "scripts/macos/contoso-tool/preinstall.sh" };
+        manifest.Apps = [macApp];
+
+        AssertInvalid(manifest, "Scripts must not be set for macOS AppType 'lob'");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsPkgWithEmptyScriptsBlock_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest();
+        manifest.Apps = [macApp];
+
+        AssertInvalid(manifest, "Scripts must set at least one of PreInstall or PostInstall");
+    }
+
+    [TestMethod]
+    [DataRow("../outside/preinstall.sh")]
+    [DataRow("/etc/preinstall.sh")]
+    [DataRow("C:\\evil\\preinstall.sh")]
+    public void Validate_MacOsScriptEscapesRepository_Fails(string path)
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest { PreInstall = path };
+        manifest.Apps = [macApp];
+
+        AssertInvalid(manifest, "Scripts.PreInstall");
+    }
+
+    [TestMethod]
+    [DataRow("scripts/macos/contoso-tool/preinstall.ps1")]
+    [DataRow("scripts/macos/contoso-tool/preinstall")]
+    [DataRow("scripts/macos/contoso-tool/preinstall.bash")]
+    public void Validate_MacOsScriptWithUnsupportedExtension_Fails(string path)
+    {
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Scripts = new MacOsScriptsManifest { PreInstall = path };
+        manifest.Apps = [macApp];
+
+        AssertInvalid(manifest, "must have the '.sh' extension");
+    }
 }

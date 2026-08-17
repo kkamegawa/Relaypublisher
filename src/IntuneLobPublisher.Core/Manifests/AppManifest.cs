@@ -29,5 +29,8 @@ public sealed class AppManifest
 
     public RequirementsManifest? Requirements { get; set; }
 
+    /// <summary>macOS <c>AppType: pkg</c> only: pre/post-install shell scripts (doc/01-manifest-schema.md §5.4.2).</summary>
+    public MacOsScriptsManifest? Scripts { get; set; }
+
     public List<AssignmentManifest> Assignments { get; set; } = [];
 }

@@ -135,6 +135,15 @@ internal sealed class AppManifestValidator : AbstractValidator<AppManifest>
             .NotNull()
             .SetValidator(a => new RequirementsManifestValidator(a.Platform)!);
 
+        // Pre/post-install scripts only exist on the Graph macOSPkgApp resource
+        // (doc/00-overview.md §6.13); AppType: lob and Platform: windows have no such property.
+        RuleFor(a => a.Scripts)
+            .Must((app, scripts) => app.Platform != "windows" || scripts is null)
+            .WithMessage("Scripts must not be set for Platform 'windows'; pre/post-install scripts only apply to macOS AppType 'pkg'.")
+            .Must((app, scripts) => !IsMacOsLob(app) || scripts is null)
+            .WithMessage("Scripts must not be set for macOS AppType 'lob'; pre/post-install scripts are only supported for AppType 'pkg'.")
+            .SetValidator(new MacOsScriptsManifestValidator()!);
+
         RuleFor(a => a.Requirements!.Architecture)
             .Must((app, requirementsArchitecture) => string.Equals(requirementsArchitecture, app.Architecture, StringComparison.Ordinal))
             .When(a => a.Requirements?.Architecture is not null && a.Architecture is not null)
@@ -163,6 +172,9 @@ internal sealed class AppManifestValidator : AbstractValidator<AppManifest>
 
     private static bool IsMacOsPkg(AppManifest app)
         => app.Platform == "macos" && (app.AppType ?? ManifestValues.DefaultMacOsAppType) == ManifestValues.DefaultMacOsAppType;
+
+    private static bool IsMacOsLob(AppManifest app)
+        => app.Platform == "macos" && app.AppType == "lob";
 
     private static bool HaveUniqueTargets(List<AssignmentManifest> assignments)
     {
@@ -253,6 +265,39 @@ internal sealed class SourceManifestValidator : AbstractValidator<SourceManifest
             .WithMessage("Auth.Type 'workloadIdentity' is required for source Type 'azureBlob'. Use publicHttp for anonymously readable URLs.")
             .OverridePropertyName("Auth.Type");
     }
+}
+
+/// <summary>
+/// Validates the macOS <c>Scripts</c> block (doc/01-manifest-schema.md §5.4.2): only path shape
+/// and extension are checked here (pure, no I/O). Existence, size, BOM and shebang need the
+/// repository root, so they are checked by <see cref="ManifestAssetValidator"/> instead.
+/// </summary>
+internal sealed class MacOsScriptsManifestValidator : AbstractValidator<MacOsScriptsManifest>
+{
+    public MacOsScriptsManifestValidator()
+    {
+        RuleLevelCascadeMode = CascadeMode.Stop;
+
+        RuleFor(s => s)
+            .Must(s => s.PreInstall is not null || s.PostInstall is not null)
+            .WithMessage("Scripts must set at least one of PreInstall or PostInstall.")
+            .OverridePropertyName("Scripts");
+
+        RuleFor(s => s.PreInstall)
+            .Must(v => v is null || PathSafety.IsSafeRelativePath(v))
+            .WithMessage("Scripts.PreInstall must be a repository-relative path without traversal segments.")
+            .Must(v => v is null || HasScriptExtension(v))
+            .WithMessage(s => $"Scripts.PreInstall '{s.PreInstall}' must have the '{ManifestValues.MacOsScriptExtension}' extension.");
+
+        RuleFor(s => s.PostInstall)
+            .Must(v => v is null || PathSafety.IsSafeRelativePath(v))
+            .WithMessage("Scripts.PostInstall must be a repository-relative path without traversal segments.")
+            .Must(v => v is null || HasScriptExtension(v))
+            .WithMessage(s => $"Scripts.PostInstall '{s.PostInstall}' must have the '{ManifestValues.MacOsScriptExtension}' extension.");
+    }
+
+    private static bool HasScriptExtension(string path)
+        => string.Equals(Path.GetExtension(path), ManifestValues.MacOsScriptExtension, StringComparison.OrdinalIgnoreCase);
 }
 
 internal sealed class InstallManifestValidator : AbstractValidator<InstallManifest>

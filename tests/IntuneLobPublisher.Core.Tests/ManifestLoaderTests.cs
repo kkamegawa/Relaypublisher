@@ -158,6 +158,66 @@ public sealed class ManifestLoaderTests
     }
 
     [TestMethod]
+    public async Task LoadAsync_MacOsScripts_PopulatesPreAndPostInstall()
+    {
+        var manifest = await LoadFromTextAsync(
+            """
+            SchemaVersion: "1.0"
+            PackageIdentifier: Contoso.Tool
+            PackageName: Contoso Tool
+            Publisher: Contoso Ltd.
+            Description: Internal tool for Contoso employees.
+            PackageVersion: 1.2.3
+
+            Apps:
+              - Platform: macos
+                Architecture: arm64
+                InstallerType: pkg
+                AppType: pkg
+                DisplayName: Contoso Tool [macOS Arm64]
+
+                Source:
+                  Type: publicHttp
+                  Url: https://example.com/downloads/contoso-tool-arm64.pkg
+                  Destination: contoso-tool-arm64.pkg
+                  Sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+                Requirements:
+                  MinimumOSVersion: "14.0"
+
+                Detection:
+                  IncludedApps:
+                    - BundleId: com.contoso.tool
+                      BundleVersion: 1.2.3
+
+                Scripts:
+                  PreInstall: scripts/macos/contoso-tool/preinstall.sh
+                  PostInstall: scripts/macos/contoso-tool/postinstall.sh
+            """);
+        var app = manifest.Apps[0];
+
+        Assert.AreEqual("scripts/macos/contoso-tool/preinstall.sh", app.Scripts?.PreInstall);
+        Assert.AreEqual("scripts/macos/contoso-tool/postinstall.sh", app.Scripts?.PostInstall);
+    }
+
+    [TestMethod]
+    public async Task LoadAsync_MacOsAppWithoutScripts_ScriptsIsNull()
+    {
+        var manifest = await LoadFromTextAsync(
+            """
+            SchemaVersion: "1.0"
+            PackageIdentifier: Contoso.Tool
+            Apps:
+              - Platform: macos
+                Architecture: arm64
+                InstallerType: pkg
+            """);
+        var app = manifest.Apps[0];
+
+        Assert.IsNull(app.Scripts);
+    }
+
+    [TestMethod]
     public async Task LoadAsync_UnknownKeys_AreIgnored()
     {
         var manifest = await LoadFromTextAsync(
