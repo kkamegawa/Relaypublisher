@@ -66,6 +66,7 @@ publish の安全オプション:
 
 - `--expected-tenant <tenant-id>`: token の `tid` claim と照合し、不一致なら fail(誤テナント防止)。
 - `--allow-downgrade`: Intune 側 metadata より低い `PackageVersion` の publish を許可する。既定は skip + warning。
+- Credential 解決の決定性は CLI option ではなく環境変数 `AZURE_TOKEN_CREDENTIALS` で確保する。未設定なら `publish` 開始時に warning を出す(00-overview.md 6.19)。
 
 MVP:
 
@@ -97,7 +98,7 @@ Microsoft Graph 経由で Intune を操作する implementation layer。
 
 Responsibilities:
 
-- Graph token acquisition(`--expected-tenant` の tid 照合を含む)
+- Graph token acquisition(`--expected-tenant` の tid 照合、および取得ごとの identity(`appid`/`idtyp`/`roles`)ログを含む)
 - mobile app search(複数一致は fail、DisplayName fallback 時は adopt)
 - win32LobApp create / update
 - `.intunewin` 展開と `Detection.xml` からの `fileEncryptionInfo` 組み立て
@@ -159,6 +160,8 @@ var token = await credential.GetTokenAsync(
     new TokenRequestContext(["https://graph.microsoft.com/.default"]),
     cancellationToken);
 ```
+
+`new DefaultAzureCredential()`(引数なし)の credential chain 解決順は環境依存で保証されない。`AZURE_TOKEN_CREDENTIALS` 環境変数で固定することを推奨する(00-overview.md 6.19)。
 
 ### 8.1 Global tool packaging
 

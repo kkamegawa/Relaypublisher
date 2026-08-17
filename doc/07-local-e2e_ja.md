@@ -19,7 +19,7 @@
 
 ## 2. Azure CLI によるローカル認証
 
-Relaypublisher は Microsoft Graph と Azure Blob へのアクセスに `DefaultAzureCredential` を使用します。app-only のローカル E2E テストでは、Microsoft Entra app 登録に対応する service principal として Azure CLI にログインします。`az login --tenant <tenant-id>` だけでは対話型のユーザーログインになり、app 登録に設定した application permission のテストにはなりません。
+Relaypublisher は Microsoft Graph と Azure Blob へのアクセスに `DefaultAzureCredential` を使用します。app-only のローカル E2E テストでは、Microsoft Entra app 登録に対応する service principal として Azure CLI にログインします。`az login --tenant <tenant-id>` だけでは対話型のユーザーログインになり、app 登録に設定した application permission のテストにはなりません。ローカル run が意図した service principal を実際に使う(同じマシンにサインイン済みの他の identity ではなく)ためには、credential chain も固定する必要があります(下記「Run の credential を固定する」参照)。
 
 ログイン前に app 登録を次のように構成します。
 
@@ -28,7 +28,7 @@ Relaypublisher は Microsoft Graph と Azure Blob へのアクセスに `Default
 - client secret または app に登録した PEM 証明書を準備します。ローカル環境で秘密鍵を保護できる場合は、証明書の利用を推奨します。
 - 選択した manifest が Azure Blob を使う場合は、必要な storage scope で service principal に `Storage Blob Data Reader` を付与します。
 
-app-only の Graph token は `.default` scope により app 登録に事前設定された permission を使用します。そのため `DefaultAzureCredential` は Azure CLI の service principal ログインを Azure CLI credential 経由で利用できます。
+app-only の Graph token は `.default` scope により app 登録に事前設定された permission を使用します。`DefaultAzureCredential` は Azure CLI の service principal ログインを**利用できます**が、それは credential chain を固定した場合に限られます。固定していないと、サインイン済みの Visual Studio・VS Code・broker の identity が先に試され、黙って勝つことがあり、permission 不足と見分けが付かない 403 になります。[06-troubleshooting_ja.md](06-troubleshooting_ja.md) section 2a と下記「Run の credential を固定する」を参照してください。
 
 この permission は実際の publish だけでなく `publish --dry-run` にも必要です。dry-run は何が変わるかを報告する前に既存の Intune app を解決するため、最初に `GET /deviceAppManagement/mobileApps` を呼び出し、permission がなければ 403 で失敗します。permission を付与する前に pipeline を試す手段として `--dry-run` を使うことはできません。
 
@@ -81,6 +81,21 @@ az login --service-principal `
   --username $AppId `
   --certificate "C:\path\to\certificate.pem" `
   --tenant $TenantId
+```
+
+### Run の credential を固定する
+
+サインイン後、`DefaultAzureCredential` の chain を固定し、この run がたった今サインインした service
+principal を実際に使う(同じマシンにサインイン済みの他の identity ではなく)ようにします
+(doc/00-overview.md §6.19)。この設定は shell session 全体に効き、Graph publish 経路と Azure Blob
+download の両方をカバーします。未設定の場合 `publish` は warning を出します。
+
+```bash
+export AZURE_TOKEN_CREDENTIALS=AzureCliCredential
+```
+
+```powershell
+$env:AZURE_TOKEN_CREDENTIALS = "AzureCliCredential"
 ```
 
 client secret、秘密鍵、access token を shell history、log、manifest、artifact に残さないでください。証明書や秘密鍵を commit しないでください。

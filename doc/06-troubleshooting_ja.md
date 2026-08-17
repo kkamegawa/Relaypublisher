@@ -144,21 +144,44 @@ permission を拾うことを期待せず、コマンドを実行し直してく
 
 ### `roles` が正しいのに 403 が続く場合
 
-- Relaypublisher とは独立に、permission 自体が機能するか確認します。
+上の `roles` 確認より前の話として、Relaypublisher は新規に token を取得するたびに、それを取得した
+identity をログしています。
 
-  ```bash
-  az rest --method get --url 'https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?$select=id,displayName&$top=1'
-  ```
+```
+info: IntuneLobPublisher.Core.Publishing.GraphAuthenticationHandler[0] Acquired Graph token for identity
+appid=<guid> idtyp=<type> roles=<permission names>.
+```
 
-  これが成功するのに `publish` は 403 のままなら、permission は正しく、2 つの呼び出しが同じ identity を
-  使っていません。`DefaultAzureCredential` は複数の credential を順に試し、Azure CLI login は最初では
-  ないため、開発機ではサインイン済みの Visual Studio・VS Code・broker の identity を先に拾うことが
-  あります。その identity は通常同じ tenant にあるので `--expected-tenant` では検出できません。Run
-  単位で credential を固定します。
+`appid` を意図したアプリ登録の application (client) ID と比較してください。値が異なれば別の identity が
+token を取得しています。`idtyp=app` は app-only(client credentials)token であることを確認できます。
+それ以外の値(例えば `idtyp=user`、またはこの claim 自体が無い)は service principal ではなく user
+identity が使われたことを意味します。これが `az rest` に頼らず誤った identity を確認する最も速い方法です。
 
-  ```bash
-  AZURE_TOKEN_CREDENTIALS=AzureCliCredential
-  ```
+Identity が想定外だった場合、または Relaypublisher とは独立に permission 自体が機能するか確認したい
+場合:
+
+```bash
+az rest --method get --url 'https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?$select=id,displayName&$top=1'
+```
+
+これが成功するのに `publish` は 403 のままなら、permission は正しく、2 つの呼び出しが同じ identity を
+使っていません。`DefaultAzureCredential` は複数の credential を順に試し、Azure CLI login が選ばれる
+保証はないため、開発機ではサインイン済みの Visual Studio・VS Code・broker の identity を先に拾うことが
+あります。その identity は通常同じ tenant にあるので `--expected-tenant` では検出できません。これは
+その場しのぎの回避策ではなく、正式に文書化されサポートされている設定です
+([05-operation_ja.md](05-operation_ja.md) §3、[00-overview.md](00-overview.md) §6.19)。トラブル
+シューティング時だけでなく、毎回の run で credential chain を固定してください。
+
+```bash
+export AZURE_TOKEN_CREDENTIALS=AzureCliCredential
+```
+
+```powershell
+$env:AZURE_TOKEN_CREDENTIALS = "AzureCliCredential"
+```
+
+403 の前に `AZURE_TOKEN_CREDENTIALS is not set` で始まる warning が `publish` から出ていた場合、chain が
+固定されていません。その warning に対処してから rerun し、それ以上 permission の調査を続けないでください。
 
 - Tenant に有効な Intune license があるか確認します。Intune の Microsoft Graph API は license を必要と
   し、license がない tenant は permission に関係なく 403 を返します。

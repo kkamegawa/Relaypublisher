@@ -1,18 +1,23 @@
 using System.Net.Http.Headers;
 using Azure.Core;
 using IntuneLobPublisher.Core.Exceptions;
+using Microsoft.Extensions.Logging;
 
 namespace IntuneLobPublisher.Core.Publishing;
 
 /// <summary>
 /// Attaches a Graph bearer token acquired via the configured <see cref="TokenCredential"/> to every
 /// request. Verifies the token's `tid` claim against <see cref="GraphClientOptions.ExpectedTenantId"/>
-/// on every fresh token acquisition, so a tenant change is caught before the next write.
+/// on every fresh token acquisition, so a tenant change is caught before the next write. Also logs the
+/// token's non-secret identity claims (`appid`/`idtyp`/`roles`) on every fresh acquisition, independent
+/// of whether a tenant is configured, so a `DefaultAzureCredential` chain that silently resolved to the
+/// wrong identity is visible in the log rather than only inferable from a 403 (doc/00-overview.md 6.19).
 /// </summary>
 public sealed class GraphAuthenticationHandler : DelegatingHandler
 {
     private readonly TokenCredential _credential;
     private readonly GraphClientOptions _options;
+    private readonly ILogger<GraphAuthenticationHandler> _logger;
     private readonly SemaphoreSlim _tokenLock = new(1, 1);
 
     // Refresh a little before actual expiry so a request never starts with a token that expires mid-flight.
@@ -20,10 +25,11 @@ public sealed class GraphAuthenticationHandler : DelegatingHandler
 
     private AccessToken? _cachedToken;
 
-    public GraphAuthenticationHandler(TokenCredential credential, GraphClientOptions options)
+    public GraphAuthenticationHandler(TokenCredential credential, GraphClientOptions options, ILogger<GraphAuthenticationHandler> logger)
     {
         _credential = credential;
         _options = options;
+        _logger = logger;
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -69,6 +75,12 @@ public sealed class GraphAuthenticationHandler : DelegatingHandler
 
             var context = new TokenRequestContext([_options.Scope]);
             var token = await _credential.GetTokenAsync(context, cancellationToken).ConfigureAwait(false);
+
+            // Logged before VerifyTenant, and independent of it: VerifyTenant returns immediately when
+            // ExpectedTenantId is not configured, but the identity matters most exactly when no tenant
+            // guard is in place. Logging first also means the identity is on record even when
+            // VerifyTenant throws below.
+            LogTokenIdentity(token.Token);
             VerifyTenant(token.Token);
             _cachedToken = token;
             return token.Token;
@@ -77,6 +89,19 @@ public sealed class GraphAuthenticationHandler : DelegatingHandler
         {
             _tokenLock.Release();
         }
+    }
+
+    // appid (a GUID), idtyp and roles (permission names) are not secrets - the same class of value as
+    // the client-request-id/request-id correlation ids GraphErrorReader logs. The access token itself
+    // is never passed to the logger.
+    private void LogTokenIdentity(string accessToken)
+    {
+        var identity = JwtTenantIdReader.ReadIdentity(accessToken);
+        _logger.LogInformation(
+            "Acquired Graph token for identity appid={AppId} idtyp={IdentityType} roles={Roles}.",
+            identity.AppId ?? "(none)",
+            identity.IdentityType ?? "(none)",
+            identity.Roles.Count == 0 ? "(none)" : string.Join(", ", identity.Roles));
     }
 
     private void VerifyTenant(string accessToken)
