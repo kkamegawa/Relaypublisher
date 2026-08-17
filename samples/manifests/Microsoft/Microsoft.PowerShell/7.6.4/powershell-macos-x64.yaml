@@ -11,7 +11,7 @@
 # "superseded by version 7.6.5" (doc/00-overview.md §6.8).
 #
 # PowerShell's macOS pkg is a good E2E fixture because, unlike a CLI-only pkg
-# (see apple-container-macos-arm64.yaml), its installer places a real .app bundle
+# (see samples/manifests/apple-container-macos-arm64.yaml), its installer places a real .app bundle
 # under /Applications, so Detection.IncludedApps can be populated with genuine
 # values instead of being left empty or falsified:
 #   - BundleId:      com.microsoft.powershell

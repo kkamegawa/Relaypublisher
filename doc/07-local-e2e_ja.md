@@ -15,7 +15,7 @@
 - テスト用 Microsoft Entra tenant、Intune 権限、assignment group。
 - Windows の `.intunewin` を生成するための Windows マシンまたは runner。
 
-リポジトリの sample manifest は、必ずしも E2E 実行できる fixture ではなく、参照用です。ただし例外が 2 つあります: `samples/manifests/Microsoft/Microsoft.PowerShell/7.6.5/powershell-macos-arm64.yaml` / `-x64.yaml` は実在する、公開ダウンロード可能な package を指しており、無編集で `plan` → `validate` → `package` が通ります。それ以外の sample は、schema の形や実世界の制約を記録するために、意図的に validation で失敗する、または解決できない package source を参照しています。どのサンプルがどちらかは、失敗をバグと判断する前に [samples/manifests/README_ja.md](../samples/manifests/README_ja.md) を確認してください。手早いローカルの動作確認を超える用途には、実在する package input を持つ組織用のテスト manifest を使用してください。
+リポジトリの sample manifest は、必ずしも E2E 実行できる fixture ではなく、参照用です。ただし例外が 1 つあります: `samples/manifests/Microsoft/Microsoft.PowerShell/7.6.4/` と `7.6.5/` 配下の PowerShell macOS manifest(`powershell-macos-arm64.yaml` / `-x64.yaml`、合計 4 ファイル)は実在する、公開ダウンロード可能な package を指しており、無編集で `plan` → `validate` → `package` が通ります。それ以外の sample は、schema の形や実世界の制約を記録するために、意図的に validation で失敗する、または解決できない package source を参照しています。どのサンプルがどちらかは、失敗をバグと判断する前に [samples/manifests/README_ja.md](../samples/manifests/README_ja.md) を確認してください。手早いローカルの動作確認を超える用途には、実在する package input を持つ組織用のテスト manifest を使用してください。
 
 ## 2. Azure CLI によるローカル認証
 
