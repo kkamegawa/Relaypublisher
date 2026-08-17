@@ -1,4 +1,4 @@
-#requires -Version 7.2
+#requires -Version 7.3
 
 [CmdletBinding()]
 param(
@@ -36,7 +36,7 @@ else {
     }
 
     if (-not (Test-Path -LiteralPath $OutputDirectory -PathType Container)) {
-        $null = New-Item -ItemType Directory -Path $OutputDirectory -Force
+        [System.IO.Directory]::CreateDirectory($OutputDirectory) | Out-Null
     }
 }
 
@@ -434,10 +434,10 @@ try {
     }
 
     $v1MobileApps = Get-GraphCollection `
-        -Path 'v1.0/deviceAppManagement/mobileApps?$select=id,displayName' `
+        -Path 'v1.0/deviceAppManagement/mobileApps' `
         -Headers $GraphHeaders
     $betaMobileApps = Get-GraphCollection `
-        -Path 'beta/deviceAppManagement/mobileApps?$select=id,displayName' `
+        -Path 'beta/deviceAppManagement/mobileApps' `
         -Headers $GraphHeaders
 
     $selectedAppsById = @{}
