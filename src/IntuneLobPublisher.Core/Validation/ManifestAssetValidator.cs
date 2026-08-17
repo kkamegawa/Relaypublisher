@@ -17,8 +17,6 @@ namespace IntuneLobPublisher.Core.Validation;
 /// </summary>
 public static class ManifestAssetValidator
 {
-    private const char Utf8BomChar = '\uFEFF';
-
     private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
 
     /// <summary>Returns error strings (empty when valid) for the given manifest's file-backed assets.</summary>
@@ -54,21 +52,9 @@ public static class ManifestAssetValidator
 
     private static IReadOnlyList<string> ValidateIcon(string icon, string repositoryRoot)
     {
-        // Path safety (traversal, absolute paths) is already checked by ManifestValidator before this
-        // runs; ResolveWithin re-validates defensively rather than trusting an already-loaded manifest.
-        string iconPath;
-        try
+        if (!TryResolveExistingFile(icon, repositoryRoot, "Icon", out var iconPath, out var error))
         {
-            iconPath = PathSafety.ResolveWithin(repositoryRoot, icon, "Icon");
-        }
-        catch (UnsafePathException ex)
-        {
-            return [ex.Message];
-        }
-
-        if (!File.Exists(iconPath))
-        {
-            return [$"Icon '{icon}' does not exist under '{repositoryRoot}'."];
+            return [error];
         }
 
         var sizeBytes = new FileInfo(iconPath).Length;
@@ -82,19 +68,9 @@ public static class ManifestAssetValidator
 
     private static IReadOnlyList<string> ValidateScript(string scriptPath, string repositoryRoot, string fieldName)
     {
-        string fullPath;
-        try
+        if (!TryResolveExistingFile(scriptPath, repositoryRoot, fieldName, out var fullPath, out var error))
         {
-            fullPath = PathSafety.ResolveWithin(repositoryRoot, scriptPath, fieldName);
-        }
-        catch (UnsafePathException ex)
-        {
-            return [ex.Message];
-        }
-
-        if (!File.Exists(fullPath))
-        {
-            return [$"{fieldName} '{scriptPath}' does not exist under '{repositoryRoot}'."];
+            return [error];
         }
 
         var bytes = File.ReadAllBytes(fullPath);
@@ -102,7 +78,8 @@ public static class ManifestAssetValidator
 
         // A BOM before the shebang stops macOS from launching the script at all, so it is
         // rejected outright rather than silently stripped.
-        if (bytes.AsSpan(0, Math.Min(bytes.Length, Utf8Bom.Length)).SequenceEqual(Utf8Bom))
+        var hasBom = bytes.AsSpan(0, Math.Min(bytes.Length, Utf8Bom.Length)).SequenceEqual(Utf8Bom);
+        if (hasBom)
         {
             errors.Add($"{fieldName} '{scriptPath}' must not have a UTF-8 byte order mark (BOM).");
         }
@@ -117,11 +94,45 @@ public static class ManifestAssetValidator
                 + $"{ManifestValues.MaxMacOsAppScriptChars} characters.");
         }
 
-        if (!text.TrimStart(Utf8BomChar).StartsWith("#!", StringComparison.Ordinal))
+        // hasBom already tells us the decoded text starts with the BOM char (U+FEFF); reuse that
+        // instead of re-detecting the BOM a second time via a separate character-level check.
+        var textAfterBom = hasBom ? text[1..] : text;
+        if (!textAfterBom.StartsWith("#!", StringComparison.Ordinal))
         {
             errors.Add($"{fieldName} '{scriptPath}' must start with a shebang ('#!').");
         }
 
         return errors;
+    }
+
+    /// <summary>
+    /// Resolves <paramref name="relativePath"/> under <paramref name="repositoryRoot"/> and confirms it
+    /// exists, sharing the resolve-and-check step used by both <see cref="ValidateIcon"/> and
+    /// <see cref="ValidateScript"/>. Path safety (traversal, absolute paths) is already checked by
+    /// <see cref="ManifestValidator"/> before this runs; <see cref="PathSafety.ResolveWithin"/>
+    /// re-validates defensively rather than trusting an already-loaded manifest.
+    /// </summary>
+    private static bool TryResolveExistingFile(
+        string relativePath, string repositoryRoot, string fieldName, out string fullPath, out string error)
+    {
+        try
+        {
+            fullPath = PathSafety.ResolveWithin(repositoryRoot, relativePath, fieldName);
+        }
+        catch (UnsafePathException ex)
+        {
+            fullPath = string.Empty;
+            error = ex.Message;
+            return false;
+        }
+
+        if (!File.Exists(fullPath))
+        {
+            error = $"{fieldName} '{relativePath}' does not exist under '{repositoryRoot}'.";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
     }
 }

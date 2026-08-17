@@ -69,12 +69,8 @@ public static class MacOsAppPayloadMapper
                 IncludedApps = includedApps
                     .Select(a => new MacOsIncludedAppPayload { BundleId = a.BundleId!, BundleVersion = a.BundleVersion! })
                     .ToList(),
-                PreInstallScript = scripts?.PreInstall is { } preInstall
-                    ? new MacOsAppScriptPayload { ScriptContent = preInstall }
-                    : null,
-                PostInstallScript = scripts?.PostInstall is { } postInstall
-                    ? new MacOsAppScriptPayload { ScriptContent = postInstall }
-                    : null,
+                PreInstallScript = ToScriptPayload(scripts?.PreInstall),
+                PostInstallScript = ToScriptPayload(scripts?.PostInstall),
             };
         }
 
@@ -104,4 +100,7 @@ public static class MacOsAppPayloadMapper
     }
 
     private static bool IsPkg(AppManifest app) => (app.AppType ?? ManifestValues.DefaultMacOsAppType) == ManifestValues.DefaultMacOsAppType;
+
+    private static MacOsAppScriptPayload? ToScriptPayload(string? scriptContent)
+        => scriptContent is { } content ? new MacOsAppScriptPayload { ScriptContent = content } : null;
 }

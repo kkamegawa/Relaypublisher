@@ -27,8 +27,9 @@ if [ -L "/usr/local/bin/pwsh" ]; then
     rm -f /usr/local/bin/pwsh
 fi
 
-# 3. Check free disk space (minimum 500 MB).
-AVAILABLE_KB=$(df / | tail -1 | awk '{print $4}')
+# 3. Check free disk space (minimum 500 MB). -k forces 1024-byte blocks: macOS/BSD df
+# defaults to 512-byte blocks, which would silently halve the effective threshold.
+AVAILABLE_KB=$(df -k / | tail -1 | awk '{print $4}')
 if [ "$AVAILABLE_KB" -lt 500000 ]; then
     log "ERROR: Not enough disk space (${AVAILABLE_KB}KB available)"
     exit 1
