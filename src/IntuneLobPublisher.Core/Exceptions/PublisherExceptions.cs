@@ -262,12 +262,14 @@ public sealed class PublishResultOutputException : PublisherException
 /// <summary>A Microsoft Graph call failed after retries. Carries the request ids Graph returns for support/troubleshooting.</summary>
 public sealed class GraphRequestException : PublisherException
 {
-    public GraphRequestException(string message, int? statusCode, string? clientRequestId, string? requestId)
+    public GraphRequestException(
+        string message, int? statusCode, string? clientRequestId, string? requestId, string? graphErrorCode = null)
         : base(message)
     {
         StatusCode = statusCode;
         ClientRequestId = clientRequestId;
         RequestId = requestId;
+        GraphErrorCode = graphErrorCode;
     }
 
     public GraphRequestException(string message, Exception innerException)
@@ -283,4 +285,40 @@ public sealed class GraphRequestException : PublisherException
 
     /// <summary>The `request-id` header Graph returns, for support correlation. Never a secret.</summary>
     public string? RequestId { get; }
+
+    /// <summary>Graph's `error.code` value, when the failing response carried an error body.</summary>
+    public string? GraphErrorCode { get; }
+}
+
+/// <summary>
+/// Graph refused a call that the publishing identity must be able to make for *any* app entry to
+/// succeed - currently only the mobile app listing, which every entry goes through before anything
+/// else. Distinct from <see cref="GraphRequestException"/> so the CLI can abort the whole batch instead
+/// of repeating the same permission error once per entry. A 403 confined to one app type (for example
+/// macOS `AppType: pkg`, which is beta-only) stays a <see cref="GraphRequestException"/> so the rest of
+/// the batch still publishes.
+/// </summary>
+public sealed class GraphAccessDeniedException : PublisherException
+{
+    public GraphAccessDeniedException(
+        string message, int? statusCode, string? clientRequestId, string? requestId, string? graphErrorCode = null)
+        : base(message)
+    {
+        StatusCode = statusCode;
+        ClientRequestId = clientRequestId;
+        RequestId = requestId;
+        GraphErrorCode = graphErrorCode;
+    }
+
+    /// <summary>HTTP status code of the failing response (401 or 403).</summary>
+    public int? StatusCode { get; }
+
+    /// <summary>The `client-request-id` header Graph echoes back, for support correlation. Never a secret.</summary>
+    public string? ClientRequestId { get; }
+
+    /// <summary>The `request-id` header Graph returns, for support correlation. Never a secret.</summary>
+    public string? RequestId { get; }
+
+    /// <summary>Graph's `error.code` value, when the failing response carried an error body.</summary>
+    public string? GraphErrorCode { get; }
 }

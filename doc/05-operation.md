@@ -47,7 +47,11 @@ Create one Microsoft Entra application registration for the CI publisher identit
 Required configuration:
 
 - Account type: single tenant for the target tenant.
-- Microsoft Graph application permission: `DeviceManagementApps.ReadWrite.All`.
+- Microsoft Graph application permission: `DeviceManagementApps.ReadWrite.All`. It must be added under
+  **Application permissions**, not **Delegated permissions** - the portal lists the same name under
+  both. Relaypublisher signs in as a service principal, and an app-only token carries only application
+  permissions (`roles` claim); a delegated permission produces a 403 even after admin consent. See
+  [06-troubleshooting.md](06-troubleshooting.md) section 2a.
 - Admin consent: granted by a tenant administrator before the first production publish.
 - No client secret is required for the recommended CI setup. Use workload identity federation instead.
 

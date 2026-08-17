@@ -118,13 +118,13 @@ internal static class PublishCommand
         return command;
     }
 
-    private sealed record PublishEntry(IntuneLobPublisher.Core.Validation.LoadedManifest Loaded, AppManifest App);
+    internal sealed record PublishEntry(IntuneLobPublisher.Core.Validation.LoadedManifest Loaded, AppManifest App);
 
     /// <summary>
     /// When several manifests target the same app identity, only the highest PackageVersion is
     /// published (doc/00-overview.md 6.8); the rest are reported as skipped.
     /// </summary>
-    private static List<PublishEntry> SelectHighestVersions(
+    internal static List<PublishEntry> SelectHighestVersions(
         IReadOnlyList<IntuneLobPublisher.Core.Validation.LoadedManifest> manifests)
     {
         var byIdentity = new Dictionary<AppIdentity, PublishEntry>();
@@ -169,10 +169,11 @@ internal static class PublishCommand
 
     /// <summary>
     /// Publishes entries one by one, continuing on per-app failures so one broken app does not block
-    /// the rest of a CI batch (reruns converge, doc/00-overview.md 6.10). Tenant mismatch and
-    /// authentication failures abort the whole run — nothing else can succeed after those.
+    /// the rest of a CI batch (reruns converge, doc/00-overview.md 6.10). Tenant mismatch,
+    /// authentication failures and identity-wide Graph authorization failures abort the whole run —
+    /// nothing else can succeed after those, so continuing would only repeat the same error per entry.
     /// </summary>
-    private static async Task<int> PublishEntriesAsync(
+    internal static async Task<int> PublishEntriesAsync(
         IPublishOrchestrator orchestrator,
         List<PublishEntry> entries,
         string repoRoot,
@@ -227,6 +228,13 @@ internal static class PublishCommand
                 AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
                 await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
                 Console.Error.WriteLine($"error: {ex.Message}");
+                return ExitCodes.Failure;
+            }
+            catch (GraphAccessDeniedException ex)
+            {
+                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
+                await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
+                Console.Error.WriteLine($"error: {label}: {ex.Message}");
                 return ExitCodes.Failure;
             }
             catch (Azure.Identity.AuthenticationFailedException ex)

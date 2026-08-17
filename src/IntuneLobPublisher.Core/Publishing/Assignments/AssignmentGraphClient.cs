@@ -37,7 +37,7 @@ public sealed class AssignmentGraphClient : IAssignmentGraphClient
         while (requestUri is not null)
         {
             using var response = await _httpClient.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
-            var page = await ReadJsonAsync<MobileAppAssignmentListPage>(response, requestUri, cancellationToken).ConfigureAwait(false);
+            var page = await GraphResponseReader.ReadJsonAsync<MobileAppAssignmentListPage>(response, requestUri, cancellationToken).ConfigureAwait(false);
 
             foreach (var assignment in page.Value)
             {
@@ -55,8 +55,9 @@ public sealed class AssignmentGraphClient : IAssignmentGraphClient
         var requestUri = AssignmentCollectionPath(appId, useBeta: assignment.Filter is not null);
         var payload = ToPayload(assignment);
         using var response = await _httpClient.PostAsJsonAsync(requestUri, payload, cancellationToken).ConfigureAwait(false);
-        var body = await ReadJsonAsync<MobileAppAssignmentResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
-        return body.Id ?? throw new GraphRequestException($"Graph returned an assignment without an id for '{requestUri}'.", (int)response.StatusCode, null, null);
+        var body = await GraphResponseReader.ReadJsonAsync<MobileAppAssignmentResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
+        return body.Id ?? throw GraphResponseReader.BodyFailure(
+            response, $"Graph returned an assignment without an id for '{requestUri}'.");
     }
 
     public async Task UpdateAssignmentAsync(string appId, CurrentAssignment current, DesiredAssignment desired, CancellationToken cancellationToken)
@@ -65,14 +66,14 @@ public sealed class AssignmentGraphClient : IAssignmentGraphClient
         var useBeta = current.Filter is not null || desired.Filter is not null;
         var requestUri = AssignmentItemPath(appId, assignmentId, useBeta);
         using var response = await _httpClient.PatchAsync(requestUri, JsonContent.Create(ToPayload(desired)), cancellationToken).ConfigureAwait(false);
-        EnsureSuccess(response, requestUri);
+        await GraphResponseReader.EnsureSuccessAsync(response, requestUri, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task DeleteAssignmentAsync(string appId, string assignmentId, CancellationToken cancellationToken)
     {
         var requestUri = AssignmentItemPath(appId, assignmentId, useBeta: false);
         using var response = await _httpClient.DeleteAsync(requestUri, cancellationToken).ConfigureAwait(false);
-        EnsureSuccess(response, requestUri);
+        await GraphResponseReader.EnsureSuccessAsync(response, requestUri, cancellationToken).ConfigureAwait(false);
     }
 
     private static MobileAppAssignmentPayload ToPayload(DesiredAssignment assignment)
@@ -206,45 +207,6 @@ public sealed class AssignmentGraphClient : IAssignmentGraphClient
 
     private static string AssignmentItemPath(string appId, string assignmentId, bool useBeta)
         => $"{AssignmentCollectionPath(appId, useBeta)}/{Uri.EscapeDataString(assignmentId)}";
-
-    private async Task<T> ReadJsonAsync<T>(HttpResponseMessage response, string requestUri, CancellationToken cancellationToken)
-    {
-        EnsureSuccess(response, requestUri);
-
-        var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        T? body;
-        try
-        {
-            body = await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
-        catch (JsonException)
-        {
-            throw new GraphRequestException(
-                $"Graph returned a malformed body for '{requestUri}'.",
-                (int)response.StatusCode, GetHeader(response, "client-request-id"), GetHeader(response, "request-id"));
-        }
-
-        return body ?? throw new GraphRequestException(
-            $"Graph returned an empty body for '{requestUri}'.",
-            (int)response.StatusCode, GetHeader(response, "client-request-id"), GetHeader(response, "request-id"));
-    }
-
-    private static void EnsureSuccess(HttpResponseMessage response, string requestUri)
-    {
-        if (response.IsSuccessStatusCode)
-        {
-            return;
-        }
-
-        throw new GraphRequestException(
-            $"Graph request to '{requestUri}' returned {(int)response.StatusCode}.",
-            (int)response.StatusCode,
-            GetHeader(response, "client-request-id"),
-            GetHeader(response, "request-id"));
-    }
-
-    private static string? GetHeader(HttpResponseMessage response, string name)
-        => response.Headers.TryGetValues(name, out var values) ? values.FirstOrDefault() : null;
 
     private sealed class MobileAppAssignmentListPage
     {

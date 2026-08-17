@@ -1,7 +1,5 @@
 using System.Net.Http.Json;
-using System.Text.Json;
 using System.Text.Json.Serialization;
-using IntuneLobPublisher.Core.Exceptions;
 
 namespace IntuneLobPublisher.Core.Publishing;
 
@@ -42,10 +40,9 @@ public sealed class GraphMacOsAppClient : IMacOsAppClient
         var requestUri = $"{VersionSegment(useBeta)}/deviceAppManagement/mobileApps";
         using var response = await _httpClient.PostAsync(requestUri, JsonContent.Create(payload, payload.GetType()), cancellationToken)
             .ConfigureAwait(false);
-        var body = await ReadJsonAsync<MobileAppResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
-        return body.Id ?? throw new GraphRequestException(
-            $"Graph returned a created app without an id for '{requestUri}'.",
-            (int)response.StatusCode, GetHeader(response, "client-request-id"), GetHeader(response, "request-id"));
+        var body = await GraphResponseReader.ReadJsonAsync<MobileAppResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
+        return body.Id ?? throw GraphResponseReader.BodyFailure(
+            response, $"Graph returned a created app without an id for '{requestUri}'.");
     }
 
     public async Task UpdateAppAsync(string appId, MacOsAppPayloadBase payload, bool useBeta, CancellationToken cancellationToken)
@@ -53,49 +50,10 @@ public sealed class GraphMacOsAppClient : IMacOsAppClient
         var requestUri = $"{VersionSegment(useBeta)}/deviceAppManagement/mobileApps/{Uri.EscapeDataString(appId)}";
         using var response = await _httpClient.PatchAsync(requestUri, JsonContent.Create(payload, payload.GetType()), cancellationToken)
             .ConfigureAwait(false);
-        EnsureSuccess(response, requestUri);
+        await GraphResponseReader.EnsureSuccessAsync(response, requestUri, cancellationToken).ConfigureAwait(false);
     }
 
     private static string VersionSegment(bool useBeta) => useBeta ? "/beta" : "/v1.0";
-
-    private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response, string requestUri, CancellationToken cancellationToken)
-    {
-        EnsureSuccess(response, requestUri);
-
-        var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        T? body;
-        try
-        {
-            body = await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
-        catch (JsonException)
-        {
-            throw new GraphRequestException(
-                $"Graph returned a malformed body for '{requestUri}'.",
-                (int)response.StatusCode, GetHeader(response, "client-request-id"), GetHeader(response, "request-id"));
-        }
-
-        return body ?? throw new GraphRequestException(
-            $"Graph returned an empty body for '{requestUri}'.",
-            (int)response.StatusCode, GetHeader(response, "client-request-id"), GetHeader(response, "request-id"));
-    }
-
-    private static void EnsureSuccess(HttpResponseMessage response, string requestUri)
-    {
-        if (response.IsSuccessStatusCode)
-        {
-            return;
-        }
-
-        throw new GraphRequestException(
-            $"Graph request to '{requestUri}' returned {(int)response.StatusCode}.",
-            (int)response.StatusCode,
-            GetHeader(response, "client-request-id"),
-            GetHeader(response, "request-id"));
-    }
-
-    private static string? GetHeader(HttpResponseMessage response, string name)
-        => response.Headers.TryGetValues(name, out var values) ? values.FirstOrDefault() : null;
 
     private sealed class MobileAppResponse
     {
