@@ -32,6 +32,8 @@ public sealed class MobileAppContentUploadOrchestratorTests
 
         public Queue<string> PublishingStates { get; } = new();
 
+        public Queue<Exception> PatchNotesFailures { get; } = new();
+
         public List<(string Name, long Size, long SizeEncrypted)> CreateContentFileCalls { get; } = [];
 
         public List<FileEncryptionInfoPayload> CommitFileCalls { get; } = [];
@@ -46,23 +48,26 @@ public sealed class MobileAppContentUploadOrchestratorTests
 
         public List<string> ODataTypeCalls { get; } = [];
 
-        public Task<string> CreateContentVersionAsync(string appId, bool useBeta, CancellationToken cancellationToken)
+        public Task<string> CreateContentVersionAsync(string appId, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
             UseBetaCalls.Add(useBeta);
+            ODataTypeCalls.Add(oDataType);
             return Task.FromResult("cv-1");
         }
 
         public Task<string> CreateContentFileAsync(
-            string appId, string contentVersionId, string name, long size, long sizeEncrypted, bool useBeta, CancellationToken cancellationToken)
+            string appId, string contentVersionId, string name, long size, long sizeEncrypted, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
             CreateContentFileCalls.Add((name, size, sizeEncrypted));
             UseBetaCalls.Add(useBeta);
+            ODataTypeCalls.Add(oDataType);
             return Task.FromResult("file-1");
         }
 
         public Task<MobileAppContentFileResponse> GetContentFileAsync(
-            string appId, string contentVersionId, string fileId, bool useBeta, CancellationToken cancellationToken)
+            string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
+            ODataTypeCalls.Add(oDataType);
             if (FileResponses.Count == 0)
             {
                 throw new InvalidOperationException("No more queued file responses.");
@@ -71,16 +76,18 @@ public sealed class MobileAppContentUploadOrchestratorTests
             return Task.FromResult(FileResponses.Dequeue());
         }
 
-        public Task RenewUploadAsync(string appId, string contentVersionId, string fileId, bool useBeta, CancellationToken cancellationToken)
+        public Task RenewUploadAsync(string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
             RenewUploadCallCount++;
+            ODataTypeCalls.Add(oDataType);
             return Task.CompletedTask;
         }
 
         public Task CommitFileAsync(
-            string appId, string contentVersionId, string fileId, FileEncryptionInfoPayload fileEncryptionInfo, bool useBeta, CancellationToken cancellationToken)
+            string appId, string contentVersionId, string fileId, FileEncryptionInfoPayload fileEncryptionInfo, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
             CommitFileCalls.Add(fileEncryptionInfo);
+            ODataTypeCalls.Add(oDataType);
             return Task.CompletedTask;
         }
 
@@ -94,6 +101,11 @@ public sealed class MobileAppContentUploadOrchestratorTests
 
         public Task PatchNotesAsync(string appId, string notes, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
+            if (PatchNotesFailures.TryDequeue(out var failure))
+            {
+                throw failure;
+            }
+
             PatchedNotes.Add(notes);
             ODataTypeCalls.Add(oDataType);
             UseBetaCalls.Add(useBeta);
@@ -230,6 +242,25 @@ public sealed class MobileAppContentUploadOrchestratorTests
         Assert.HasCount(1, client.PatchedNotes);
         Assert.AreEqual(metadata.Serialize(), client.PatchedNotes[0]);
         Assert.IsNull(client.PatchedCommittedContentVersion);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_MatchingInputHash_PatchNotesReturnsPublishingStateNotPublished_WaitsAndRetries()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PatchNotesFailures.Enqueue(new GraphRequestException(
+            "Invalid operation: app's PublishingState is not 'Published'.", 400, null, null));
+        client.PublishingStates.Enqueue("processing");
+        client.PublishingStates.Enqueue("published");
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+        var metadata = CreateMetadata();
+
+        var result = await PublishAsync(
+            orchestrator, "app-1", CreateContent(inputHash: "same-hash"), storedInputHash: "same-hash", metadata, FastOptions());
+
+        Assert.AreEqual(ContentUploadOutcome.SkippedUnchanged, result.Outcome);
+        Assert.HasCount(1, client.PatchedNotes);
+        Assert.AreEqual(metadata.Serialize(), client.PatchedNotes[0]);
     }
 
     [TestMethod]

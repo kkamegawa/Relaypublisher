@@ -15,22 +15,22 @@ namespace IntuneLobPublisher.Core.Publishing;
 public interface IMobileAppContentClient
 {
     /// <summary>Creates a new content version and returns its id.</summary>
-    Task<string> CreateContentVersionAsync(string appId, bool useBeta, CancellationToken cancellationToken);
+    Task<string> CreateContentVersionAsync(string appId, string oDataType, bool useBeta, CancellationToken cancellationToken);
 
     /// <summary>Creates a content file record and returns its id.</summary>
     Task<string> CreateContentFileAsync(
-        string appId, string contentVersionId, string name, long size, long sizeEncrypted, bool useBeta, CancellationToken cancellationToken);
+        string appId, string contentVersionId, string name, long size, long sizeEncrypted, string oDataType, bool useBeta, CancellationToken cancellationToken);
 
     /// <summary>Reads the current state of a content file, for polling <c>uploadState</c>.</summary>
     Task<MobileAppContentFileResponse> GetContentFileAsync(
-        string appId, string contentVersionId, string fileId, bool useBeta, CancellationToken cancellationToken);
+        string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken);
 
     /// <summary>Requests a fresh Azure Storage SAS URI before the current one expires.</summary>
-    Task RenewUploadAsync(string appId, string contentVersionId, string fileId, bool useBeta, CancellationToken cancellationToken);
+    Task RenewUploadAsync(string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken);
 
     /// <summary>Commits an uploaded file with its encryption info.</summary>
     Task CommitFileAsync(
-        string appId, string contentVersionId, string fileId, FileEncryptionInfoPayload fileEncryptionInfo, bool useBeta, CancellationToken cancellationToken);
+        string appId, string contentVersionId, string fileId, FileEncryptionInfoPayload fileEncryptionInfo, string oDataType, bool useBeta, CancellationToken cancellationToken);
 
     /// <summary>Activates a content version by patching the app's <c>committedContentVersion</c>. Point of no return.</summary>
     Task PatchCommittedContentVersionAsync(string appId, string contentVersionId, string oDataType, bool useBeta, CancellationToken cancellationToken);
@@ -57,9 +57,9 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         _httpClient = httpClient;
     }
 
-    public async Task<string> CreateContentVersionAsync(string appId, bool useBeta, CancellationToken cancellationToken)
+    public async Task<string> CreateContentVersionAsync(string appId, string oDataType, bool useBeta, CancellationToken cancellationToken)
     {
-        var requestUri = AppPath(appId, useBeta) + "/contentVersions";
+        var requestUri = ContentRootPath(appId, oDataType, useBeta) + "/contentVersions";
         using var response = await _httpClient.PostAsJsonAsync(requestUri, new MobileAppContentCreateRequest(), cancellationToken)
             .ConfigureAwait(false);
         var body = await GraphResponseReader.ReadJsonAsync<MobileAppContentResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
@@ -68,9 +68,9 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
     }
 
     public async Task<string> CreateContentFileAsync(
-        string appId, string contentVersionId, string name, long size, long sizeEncrypted, bool useBeta, CancellationToken cancellationToken)
+        string appId, string contentVersionId, string name, long size, long sizeEncrypted, string oDataType, bool useBeta, CancellationToken cancellationToken)
     {
-        var requestUri = ContentVersionPath(appId, contentVersionId, useBeta) + "/files";
+        var requestUri = ContentVersionPath(appId, contentVersionId, oDataType, useBeta) + "/files";
         var request = new MobileAppContentFileCreateRequest { Name = name, Size = size, SizeEncrypted = sizeEncrypted };
         using var response = await _httpClient.PostAsJsonAsync(requestUri, request, cancellationToken).ConfigureAwait(false);
         var body = await GraphResponseReader.ReadJsonAsync<MobileAppContentFileResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
@@ -79,24 +79,24 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
     }
 
     public async Task<MobileAppContentFileResponse> GetContentFileAsync(
-        string appId, string contentVersionId, string fileId, bool useBeta, CancellationToken cancellationToken)
+        string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken)
     {
-        var requestUri = FilePath(appId, contentVersionId, fileId, useBeta);
+        var requestUri = FilePath(appId, contentVersionId, fileId, oDataType, useBeta);
         using var response = await _httpClient.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
         return await GraphResponseReader.ReadJsonAsync<MobileAppContentFileResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task RenewUploadAsync(string appId, string contentVersionId, string fileId, bool useBeta, CancellationToken cancellationToken)
+    public async Task RenewUploadAsync(string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken)
     {
-        var requestUri = FilePath(appId, contentVersionId, fileId, useBeta) + "/renewUpload";
+        var requestUri = FilePath(appId, contentVersionId, fileId, oDataType, useBeta) + "/renewUpload";
         using var response = await _httpClient.PostAsync(requestUri, content: null, cancellationToken).ConfigureAwait(false);
         await GraphResponseReader.EnsureSuccessAsync(response, requestUri, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task CommitFileAsync(
-        string appId, string contentVersionId, string fileId, FileEncryptionInfoPayload fileEncryptionInfo, bool useBeta, CancellationToken cancellationToken)
+        string appId, string contentVersionId, string fileId, FileEncryptionInfoPayload fileEncryptionInfo, string oDataType, bool useBeta, CancellationToken cancellationToken)
     {
-        var requestUri = FilePath(appId, contentVersionId, fileId, useBeta) + "/commit";
+        var requestUri = FilePath(appId, contentVersionId, fileId, oDataType, useBeta) + "/commit";
         var request = new CommitFileRequest { FileEncryptionInfo = fileEncryptionInfo };
         using var response = await _httpClient.PostAsJsonAsync(requestUri, request, cancellationToken).ConfigureAwait(false);
         await GraphResponseReader.EnsureSuccessAsync(response, requestUri, cancellationToken).ConfigureAwait(false);
@@ -129,11 +129,24 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
     private static string AppPath(string appId, bool useBeta)
         => $"{VersionSegment(useBeta)}/deviceAppManagement/mobileApps/{Uri.EscapeDataString(appId)}";
 
-    private static string ContentVersionPath(string appId, string contentVersionId, bool useBeta)
-        => $"{AppPath(appId, useBeta)}/contentVersions/{Uri.EscapeDataString(contentVersionId)}";
+    private static string ContentRootPath(string appId, string oDataType, bool useBeta)
+        => $"{AppPath(appId, useBeta)}/{Uri.EscapeDataString(ToGraphTypeSegment(oDataType))}";
 
-    private static string FilePath(string appId, string contentVersionId, string fileId, bool useBeta)
-        => $"{ContentVersionPath(appId, contentVersionId, useBeta)}/files/{Uri.EscapeDataString(fileId)}";
+    private static string ContentVersionPath(string appId, string contentVersionId, string oDataType, bool useBeta)
+        => $"{ContentRootPath(appId, oDataType, useBeta)}/contentVersions/{Uri.EscapeDataString(contentVersionId)}";
+
+    private static string FilePath(string appId, string contentVersionId, string fileId, string oDataType, bool useBeta)
+        => $"{ContentVersionPath(appId, contentVersionId, oDataType, useBeta)}/files/{Uri.EscapeDataString(fileId)}";
+
+    private static string ToGraphTypeSegment(string oDataType)
+    {
+        if (string.IsNullOrWhiteSpace(oDataType))
+        {
+            throw new ArgumentException("OData type must be provided for mobile app content operations.", nameof(oDataType));
+        }
+
+        return oDataType.StartsWith("#", StringComparison.Ordinal) ? oDataType[1..] : oDataType;
+    }
 
     private static string VersionSegment(bool useBeta) => useBeta ? "/beta" : "/v1.0";
 }

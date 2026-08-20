@@ -81,22 +81,23 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
     {
         if (PublishGuard.EvaluateContentUpload(storedInputHash, content.InputHash) == ContentUploadDecision.Skip)
         {
-            await _contentClient.PatchNotesAsync(appId, metadata.Serialize(), oDataType, useBeta, cancellationToken).ConfigureAwait(false);
+            await PatchNotesWithPublishingStateRetryAsync(
+                appId, metadata.Serialize(), oDataType, options, useBeta, cancellationToken).ConfigureAwait(false);
             return new ContentUploadResult(ContentUploadOutcome.SkippedUnchanged, null);
         }
 
         using var uploadable = extractor.Extract(content.ContentPath);
 
-        var contentVersionId = await _contentClient.CreateContentVersionAsync(appId, useBeta, cancellationToken).ConfigureAwait(false);
+        var contentVersionId = await _contentClient.CreateContentVersionAsync(appId, oDataType, useBeta, cancellationToken).ConfigureAwait(false);
         var fileId = await _contentClient.CreateContentFileAsync(
                 appId, contentVersionId, uploadable.ContentFileName, uploadable.UnencryptedContentSize, uploadable.EncryptedContentSize,
-                useBeta, cancellationToken)
+                oDataType, useBeta, cancellationToken)
             .ConfigureAwait(false);
 
         var readyFile = await PollFileStateAsync(
                 appId, contentVersionId, fileId, stage: "azureStorageUriRequest",
                 successState: "azureStorageUriRequestSuccess", failureStates: AzureStorageUriRequestFailureStates,
-                options.AzureStorageUriPollInterval, options.AzureStorageUriTimeout, useBeta, cancellationToken)
+                options.AzureStorageUriPollInterval, options.AzureStorageUriTimeout, oDataType, useBeta, cancellationToken)
             .ConfigureAwait(false);
 
         var sasUri = new Uri(RequireAzureStorageUri(readyFile, "azureStorageUriRequestSuccess"));
@@ -108,7 +109,7 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
                 sasUri,
                 expiresAt,
                 payloadStream,
-                ct => RenewSasUriAsync(appId, contentVersionId, fileId, options, useBeta, ct),
+                ct => RenewSasUriAsync(appId, contentVersionId, fileId, options, oDataType, useBeta, ct),
                 options,
                 cancellationToken).ConfigureAwait(false);
         }
@@ -126,34 +127,41 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
                 FileDigest = encryptionInfo.FileDigest,
                 FileDigestAlgorithm = encryptionInfo.FileDigestAlgorithm,
             },
+            oDataType,
             useBeta,
             cancellationToken).ConfigureAwait(false);
 
         await PollFileStateAsync(
                 appId, contentVersionId, fileId, stage: "commit",
                 successState: "commitFileSuccess", failureStates: CommitFailureStates,
-                options.CommitPollInterval, options.CommitTimeout, useBeta, cancellationToken)
+                options.CommitPollInterval, options.CommitTimeout, oDataType, useBeta, cancellationToken)
             .ConfigureAwait(false);
 
         // Point of no return (doc/00-overview.md 6.10): existing clients are served this content from here on.
-        await _contentClient.PatchCommittedContentVersionAsync(appId, contentVersionId, oDataType, useBeta, cancellationToken).ConfigureAwait(false);
+        await ExecuteAppPatchWithPublishingStateRetryAsync(
+            appId,
+            options,
+            useBeta,
+            ct => _contentClient.PatchCommittedContentVersionAsync(appId, contentVersionId, oDataType, useBeta, ct),
+            cancellationToken).ConfigureAwait(false);
 
         await PollPublishingStateAsync(appId, options.PublishingStatePollInterval, options.PublishingStateTimeout, useBeta, cancellationToken)
             .ConfigureAwait(false);
 
-        await _contentClient.PatchNotesAsync(appId, metadata.Serialize(), oDataType, useBeta, cancellationToken).ConfigureAwait(false);
+        await PatchNotesWithPublishingStateRetryAsync(
+            appId, metadata.Serialize(), oDataType, options, useBeta, cancellationToken).ConfigureAwait(false);
 
         return new ContentUploadResult(ContentUploadOutcome.Uploaded, contentVersionId);
     }
 
     private async Task<SasUriRenewal> RenewSasUriAsync(
-        string appId, string contentVersionId, string fileId, ContentUploadOptions options, bool useBeta, CancellationToken cancellationToken)
+        string appId, string contentVersionId, string fileId, ContentUploadOptions options, string oDataType, bool useBeta, CancellationToken cancellationToken)
     {
-        await _contentClient.RenewUploadAsync(appId, contentVersionId, fileId, useBeta, cancellationToken).ConfigureAwait(false);
+        await _contentClient.RenewUploadAsync(appId, contentVersionId, fileId, oDataType, useBeta, cancellationToken).ConfigureAwait(false);
         var renewed = await PollFileStateAsync(
                 appId, contentVersionId, fileId, stage: "azureStorageUriRenewal",
                 successState: "azureStorageUriRenewalSuccess", failureStates: AzureStorageUriRenewalFailureStates,
-                options.AzureStorageUriPollInterval, options.AzureStorageUriTimeout, useBeta, cancellationToken)
+                options.AzureStorageUriPollInterval, options.AzureStorageUriTimeout, oDataType, useBeta, cancellationToken)
             .ConfigureAwait(false);
 
         return new SasUriRenewal(
@@ -171,15 +179,52 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         => file.AzureStorageUriExpirationDateTime
             ?? throw new GraphRequestException($"Graph reported '{uploadState}' without an azureStorageUriExpirationDateTime.", null, null, null);
 
+    private Task PatchNotesWithPublishingStateRetryAsync(
+        string appId,
+        string notes,
+        string oDataType,
+        ContentUploadOptions options,
+        bool useBeta,
+        CancellationToken cancellationToken)
+        => ExecuteAppPatchWithPublishingStateRetryAsync(
+            appId,
+            options,
+            useBeta,
+            ct => _contentClient.PatchNotesAsync(appId, notes, oDataType, useBeta, ct),
+            cancellationToken);
+
+    private async Task ExecuteAppPatchWithPublishingStateRetryAsync(
+        string appId,
+        ContentUploadOptions options,
+        bool useBeta,
+        Func<CancellationToken, Task> patchAsync,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await patchAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (GraphRequestException ex) when (IsPublishingStateNotPublished(ex))
+        {
+            await PollPublishingStateAsync(
+                appId, options.PublishingStatePollInterval, options.PublishingStateTimeout, useBeta, cancellationToken).ConfigureAwait(false);
+            await patchAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static bool IsPublishingStateNotPublished(GraphRequestException ex)
+        => ex.StatusCode == 400 &&
+           ex.Message.Contains("PublishingState is not 'Published'", StringComparison.OrdinalIgnoreCase);
+
     private async Task<MobileAppContentFileResponse> PollFileStateAsync(
         string appId, string contentVersionId, string fileId, string stage,
         string successState, IReadOnlySet<string> failureStates,
-        TimeSpan pollInterval, TimeSpan timeout, bool useBeta, CancellationToken cancellationToken)
+        TimeSpan pollInterval, TimeSpan timeout, string oDataType, bool useBeta, CancellationToken cancellationToken)
     {
         var deadline = _timeProvider.GetUtcNow() + timeout;
         while (true)
         {
-            var file = await _contentClient.GetContentFileAsync(appId, contentVersionId, fileId, useBeta, cancellationToken).ConfigureAwait(false);
+            var file = await _contentClient.GetContentFileAsync(appId, contentVersionId, fileId, oDataType, useBeta, cancellationToken).ConfigureAwait(false);
             if (string.Equals(file.UploadState, successState, StringComparison.Ordinal))
             {
                 return file;
