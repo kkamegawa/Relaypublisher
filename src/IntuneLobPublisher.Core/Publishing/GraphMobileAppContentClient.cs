@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using IntuneLobPublisher.Core.Exceptions;
 
 namespace IntuneLobPublisher.Core.Publishing;
 
@@ -130,7 +131,7 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         => $"{VersionSegment(useBeta)}/deviceAppManagement/mobileApps/{Uri.EscapeDataString(appId)}";
 
     private static string ContentRootPath(string appId, string oDataType, bool useBeta)
-        => $"{AppPath(appId, useBeta)}/{Uri.EscapeDataString(ToGraphTypeSegment(oDataType))}";
+        => $"{AppPath(appId, useBeta)}/{ToGraphTypeSegment(oDataType)}";
 
     private static string ContentVersionPath(string appId, string contentVersionId, string oDataType, bool useBeta)
         => $"{ContentRootPath(appId, oDataType, useBeta)}/contentVersions/{Uri.EscapeDataString(contentVersionId)}";
@@ -138,14 +139,36 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
     private static string FilePath(string appId, string contentVersionId, string fileId, string oDataType, bool useBeta)
         => $"{ContentVersionPath(appId, contentVersionId, oDataType, useBeta)}/files/{Uri.EscapeDataString(fileId)}";
 
+    /// <summary>
+    /// The OData type-cast path segments this client is known to build a URL for. This is a route
+    /// element, not a data value, so it is validated against this fixed set rather than percent-encoded:
+    /// <see cref="Uri.EscapeDataString(string)"/> would silently corrupt the route for any input outside
+    /// this set instead of failing loudly, and every caller in this codebase only ever passes one of
+    /// these three (<see cref="WindowsAppPublisher"/>, <see cref="MacOsAppPayloadMapper"/>).
+    /// </summary>
+    private static readonly HashSet<string> KnownGraphTypeSegments = new(StringComparer.Ordinal)
+    {
+        "microsoft.graph.win32LobApp",
+        "microsoft.graph.macOSPkgApp",
+        "microsoft.graph.macOSLobApp",
+    };
+
     private static string ToGraphTypeSegment(string oDataType)
     {
         if (string.IsNullOrWhiteSpace(oDataType))
         {
-            throw new ArgumentException("OData type must be provided for mobile app content operations.", nameof(oDataType));
+            throw new GraphRequestException(
+                "OData type must be provided for mobile app content operations.", null, null, null);
         }
 
-        return oDataType.StartsWith("#", StringComparison.Ordinal) ? oDataType[1..] : oDataType;
+        var segment = oDataType.StartsWith("#", StringComparison.Ordinal) ? oDataType[1..] : oDataType;
+        if (!KnownGraphTypeSegments.Contains(segment))
+        {
+            throw new GraphRequestException(
+                $"'{oDataType}' is not a recognized OData type for mobile app content operations.", null, null, null);
+        }
+
+        return segment;
     }
 
     private static string VersionSegment(bool useBeta) => useBeta ? "/beta" : "/v1.0";

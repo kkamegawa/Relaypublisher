@@ -293,7 +293,7 @@ If publish reports missing package metadata:
 
 - **`UnsupportedMacOsVersionException` mentioning "no known macOS minimum-operating-system mapping"**:
   `Requirements.MinimumOSVersion` is not one of the values `MacOsMinimumOperatingSystemTable` recognizes
-  (`10.13`-`13.0`, or `14`/`14.0`/`15`/`15.0` for `AppType: pkg` only). This mapping only runs during
+  (`10.13`-`13.0`, or `14`/`14.0`/`15`/`15.0`/`26`/`26.0` for `AppType: pkg` only). This mapping only runs during
   `publish` (including `--dry-run`), not `package`, so fix the version string before publishing.
 - **`UnsupportedMacOsVersionException` mentioning "AppType 'pkg'"**: the manifest has `AppType: lob` with
   `Requirements.MinimumOSVersion` set to macOS 14 or later. `macOSLobApp` stays on Graph v1.0, which has no
@@ -304,12 +304,23 @@ If publish reports missing package metadata:
   this kind of error before any Graph write).
 - **`Detection.IncludedApps` missing or empty**: every macOS app entry requires at least one
   `IncludedApps` item (`BundleId` + `BundleVersion`); this fails at `validate`, not `publish`.
-- **PKG content upload never reaches `commitFileSuccess`**: `PkgContentPreparer`'s AES-256-CBC + HMAC-SHA256
-  encryption format has no published Microsoft specification (see doc/00-overview.md §6.13) - it is derived
-  from the same community-established scheme `IntuneWinContentExtractor` already relies on to parse
-  `.intunewin` content, cross-checked against the documented `fileEncryptionInfo.mac` semantics. If commit
-  repeatedly fails for macOS entries specifically (Windows entries unaffected), file an issue with the
-  Graph error and `client-request-id`/`request-id` from the log rather than retrying blindly.
+- **PKG content upload never reaches `commitFileSuccess`, or fails with an HTTP 400 on the SAS URI upload
+  itself (fixed)**: earlier versions of `PkgContentPreparer` uploaded only the AES-256-CBC ciphertext, but
+  Intune expects the uploaded content stream to start with a 48-byte `[mac (32 bytes)][iv (16 bytes)]`
+  header in front of the ciphertext - the same layout a `.intunewin` content entry already has, which is
+  why `IntuneWinContentExtractor` could stream it unmodified. This was confirmed against Microsoft's own
+  reference implementation (`microsoftgraph/powershell-intune-samples`, `LOB_Application/Application_LOB_Add.ps1`,
+  the `EncryptFileWithIV` function) rather than reverse-engineered. `PkgContentPreparer` now writes that
+  header (see doc/00-overview.md §6.13). If commit still fails for macOS entries specifically (Windows
+  entries unaffected) after upgrading, file an issue with the Graph error and `client-request-id`/
+  `request-id` from the log rather than retrying blindly.
+- **`GraphRequestException` 400 mentioning `v14_0`/`v15_0` "does not exist on type
+  'microsoft.graph.macOSMinimumOperatingSystem'" (fixed)**: earlier versions always serialized `v14_0`
+  and `v15_0` (even as `false`) on every macOS app payload, but Graph v1.0's `macOSMinimumOperatingSystem`
+  has no such properties at all - only the beta resource does. This made every `AppType: lob` create/update
+  fail, regardless of `Requirements.MinimumOSVersion`. `MacOsMinimumOperatingSystemPayload` now leaves
+  those fields (and the newly-added beta-only `v26_0`) null for a v1.0 target, so they are omitted from
+  the request body instead of sent as a literal `false`.
 - **`GraphRequestException` with a 403/404 specific to macOS `AppType: pkg` entries**: pkg apps are
   created, updated, and content-uploaded entirely through Graph **beta** (`macOSPkgApp` does not exist in
   v1.0). Confirm the service principal's Graph permissions (section 2a) and the tenant's beta API

@@ -34,8 +34,13 @@ public sealed class WindowsAppPublisher : IPlatformAppPublisher
         return await _appClient.CreateAppAsync(payload, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task UpdateAppAsync(string appId, PublishRequest request, CancellationToken cancellationToken)
+    public async Task UpdateAppAsync(string appId, PublishRequest request, ContentUploadOptions options, CancellationToken cancellationToken)
     {
+        // Guards against an app left mid-"processing" by an interrupted previous run: this PATCH is the
+        // first Graph write of the run, and win32LobApp always stays on v1.0 (useBeta: false).
+        await _contentOrchestrator.WaitWhilePublishingStateProcessingAsync(appId, options, useBeta: false, cancellationToken)
+            .ConfigureAwait(false);
+
         var (detectionScript, iconBytes) = await ReadAssetsAsync(request, cancellationToken).ConfigureAwait(false);
         var payload = Win32LobAppPayloadMapper.Map(request.Manifest, request.App, detectionScript, iconBytes);
         await _appClient.UpdateAppAsync(appId, payload, cancellationToken).ConfigureAwait(false);

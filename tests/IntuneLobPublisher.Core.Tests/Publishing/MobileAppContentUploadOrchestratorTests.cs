@@ -32,8 +32,6 @@ public sealed class MobileAppContentUploadOrchestratorTests
 
         public Queue<string> PublishingStates { get; } = new();
 
-        public Queue<Exception> PatchNotesFailures { get; } = new();
-
         public List<(string Name, long Size, long SizeEncrypted)> CreateContentFileCalls { get; } = [];
 
         public List<FileEncryptionInfoPayload> CommitFileCalls { get; } = [];
@@ -101,11 +99,6 @@ public sealed class MobileAppContentUploadOrchestratorTests
 
         public Task PatchNotesAsync(string appId, string notes, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
-            if (PatchNotesFailures.TryDequeue(out var failure))
-            {
-                throw failure;
-            }
-
             PatchedNotes.Add(notes);
             ODataTypeCalls.Add(oDataType);
             UseBetaCalls.Add(useBeta);
@@ -231,6 +224,7 @@ public sealed class MobileAppContentUploadOrchestratorTests
     public async Task PublishContentAsync_MatchingInputHash_SkipsUploadAndOnlyPatchesNotes()
     {
         var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("published");
         var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
         var metadata = CreateMetadata();
 
@@ -245,13 +239,17 @@ public sealed class MobileAppContentUploadOrchestratorTests
     }
 
     [TestMethod]
-    public async Task PublishContentAsync_MatchingInputHash_PatchNotesReturnsPublishingStateNotPublished_WaitsAndRetries()
+    public async Task PublishContentAsync_MatchingInputHash_WaitsForProcessingToClearBeforePatchingNotes()
     {
+        // Regression test for the fixed bug: the skip path used to retry the notes PATCH *after* it
+        // failed with a 400, catching the exception and then polling for publishingState == "published"
+        // - which cannot work when the app has never had content committed (see
+        // WaitWhilePublishingStateProcessingAsync's doc comment). The fix guards *before* the PATCH and
+        // accepts any non-"processing" state, so this never issues a doomed PATCH in the first place.
         var client = new FakeMobileAppContentClient();
-        client.PatchNotesFailures.Enqueue(new GraphRequestException(
-            "Invalid operation: app's PublishingState is not 'Published'.", 400, null, null));
         client.PublishingStates.Enqueue("processing");
-        client.PublishingStates.Enqueue("published");
+        client.PublishingStates.Enqueue("processing");
+        client.PublishingStates.Enqueue("notPublished");
         var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
         var metadata = CreateMetadata();
 
@@ -261,6 +259,24 @@ public sealed class MobileAppContentUploadOrchestratorTests
         Assert.AreEqual(ContentUploadOutcome.SkippedUnchanged, result.Outcome);
         Assert.HasCount(1, client.PatchedNotes);
         Assert.AreEqual(metadata.Serialize(), client.PatchedNotes[0]);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_MatchingInputHash_ProcessingNeverClears_ThrowsContentUploadTimedOutExceptionWithoutPatchingNotes()
+    {
+        var client = new FakeMobileAppContentClient();
+        for (var i = 0; i < 10; i++)
+        {
+            client.PublishingStates.Enqueue("processing");
+        }
+
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+
+        var ex = await Assert.ThrowsExactlyAsync<ContentUploadTimedOutException>(() => PublishAsync(
+            orchestrator, "app-1", CreateContent(inputHash: "same-hash"), storedInputHash: "same-hash", CreateMetadata(), FastOptions()));
+
+        Assert.AreEqual("publishingState", ex.Stage);
+        Assert.IsEmpty(client.PatchedNotes);
     }
 
     [TestMethod]

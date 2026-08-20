@@ -14,16 +14,25 @@ namespace IntuneLobPublisher.Core.Publishing;
 /// <param name="ClientRequestId">The `client-request-id` header Graph echoes back. Never a secret.</param>
 /// <param name="RequestId">The `request-id` header Graph returns. Never a secret.</param>
 /// <param name="ErrorCode">Graph's `error.code` value, when the body carried one.</param>
+/// <param name="ErrorMessage">
+/// Graph's own `error.message` text (collapsed to one line, capped like everything folded into
+/// <see cref="Summary"/>), exposed as its own field. Callers that need to pattern-match on the server's
+/// own wording - e.g. detecting a specific "PublishingState is not 'Published'" 400 to retry - should use
+/// this instead of substring-matching <see cref="Summary"/>/<c>GraphRequestException.Message</c>, which
+/// also carries the request URI, status code and correlation ids and can coincidentally contain
+/// unrelated text (e.g. a `client-request-id` that happens to embed the searched substring).
+/// </param>
 public sealed record GraphFailure(
     string Summary,
     int StatusCode,
     string? ClientRequestId,
     string? RequestId,
-    string? ErrorCode)
+    string? ErrorCode,
+    string? ErrorMessage = null)
 {
     /// <summary>Builds the per-call exception. <paramref name="prefix"/> names the operation that failed.</summary>
     public GraphRequestException ToRequestException(string? prefix = null)
-        => new(Compose(prefix), StatusCode, ClientRequestId, RequestId, ErrorCode);
+        => new(Compose(prefix), StatusCode, ClientRequestId, RequestId, ErrorCode, ErrorMessage);
 
     /// <summary>Builds the identity-wide exception used when no other call can succeed either.</summary>
     public GraphAccessDeniedException ToAccessDeniedException(string? prefix = null)
@@ -99,7 +108,7 @@ public static class GraphErrorReader
             summary.Append(' ').Append(PermissionHint);
         }
 
-        return new GraphFailure(summary.ToString(), statusCode, clientRequestId, requestId, errorCode);
+        return new GraphFailure(summary.ToString(), statusCode, clientRequestId, requestId, errorCode, errorMessage);
     }
 
     /// <summary>Reads a response header Graph uses for support correlation. Returns null when absent.</summary>

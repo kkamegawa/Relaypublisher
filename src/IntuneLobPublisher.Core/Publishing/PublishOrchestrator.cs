@@ -127,7 +127,13 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         else
         {
             appId = resolution.AppId!;
-            await platformPublisher.UpdateAppAsync(appId, request, cancellationToken).ConfigureAwait(false);
+            // Known caveat: this PATCH writes version-dependent fields (fileName, primaryBundleVersion/
+            // includedApps, buildNumber/versionNumber) from the *new* manifest before the matching content
+            // is uploaded and committed below. If content upload fails partway through, the app is left
+            // advertising the new version's metadata while committedContentVersion still points at the old
+            // content, until a later run's content upload succeeds. Reordering this against content upload
+            // would be a larger change spanning both platform publishers; not attempted here.
+            await platformPublisher.UpdateAppAsync(appId, request, _contentUploadOptions, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation(
                 "Updated app {AppId} for {PackageIdentifier} {Platform}-{Architecture}",
                 appId, identity.PackageIdentifier, identity.Platform, identity.Architecture);

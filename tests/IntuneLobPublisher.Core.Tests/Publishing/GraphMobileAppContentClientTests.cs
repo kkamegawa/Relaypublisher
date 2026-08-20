@@ -10,6 +10,7 @@ public sealed class GraphMobileAppContentClientTests
 {
     private const string WindowsODataType = "#microsoft.graph.win32LobApp";
     private const string MacPkgODataType = "#microsoft.graph.macOSPkgApp";
+    private const string MacLobODataType = "#microsoft.graph.macOSLobApp";
 
     private sealed class QueueHandler : HttpMessageHandler
     {
@@ -206,5 +207,33 @@ public sealed class GraphMobileAppContentClientTests
         Assert.AreEqual(403, ex.StatusCode);
         Assert.AreEqual("client-id-1", ex.ClientRequestId);
         Assert.AreEqual("request-id-1", ex.RequestId);
+    }
+
+    [TestMethod]
+    public async Task CreateContentVersionAsync_MacOsLobODataType_UsesMacOsLobAppCastSegment()
+    {
+        var (client, handler) = CreateClient(
+            _ => JsonResponse(HttpStatusCode.Created, """{"id":"cv-1"}"""));
+
+        await client.CreateContentVersionAsync("app-1", MacLobODataType, useBeta: false, CancellationToken.None);
+
+        Assert.AreEqual(
+            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/microsoft.graph.macOSLobApp/contentVersions",
+            handler.Requests[0].Uri);
+    }
+
+    [TestMethod]
+    public async Task CreateContentVersionAsync_UnrecognizedODataType_ThrowsGraphRequestExceptionWithoutCallingGraph()
+    {
+        // The type-cast segment is a URL route element, not a data value: an unrecognized value must
+        // fail loudly here rather than being percent-encoded into a path Graph will 404 or 400 on.
+        var (client, handler) = CreateClient(
+            _ => throw new InvalidOperationException("Should not reach the network for an unrecognized OData type."));
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(
+            () => client.CreateContentVersionAsync("app-1", "#microsoft.graph.unknownAppType", useBeta: false, CancellationToken.None));
+
+        StringAssert.Contains(ex.Message, "unknownAppType");
+        Assert.IsEmpty(handler.Requests);
     }
 }
