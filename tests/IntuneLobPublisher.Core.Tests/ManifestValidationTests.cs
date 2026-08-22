@@ -596,4 +596,69 @@ public sealed class ManifestValidationTests
 
         AssertInvalid(manifest, "must have the '.sh' extension");
     }
+
+    private static IntunePackageManifest ManifestWithCategories(List<string>? categories)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Categories = categories;
+        return manifest;
+    }
+
+    [TestMethod]
+    public void Validate_CategoriesOmitted_Passes()
+    {
+        var result = _validator.Validate(ManifestWithCategories(null));
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => e.ErrorMessage)));
+    }
+
+    [TestMethod]
+    public void Validate_CategoriesEmptyList_Passes()
+    {
+        // An explicit empty list means "remove every relationship"; it is valid, not a mistake.
+        var result = _validator.Validate(ManifestWithCategories([]));
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => e.ErrorMessage)));
+    }
+
+    [TestMethod]
+    public void Validate_CategoriesWithDistinctNames_Passes()
+    {
+        var result = _validator.Validate(ManifestWithCategories(["Business Apps", "Productivity"]));
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => e.ErrorMessage)));
+    }
+
+    [TestMethod]
+    public void Validate_CategoryNameWithInnerSpacesAndSymbols_Passes()
+    {
+        // No character-class, length or count restriction is imposed locally: the tenant catalog decides.
+        var result = _validator.Validate(ManifestWithCategories(["Line-of-Business & Ops (JP)", "業務アプリ"]));
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => e.ErrorMessage)));
+    }
+
+    [TestMethod]
+    [DataRow("")]
+    [DataRow(" ")]
+    [DataRow("\t")]
+    public void Validate_EmptyOrWhitespaceCategory_Fails(string category)
+    {
+        AssertInvalid(ManifestWithCategories([category]), "empty or whitespace-only");
+    }
+
+    [TestMethod]
+    [DataRow(" Business Apps")]
+    [DataRow("Business Apps ")]
+    [DataRow("\tBusiness Apps")]
+    public void Validate_CategoryWithOuterWhitespace_Fails(string category)
+    {
+        // Names are never trimmed, so a padded name would silently fail to resolve in the tenant.
+        AssertInvalid(ManifestWithCategories([category]), "leading or trailing whitespace");
+    }
+
+    [TestMethod]
+    [DataRow("Business Apps", "business apps")]
+    [DataRow("Business Apps", "BUSINESS APPS")]
+    [DataRow("Business Apps", "Business Apps")]
+    public void Validate_CaseInsensitiveDuplicateCategories_Fails(string first, string second)
+    {
+        AssertInvalid(ManifestWithCategories([first, second]), "duplicate names");
+    }
 }

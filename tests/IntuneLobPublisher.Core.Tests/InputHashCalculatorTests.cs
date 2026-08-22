@@ -86,4 +86,72 @@ public sealed class InputHashCalculatorTests
             InputHashCalculator.ComputeManifestHash(TestManifests.CreateValid()),
             InputHashCalculator.ComputeManifestHash(TestManifests.CreateValid()));
     }
+
+    /// <summary>
+    /// Pinned so that adding an optional manifest field can never silently re-hash - and therefore
+    /// re-package and re-upload - every existing manifest in a repository (issue #99). `Categories` is
+    /// nullable with no initializer specifically so the canonical JSON of a manifest that does not
+    /// declare it stays byte-identical.
+    /// </summary>
+    private const string PinnedManifestHashWithoutCategories =
+        "96016e43c0f78ced7e4a46c5c1699377a31045eec1be183124fc6e2b6e205edc";
+
+    private const string PinnedInputHashWithoutCategories =
+        "379fc955db9c86bb41719a6a1cc930eb8ea50b8c52914d649c53c9a609fd452d";
+
+    [TestMethod]
+    public void ComputeManifestHash_ManifestWithoutCategories_MatchesThePinnedValue()
+    {
+        Assert.AreEqual(
+            PinnedManifestHashWithoutCategories,
+            InputHashCalculator.ComputeManifestHash(TestManifests.CreateValid()));
+    }
+
+    [TestMethod]
+    public async Task ComputeInputHashAsync_ManifestWithoutCategories_MatchesThePinnedValue()
+    {
+        Assert.AreEqual(
+            PinnedInputHashWithoutCategories,
+            await InputHashCalculator.ComputeInputHashAsync(
+                TestManifests.CreateValid(), _stagingDirectory, CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task ComputeInputHashAsync_AddingCategories_ChangesTheHash()
+    {
+        // A category-only manifest change still moves the manifest-wide inputHash, so content may be
+        // re-packaged and re-uploaded. That contract is deliberately unchanged (doc/00-overview.md §6.7).
+        var withCategories = TestManifests.CreateValid();
+        withCategories.Apps[0].Categories = ["Business Apps"];
+
+        var after = await InputHashCalculator.ComputeInputHashAsync(
+            withCategories, _stagingDirectory, CancellationToken.None);
+
+        Assert.AreNotEqual(PinnedInputHashWithoutCategories, after);
+    }
+
+    [TestMethod]
+    public void ComputeManifestHash_EmptyCategoriesDiffersFromOmitted()
+    {
+        var withEmptyCategories = TestManifests.CreateValid();
+        withEmptyCategories.Apps[0].Categories = [];
+
+        Assert.AreNotEqual(
+            PinnedManifestHashWithoutCategories,
+            InputHashCalculator.ComputeManifestHash(withEmptyCategories),
+            "`Categories: []` is a real instruction (remove everything), so it must be a hash input.");
+    }
+
+    [TestMethod]
+    public void ComputeManifestHash_CategoryOrderChange_ChangesTheHash()
+    {
+        var first = TestManifests.CreateValid();
+        first.Apps[0].Categories = ["Business Apps", "Productivity"];
+        var second = TestManifests.CreateValid();
+        second.Apps[0].Categories = ["Productivity", "Business Apps"];
+
+        Assert.AreNotEqual(
+            InputHashCalculator.ComputeManifestHash(first),
+            InputHashCalculator.ComputeManifestHash(second));
+    }
 }

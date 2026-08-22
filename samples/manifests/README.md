@@ -64,6 +64,32 @@ Assignments:
     Intent: required
 ```
 
+## App categories
+
+No sample declares `Categories`, on purpose: category names are tenant-specific, and a name that does not
+exist in the target tenant fails the publish preflight. Omitting `Categories` is also the only value that
+touches nothing — the app's current categories are preserved and no category Graph call is made at all.
+
+To try it, create the category in the Intune admin center first, then add it to the app entry:
+
+```yaml
+Apps:
+  - Platform: macos
+    Architecture: arm64
+    Categories:
+      - Business Apps
+```
+
+`Categories: []` is different from omitting the key: it removes every category relationship from the app.
+Names are matched against the tenant's `mobileAppCategory.displayName` case-insensitively but otherwise
+verbatim, and Relaypublisher never creates, renames, or deletes a category. `validate` cannot check the name
+against the tenant; run `publish --dry-run` to see the category plan. See
+[doc/05-operation.md §4d](../../doc/05-operation.md#4d-intune-app-categories) and
+[doc/01-manifest-schema.md §5.8](../../doc/01-manifest-schema.md).
+
+Note that adding or changing `Categories` changes the manifest-wide `inputHash`, so the next `package` /
+`publish` re-packages and re-uploads the content even though only metadata changed.
+
 ## Running the PowerShell sample end to end
 
 ```bash

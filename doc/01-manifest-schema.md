@@ -322,4 +322,43 @@ macOS:
 | `Detection.IncludedApps`(`AppType: pkg`) | `includedApps`(`macOSIncludedApp`: `bundleId` + `bundleVersion`) | 先頭要素の値がそのまま `primaryBundleId` / `primaryBundleVersion` にもなる |
 | `Detection.IncludedApps`(`AppType: lob`) | `childApps`(`macOSLobChildApp`: `bundleId` + `buildNumber` + `versionNumber`)。先頭要素が top-level `buildNumber` / `versionNumber` にもなる | `pkg` の `includedApps` とはフィールド名・形が異なる点に注意 |
 
+### 5.8 Categories(Intune app category / GitHub #99)
+
+`Categories` は `Apps[]` 配下の任意フィールドで、その app entry を関連付ける Intune app category の
+`displayName` を列挙する。platform / architecture ごとに Intune app が分かれるため、カテゴリも app entry ごとに
+独立して指定する。
+
+```yaml
+Apps:
+  - Platform: windows
+    Architecture: x64
+    Categories:
+      - Business Apps
+      - Productivity
+```
+
+意味論は次のとおり。`Categories` は **nullable** な model(省略時は `null`)であり、省略と空配列は別物として扱う。
+
+| Manifest | 動作 |
+|---|---|
+| `Categories` 省略 | 既存の app-category relationship を変更しない。category 関連の Graph 呼び出しを一切行わない |
+| `Categories: []` | 既存の app-category relationship をすべて解除する(desired set が空集合) |
+| 1 件以上 | 指定されたカテゴリ集合に完全同期する(未指定の既存 relationship は解除) |
+
+カテゴリ名は tenant 内の `mobileAppCategory.displayName` を正本とする。tenant 固有の category ID は manifest に
+保存しない。カテゴリそのものの作成・改名・削除は対象外で、Relaypublisher は app との relationship だけを操作する。
+
+ローカル validation(`validate`)は Graph に接続せず、次のみを検証する。
+
+- 各要素が空文字・空白のみでないこと。
+- 各要素が前後に空白を持たないこと(名前は trim も Unicode 正規化もしない)。
+- 同一 app entry 内で `OrdinalIgnoreCase` の重複がないこと。
+- 件数上限・文字数上限・使用可能文字の制限は設けない。
+
+そのため、**tenant に存在しないカテゴリ名は `validate` では検出できない**。検出は publish / dry-run の Graph
+preflight(§6.20)で行われる。
+
+`SchemaVersion` は `"1.0"` のまま(additive optional field)。`Categories` を宣言していない既存 manifest の
+`manifestHash` / `inputHash` は本変更の前後で変わらない(§6.7、doc/00-overview.md §6.20)。
+
 ---

@@ -275,6 +275,18 @@ inputHash = SHA256(
 - publish 時、Intune 側 metadata の `inputHash` と一致すればコンテンツアップロードをスキップする(assignment 差分のみ適用)。
 - 再実行(retry)しても同じ結果に収束することを acceptance criteria とする。
 
+manifest schema に optional field を追加するときの hash 互換性(#99):
+
+- 新しい optional field は **nullable + 初期値なし**で定義する。canonical JSON は null property を落とすため、その
+  field を宣言していない既存 manifest の `manifestHash` / `inputHash` は変わらない。非 nullable の空 collection
+  (`= []`)にすると常に `"field":[]` が出力され、repository 内の**全** manifest の hash が変わって初回実行で
+  全 app が再package / 再upload される(macOS PKG は最大 8 GB)。この不変条件は pinned hash の test で固定する。
+- `ManifestLoader` は `IgnoreUnmatchedProperties()` のため、新 field を宣言した manifest を**古い CLI** で処理すると
+  古い hash が計算される。新旧 CLI を交互に実行すると `inputHash` が振動して毎回 upload が発生するため、
+  新 field(`Categories` など)を使い始めたら **CI と手元の CLI バージョンを揃える**こと。
+- 逆に、field を宣言した manifest の hash は変わる。カテゴリだけを変更した manifest でも content 再package /
+  再upload が発生し得る(6.20)。
+
 ### 6.8 ダウングレード防止とバージョンフォルダのライフサイクル
 
 manifest はバージョン別フォルダで管理するが、app identity はバージョンを含まないため以下を仕様とする。
@@ -299,6 +311,7 @@ Rollback 機能は実装しないが、Win32 コンテンツ更新のトラン�
 - 新しい content version の作成・ファイルアップロード・commit までは、**既存クライアントには旧コンテンツが配信され続ける**。この区間での失敗は安全であり、再実行すれば収束する。
 - `win32LobApp.committedContentVersion` を PATCH した時点で新コンテンツが有効になる。**この操作以降は戻せない**(戻すには旧バージョンの manifest を `--allow-downgrade` で再 publish する)。
 - app 本体のプロパティ PATCH と assignment 適用は個別に冪等であり、部分失敗しても再実行で収束する。
+- category relationship の `$ref` add/remove も個別に冪等であり、app create/update の直後・content upload の前に適用する(6.20)。content upload や assignment sync が失敗しても、次回実行時に Graph の現在値から plan を再計算して収束する。
 
 ### 6.11 App 削除・リタイアのライフサイクル
 
@@ -414,6 +427,56 @@ Windows 専用の IntuneWin パッケージング境界を検証するテスト�
 これは推奨事項であり、AGENTS.md の設計上の不変条件には追加しない。
 
 参照: [Credential chains in the Azure Identity library for .NET](https://learn.microsoft.com/dotnet/azure/sdk/authentication/credential-chains)、[Use deterministic credentials in production environments](https://learn.microsoft.com/dotnet/azure/sdk/authentication/best-practices#use-deterministic-credentials-in-production-environments)。
+
+### 6.20 Intune app category(GitHub #99)
+
+Intune の app category は tenant 共有の `mobileAppCategory` リソースであり、app 側からは scalar property ではなく
+`categories` navigation relationship として見える。Relaypublisher は **category リソース自体のライフサイクル(作成 /
+改名 / 削除)を管理せず、app との relationship だけを宣言的に同期する**。
+
+- manifest の宣言は `Apps[]` 配下の `Categories`(doc/01-manifest-schema.md §5.8)。省略 / 空配列 / 1 件以上で
+  意味が異なり、model は nullable(`List<string>?`)とする。省略時は category 関連の Graph read も write も行わない。
+- 名前解決は tenant の category 一覧を `@odata.nextLink` に従ってページング取得し、`OrdinalIgnoreCase` の完全一致で
+  行う。**0 件一致・複数件一致は、その app entry の最初の category write より前に fail** させる。
+- Graph 呼び出しは次の 4 つ。関連解除では `mobileAppCategories/{id}` 自体を DELETE せず、必ず app 側の `$ref` を
+  DELETE する。
+
+  | 操作 | 呼び出し |
+  |---|---|
+  | tenant catalog 取得 | `GET /{version}/deviceAppManagement/mobileAppCategories` |
+  | app の現在値取得 | `GET /{version}/deviceAppManagement/mobileApps/{appId}/categories` |
+  | 関連付け | `POST /{version}/deviceAppManagement/mobileApps/{appId}/categories/$ref` |
+  | 関連解除 | `DELETE /{version}/deviceAppManagement/mobileApps/{appId}/categories/{categoryId}/$ref` |
+
+- API version は既存 client と同じ規則(Windows `win32LobApp` と macOS `macOSLobApp` は v1.0、macOS `macOSPkgApp` は
+  beta)。`$ref` body の `@odata.id` は `GraphClientOptions.BaseAddress` の scheme + authority と、**その request と
+  同じ version segment** から組み立てる。host も version もハードコードしない(`BaseAddress` は `/v1.0/` で終わるため、
+  そこに相対結合すると beta request に v1.0 の参照を載せてしまう)。
+- **処理順序**は次で固定する(6.10 のトランザクション境界に従う)。
+
+  1. app resolution と downgrade guard
+  2. category preflight(tenant 名前解決 + 既存 app なら現在の relationship 取得と plan 作成)
+  3. app create/update
+  4. category relationship apply(add を先、remove を後)
+  5. content publish
+  6. assignment plan / apply
+
+  category relationship は app が存在することにしか依存しないため、最大 8 GB になり得る content upload の**前**に
+  適用して失敗ウィンドウを最小化する。新規 app では preflight で名前解決だけを済ませ(app ID がまだ無いので
+  per-app GET は行わない)、作成後に解決済み ID で add だけを適用する。dry-run は read のみ行い、plan を表示して
+  write は行わない。新規 app の plan では `(new app)` を app ID placeholder として使う。
+- `$ref` の冪等性: `GraphRetryHandler` は 429/503 で request body ごと再送するため、POST が二重に届き得る。
+  **「既に関連付け済み」を明示するレスポンスだけを成功として扱い**、DELETE の 404 も成功として扱う。判定できない
+  4xx は失敗のままとする(400 / 409 を一律に握り潰さない)。Learn には既存 category の `$ref` request example が
+  無いため、POST の重複判定は専用ヘルパー(`CategoryRefResponseClassifier`)に隔離し、実サービスの挙動が判明したら
+  そこだけを直せるようにする。
+- 失敗分類: 名前の不存在・曖昧一致・`$ref` 失敗は `CategorySyncException`(`PublisherException` 派生)とし、
+  その manifest entry だけを失敗させて batch は継続する(6.10)。ただし **tenant category 一覧の 401/403 は
+  identity-wide** なので `GraphAccessDeniedException` のままとし、CLI は batch を中断する(#94 と同じ扱い)。
+- 必要な application permission は既存の `DeviceManagementApps.ReadWrite.All` のまま(6.5)。同時実行制御も既存の
+  publish 直列化で足りる(6.9)。category ID や名前は management metadata の `notes` に保存しない。
+- `inputHash` は manifest 全体を対象とする現行契約のまま(6.7)。したがってカテゴリだけを変更した manifest でも
+  content 再package / 再upload が発生し得る。
 
 ---
 

@@ -329,9 +329,41 @@ If publish reports missing package metadata:
   any Graph call, so if it surfaces only at `publish` the repository root or working directory likely
   differs between the two commands.
 
+## 6b. Intune App Category Failures
+
+- **`CategorySyncException` mentioning "does not exist in the tenant"**: a `Categories` entry has no
+  `mobileAppCategory` with that display name. `validate` never contacts the tenant, so this is only caught by
+  the `publish` (or `publish --dry-run`) preflight. Create the category in the Intune admin center - the tool
+  deliberately never creates one - or fix the manifest spelling. Matching ignores case only; a leading or
+  trailing space is a different name, and `validate` already rejects padded names. The preflight runs before
+  the first write for that app, so nothing was created or updated when this fails, and only that manifest
+  entry fails: the rest of the batch continues and a rerun converges.
+- **`CategorySyncException` mentioning "matches N tenant categories"**: the tenant has several categories
+  whose display names differ only by case. A manifest name cannot address one of them unambiguously. Rename
+  or delete the duplicates in the Intune admin center.
+- **`CategorySyncException` wrapping a `$ref` failure**: the add (`POST .../categories/$ref`) or remove
+  (`DELETE .../categories/{id}/$ref`) call failed. Duplicate adds and missing removes are already treated as
+  success, so this is a real failure: check the Graph error text plus `client-request-id`/`request-id` in the
+  log. The next run replans from the app's current relationships, so a partial synchronization converges.
+- **403 while listing the tenant category catalog**: this is identity-wide (every entry that declares
+  `Categories` goes through the same listing), so it is reported as `GraphAccessDeniedException` and stops the
+  whole batch, exactly like a 403 on the app listing. Follow section 2a; category relationships need no
+  permission beyond `DeviceManagementApps.ReadWrite.All`.
+- **A category-only manifest change re-uploaded the content**: expected. The `inputHash` covers the whole
+  manifest (doc/00-overview.md §6.7), so changing `Categories` changes the hash and the content is packaged
+  and uploaded again.
+- **Content is re-uploaded on every run after adopting `Categories`**: different CLI versions are being used
+  against the same repository. An older CLI ignores the unknown `Categories` field and computes the older
+  `manifestHash`, so alternating versions makes `inputHash` oscillate. Pin CI and local installs to the same
+  version.
+- **`categoryOutcome` is null in the result file**: publishing never reached the category step for that
+  entry - a skip, a dry-run, or a failure before the preflight. It does not mean categories were cleared. A
+  failure after the app was resolved still reports `appId` as null, which is the accepted result-file shape.
+
 ## 7. Safe Rerun Rules
 
 - `validate`, `plan`, and `package --stage-only` are safe to rerun.
 - `package` is safe to rerun and should reproduce the same deterministic `inputHash` for the same inputs.
 - `publish --dry-run` is safe to rerun.
 - Real `publish` is designed to converge, but the content activation step cannot be undone by the tool. Roll back by publishing the previous manifest version with `--allow-downgrade`.
+- Category `$ref` add/remove is idempotent: a duplicate add and a missing remove are both treated as success, so an interrupted category synchronization converges on the next run.

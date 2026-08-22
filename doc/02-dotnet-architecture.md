@@ -19,6 +19,7 @@ IntuneLobPublisher.slnx
       Packaging/
       Publishing/
         Assignments/
+        Categories/
         ManagementMetadata.cs
       Sources/
 
@@ -106,6 +107,7 @@ Responsibilities:
 - commit + `committedContentVersion` PATCH
 - upload state polling
 - publishing state polling
+- app category relationship sync(`$ref` add/remove、`Publishing/Categories`)
 - assignment apply
 - notes metadata update
 - 429 / 503 の `Retry-After` 尊重 retry(全 Graph 呼び出し共通)
@@ -322,6 +324,59 @@ public enum AssignmentSyncMode
 }
 ```
 
+### 9.8 Category service(GitHub #99)
+
+`Publishing/Categories` は Intune app category relationship の同期だけを担当する。tenant-wide な
+`mobileAppCategory` リソースの作成 / 改名 / 削除は行わない(00-overview.md §6.20)。
+
+```csharp
+public interface ICategoryGraphClient
+{
+    Task<IReadOnlyList<IntuneAppCategory>> ListTenantCategoriesAsync(bool useBeta, CancellationToken cancellationToken);
+    Task<IReadOnlyList<IntuneAppCategory>> ListAppCategoriesAsync(string appId, bool useBeta, CancellationToken cancellationToken);
+    Task<bool> AddCategoryAsync(string appId, string categoryId, bool useBeta, CancellationToken cancellationToken);
+    Task<bool> RemoveCategoryAsync(string appId, string categoryId, bool useBeta, CancellationToken cancellationToken);
+}
+
+public interface ICategoryService
+{
+    // existingAppId が null(新規 app)なら tenant 名前解決だけを行い、per-app GET は行わない。
+    Task<CategoryPlan> CreatePlanAsync(string? existingAppId, AppManifest app, CancellationToken cancellationToken);
+
+    Task ApplyAsync(CategoryPlan plan, AppManifest app, CancellationToken cancellationToken);
+}
+```
+
+```csharp
+public sealed record IntuneAppCategory(string Id, string DisplayName);
+
+public enum CategoryPlanAction { Add, Keep, Remove }
+
+public sealed record CategoryPlanEntry(CategoryPlanAction Action, string CategoryId, string DisplayName);
+
+// Requested = false は「manifest が Categories を省略した」= Graph read も write も行わない状態。
+// Categories: [] (desired set が空集合) とは区別する。
+public sealed record CategoryPlan(string AppId, bool Requested, IReadOnlyList<CategoryPlanEntry> Entries);
+```
+
+補助クラス:
+
+- `CategoryNameResolver`: `OrdinalIgnoreCase` の完全一致で displayName → ID を解決する pure logic。0 件 / 複数件は
+  `CategorySyncException`。
+- `CategoryPlanner`: desired と current の差分から Add / Keep / Remove を決める pure logic。remove は表示順が
+  Graph の応答順に依存しないよう displayName でソートする。
+- `CategoryPlanFormatter`: dry-run / publish 用の decisive な plan 表示。`Requested = false` の plan は空文字を返す。
+- `CategoryRefResponseClassifier`: POST `$ref` の「既に関連付け済み」応答と DELETE `$ref` の 404 だけを成功に倒す
+  判定を隔離する。
+
+`Win32LobAppPayload` / `MacOsAppPayload` には `categories` を追加しない。relationship 操作は app create/update
+payload から完全に分離する。
+
+`IPublishOrchestrator.PublishAsync` は plan callback をまとめた `PublishReport`(`ReportCategoryPlan` /
+`ReportAssignmentPlan`)を受け取り、`PublishResult` は `CategoryPlan?` を保持する。publish result JSON には
+additive optional field `categoryOutcome`(`applied` / `unchanged` / `not-requested` / null)だけを追加し、
+既存 field の名前・型・順序は変更しない。
+
 ---
 
 
@@ -370,6 +425,10 @@ public sealed class AppManifest
     public RequirementsManifest? Requirements { get; init; }
 
     public List<AssignmentManifest> Assignments { get; init; } = [];
+
+    // 省略(null)= 既存 relationship を維持、[] = 全解除、1 件以上 = 完全同期。
+    // 省略と空配列を区別するため nullable かつ初期値なし(00-overview.md §6.7 / §6.20)。
+    public List<string>? Categories { get; init; }
 }
 ```
 

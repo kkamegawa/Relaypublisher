@@ -2,7 +2,6 @@ using System.Text.Json;
 using IntuneLobPublisher.Cli.Commands;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Publishing;
-using IntuneLobPublisher.Core.Publishing.Assignments;
 using IntuneLobPublisher.Core.Validation;
 
 namespace IntuneLobPublisher.Core.Tests.Cli;
@@ -37,7 +36,7 @@ public sealed class PublishCommandBatchAbortTests
         public int CallCount { get; private set; }
 
         public Task<PublishResult> PublishAsync(
-            PublishRequest request, Action<AssignmentPlan>? reportAssignmentPlan, CancellationToken cancellationToken)
+            PublishRequest request, PublishReport? report, CancellationToken cancellationToken)
         {
             CallCount++;
             throw _createException();
@@ -104,5 +103,25 @@ public sealed class PublishCommandBatchAbortTests
 
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(resultFile));
         Assert.AreEqual(2, document.RootElement.GetArrayLength());
+    }
+
+    [TestMethod]
+    public async Task PublishEntriesAsync_CategorySyncFailure_ContinuesWithTheRemainingEntries()
+    {
+        // A missing/ambiguous category name or a failed $ref is per-entry: the rest of the batch must
+        // still publish, and a rerun converges (issue #99).
+        var resultFile = Path.Combine(_repoRoot, "result.json");
+        var orchestrator = new ThrowingOrchestrator(
+            () => new CategorySyncException("Category 'Business Apps' does not exist in the tenant."));
+
+        var exitCode = await RunAsync(orchestrator, resultFile);
+
+        Assert.AreNotEqual(0, exitCode);
+        Assert.AreEqual(2, orchestrator.CallCount);
+
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(resultFile));
+        Assert.AreEqual(2, document.RootElement.GetArrayLength());
+        Assert.AreEqual("failed", document.RootElement[0].GetProperty("outcome").GetString());
+        Assert.AreEqual(JsonValueKind.Null, document.RootElement[0].GetProperty("categoryOutcome").ValueKind);
     }
 }

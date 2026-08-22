@@ -1,5 +1,6 @@
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Publishing.Assignments;
+using IntuneLobPublisher.Core.Publishing.Categories;
 
 namespace IntuneLobPublisher.Core.Publishing;
 
@@ -22,6 +23,21 @@ public sealed record PublishRequest(
     bool AllowDowngrade,
     bool DryRun);
 
+/// <summary>
+/// The plan callbacks <see cref="IPublishOrchestrator"/> invokes before applying each kind of plan,
+/// so the CLI can print the full diff first (issue-004). A dedicated object rather than one more
+/// delegate parameter, so adding a plan kind does not keep changing the method signature; every
+/// callback is optional and omitting the whole object reports nothing.
+/// </summary>
+public sealed class PublishReport
+{
+    /// <summary>Invoked with the computed category plan before it is applied, and in dry-run. Not invoked when the manifest omits <c>Categories</c>.</summary>
+    public Action<CategoryPlan>? ReportCategoryPlan { get; init; }
+
+    /// <summary>Invoked with the computed assignment plan before it is applied, and in dry-run.</summary>
+    public Action<AssignmentPlan>? ReportAssignmentPlan { get; init; }
+}
+
 public enum PublishOutcome
 {
     /// <summary>App metadata, content and assignments were applied.</summary>
@@ -38,6 +54,11 @@ public enum PublishOutcome
 }
 
 /// <summary>Result of publishing one manifest app entry.</summary>
+/// <param name="CategoryPlan">
+/// The computed category plan, when publishing got far enough to run the category preflight; null on
+/// skips and on failures raised before it. A plan with <c>Requested == false</c> means the manifest
+/// omitted <c>Categories</c>, which is distinct from "no plan was computed".
+/// </param>
 /// <param name="AssignmentPlan">The computed assignment plan, when publishing got that far; null on skips.</param>
 /// <param name="SkipReason">Human-readable reason for skip outcomes, null otherwise.</param>
 public sealed record PublishResult(
@@ -46,4 +67,5 @@ public sealed record PublishResult(
     bool AppCreated,
     ContentUploadOutcome? ContentOutcome,
     AssignmentPlan? AssignmentPlan,
-    string? SkipReason);
+    string? SkipReason,
+    CategoryPlan? CategoryPlan = null);

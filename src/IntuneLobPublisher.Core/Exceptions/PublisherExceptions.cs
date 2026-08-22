@@ -245,6 +245,27 @@ public sealed class AssignmentPlanningException : PublisherException
     }
 }
 
+/// <summary>
+/// Synchronizing Intune app categories failed for one manifest app entry: a requested category name
+/// has no match or more than one match in the tenant catalog, or a category relationship
+/// (<c>$ref</c>) read/write failed. Kept per-entry (a <see cref="PublisherException"/> the CLI reports
+/// and continues from) so one manifest entry's category problem does not abort the batch. An
+/// identity-wide 401/403 on the tenant category listing stays a <see cref="GraphAccessDeniedException"/>
+/// instead, because no other entry could succeed either.
+/// </summary>
+public sealed class CategorySyncException : PublisherException
+{
+    public CategorySyncException(string message)
+        : base(message)
+    {
+    }
+
+    public CategorySyncException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}
+
 /// <summary>Writing the publish result JSON file failed before or after publishing entries.</summary>
 public sealed class PublishResultOutputException : PublisherException
 {
@@ -292,11 +313,10 @@ public sealed class GraphRequestException : PublisherException
 
 /// <summary>
 /// Graph refused a call that the publishing identity must be able to make for *any* app entry to
-/// succeed - currently only the mobile app listing, which every entry goes through before anything
-/// else. Distinct from <see cref="GraphRequestException"/> so the CLI can abort the whole batch instead
-/// of repeating the same permission error once per entry. A 403 confined to one app type (for example
-/// macOS `AppType: pkg`, which is beta-only) stays a <see cref="GraphRequestException"/> so the rest of
-/// the batch still publishes.
+/// succeed, such as the mobile app listing or tenant category catalog. Distinct from
+/// <see cref="GraphRequestException"/> so the CLI can abort the whole batch instead of repeating the
+/// same permission error once per entry. A 403 confined to one app resource stays a
+/// <see cref="GraphRequestException"/> so the rest of the batch can still publish.
 /// </summary>
 public sealed class GraphAccessDeniedException : PublisherException
 {

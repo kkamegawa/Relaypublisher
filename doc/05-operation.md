@@ -409,6 +409,51 @@ relaypublisher publish --manifest-list manifest-list.json --package-dir ./out \
 See [samples/manifests/README.md](../samples/manifests/README.md#updating-the-powershell-sample-to-a-new-version)
 for a runnable example that adds a new version folder next to an existing one.
 
+## 4d. Intune App Categories
+
+An app entry can declare the Intune app categories it belongs to. Categories are tenant-wide
+`mobileAppCategory` resources; Relaypublisher only synchronizes the *relationship* between an app and an
+existing category. It never creates, renames, or deletes a category, so create the category in the Intune
+admin center first.
+
+```yaml
+Apps:
+  - Platform: windows
+    Architecture: x64
+    Categories:
+      - Business Apps
+      - Productivity
+```
+
+| Manifest | Effect |
+|---|---|
+| `Categories` omitted | The app's current categories are left untouched. No category Graph call is made at all. |
+| `Categories: []` | Every category relationship on the app is removed. |
+| One or more names | The listed set becomes the app's exact category set; anything else is removed. |
+
+Operational notes:
+
+- Names are matched against `mobileAppCategory.displayName`, case-insensitively but otherwise verbatim: no
+  trimming and no Unicode normalization. `validate` never contacts the tenant, so a **name that does not
+  exist in the tenant is only detected during `publish` or `publish --dry-run`**, in the preflight that runs
+  before the first write for that app. A missing or ambiguous name fails that manifest entry only; the rest
+  of the batch continues and a rerun converges.
+- `publish --dry-run` reads the tenant catalog and the app's current categories and prints the
+  add/keep/remove plan without writing anything. A new app shows the placeholder id `(new app)`.
+- Categories are applied right after the app is created or updated and *before* content is uploaded, so a
+  failed upload never leaves categories unsynchronized for longer than necessary.
+- The result file (`--result-file`) gains one additive field per entry, `categoryOutcome`: `applied`,
+  `unchanged`, `not-requested`, or null when publishing never reached the category step. Per-category
+  detail is in the console output and logs.
+- The `inputHash` covers the whole manifest, so **changing only `Categories` can still trigger repackaging
+  and a content re-upload**. Manifests that do not declare `Categories` keep their previous hashes exactly.
+- Once any manifest declares `Categories`, **keep every CLI that touches the repository on the same
+  version**. An older CLI ignores unknown manifest fields, computes the older hash, and alternating versions
+  makes `inputHash` oscillate and re-upload content on every run.
+- No extra Graph permission is required: `DeviceManagementApps.ReadWrite.All` already covers category
+  relationships. A 403 while listing the tenant catalog is identity-wide and stops the whole batch, just like
+  a 403 on the app listing (see [06-troubleshooting.md](06-troubleshooting.md) section 2a).
+
 ## 5. Exit Codes
 
 | Exit code | Meaning | Operator action |

@@ -327,9 +327,37 @@ Publish が package metadata missing を報告した場合:
   これを検出するため、`publish` でのみ表面化する場合は 2 つのコマンド間で repository root や作業ディレクトリが
   異なっている可能性が高い。
 
+## 6b. Intune app category の失敗
+
+- **`CategorySyncException`("does not exist in the tenant")**: `Categories` の名前に一致する
+  `mobileAppCategory` が tenant にない。`validate` は tenant に接続しないため、これは `publish`
+  (`--dry-run` を含む)の preflight でのみ検出される。category は Intune 管理センターで作成する
+  (本 tool は意図的に category を作らない)か、manifest の綴りを直す。照合は大小文字のみ無視するため、
+  前後の空白がある名前は別名になる(そもそも `validate` が空白付きの名前を拒否する)。preflight はその app の
+  最初の write より前に走るので、この失敗時点で app は作成も更新もされていない。失敗するのはその manifest entry
+  だけで、batch の残りは継続し、再実行で収束する。
+- **`CategorySyncException`("matches N tenant categories")**: 大小文字だけが異なる category が tenant に複数
+  存在する。manifest の名前ではどれか 1 つを一意に指せない。Intune 管理センターで重複を改名または削除する。
+- **`$ref` 失敗を包んだ `CategorySyncException`**: add(`POST .../categories/$ref`)または remove
+  (`DELETE .../categories/{id}/$ref`)が失敗した。重複 add と不在 remove は既に成功として扱われるため、これは
+  実際の失敗である。log の Graph error と `client-request-id` / `request-id` を確認する。次回実行は app の現在の
+  relationship から plan を再計算するため、途中まで適用された状態からでも収束する。
+- **tenant category 一覧取得での 403**: `Categories` を宣言したすべての entry が同じ一覧を通るため identity-wide
+  として扱い、`GraphAccessDeniedException` で batch 全体を停止する(app 一覧の 403 と同じ)。2a に従って対処する。
+  category relationship に `DeviceManagementApps.ReadWrite.All` を超える権限は不要。
+- **category だけを変更したのに content が再 upload された**: 仕様どおり。`inputHash` は manifest 全体を対象と
+  する(doc/00-overview.md §6.7)ため、`Categories` の変更で hash が変わり、再package と再 upload が発生する。
+- **`Categories` を使い始めてから毎回 content が再 upload される**: 同じ repository に対して異なるバージョンの
+  CLI を使っている。古い CLI は未知の `Categories` field を無視して古い `manifestHash` を計算するため、新旧を
+  交互に実行すると `inputHash` が振動する。CI とローカルの CLI をバージョンで揃える。
+- **result file の `categoryOutcome` が null**: その entry では category 処理に到達しなかった(skip、dry-run、
+  preflight 前の失敗)。category が解除されたという意味ではない。app 解決後に失敗した場合でも `appId` は null の
+  ままになるが、これは許容された result file の形。
+
 ## 7. Safe rerun rules
 
 - `validate`、`plan`、`package --stage-only` は rerun して安全です。
 - `package` は rerun して安全で、同じ input なら同じ deterministic `inputHash` を再現するべきです。
 - `publish --dry-run` は rerun して安全です。
 - 実 publish は収束するよう設計されていますが、content activation step は tool では undo できません。Rollback は以前の manifest version を `--allow-downgrade` 付きで publish して行います。
+- category の `$ref` add/remove は冪等です。重複 add と不在 remove はどちらも成功として扱われるため、途中で中断した category 同期は次回実行で収束します。

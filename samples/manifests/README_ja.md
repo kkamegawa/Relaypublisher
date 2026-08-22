@@ -64,6 +64,32 @@ Assignments:
     Intent: required
 ```
 
+## App category
+
+どのサンプルも `Categories` を宣言していません。これは意図的です。category 名は tenant 固有であり、対象 tenant に
+存在しない名前は publish の preflight で失敗するためです。`Categories` の省略は「何も触らない」唯一の指定でもあり、
+app の現在の category は維持され、category 関連の Graph 呼び出しも一切行われません。
+
+試す場合は、まず Intune 管理センターで category を作成してから app entry に追加します。
+
+```yaml
+Apps:
+  - Platform: macos
+    Architecture: arm64
+    Categories:
+      - Business Apps
+```
+
+`Categories: []` はキーの省略とは意味が異なり、app のすべての category relationship を解除します。名前は tenant の
+`mobileAppCategory.displayName` と大小文字を無視して照合しますが、それ以外は verbatim です。Relaypublisher は
+category の作成・改名・削除を行いません。`validate` は tenant と照合できないため、category plan を確認するには
+`publish --dry-run` を実行します。詳細は
+[doc/05-operation_ja.md §4d](../../doc/05-operation_ja.md#4d-intune-app-category) と
+[doc/01-manifest-schema.md §5.8](../../doc/01-manifest-schema.md) を参照してください。
+
+なお `Categories` の追加・変更は manifest 全体の `inputHash` を変えるため、metadata だけの変更でも次回の
+`package` / `publish` で content が再package・再upload されます。
+
 ## PowerShell サンプルを E2E で実行する
 
 ```bash

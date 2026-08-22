@@ -3,6 +3,7 @@ using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Publishing;
 using IntuneLobPublisher.Core.Publishing.Assignments;
+using IntuneLobPublisher.Core.Publishing.Categories;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -32,7 +33,7 @@ internal static class PublishCommand
         };
         var dryRunOption = new Option<bool>("--dry-run")
         {
-            Description = "Show what would change, including the assignment plan (new apps show the placeholder id '(new app)'), without writing to Intune.",
+            Description = "Show what would change, including the category and assignment plans (new apps show the placeholder id '(new app)'), without writing to Intune.",
         };
         var sourceCommitOption = new Option<string?>("--source-commit")
         {
@@ -200,7 +201,11 @@ internal static class PublishCommand
                     entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun);
                 var result = await orchestrator.PublishAsync(
                     request,
-                    plan => Console.Write(AssignmentPlanFormatter.Format(plan)),
+                    new PublishReport
+                    {
+                        ReportCategoryPlan = plan => Console.Write(CategoryPlanFormatter.Format(plan)),
+                        ReportAssignmentPlan = plan => Console.Write(AssignmentPlanFormatter.Format(plan)),
+                    },
                     cancellationToken);
                 resultEntries.Add(PublishResultOutput.FromResult(request, result));
 

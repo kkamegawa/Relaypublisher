@@ -5,6 +5,13 @@ using IntuneLobPublisher.Core.Exceptions;
 namespace IntuneLobPublisher.Core.Publishing;
 
 /// <summary>Machine-readable publish result for one manifest app entry.</summary>
+/// <param name="CategoryOutcome">
+/// Additive optional field (issue #99). <c>applied</c> when the category plan had at least one
+/// add/remove to perform, <c>unchanged</c> when the manifest declared <c>Categories</c> and the diff
+/// was empty, <c>not-requested</c> when a completed publish had no <c>Categories</c> in the manifest,
+/// and null when publishing never reached a category write (skip, dry-run, or a failure before the
+/// preflight). Per-category detail stays in console output and logs.
+/// </param>
 public sealed record PublishResultEntry(
     [property: JsonPropertyName("packageIdentifier")] string PackageIdentifier,
     [property: JsonPropertyName("packageVersion")] string PackageVersion,
@@ -14,7 +21,8 @@ public sealed record PublishResultEntry(
     [property: JsonPropertyName("outcome")] string Outcome,
     [property: JsonPropertyName("appId")] string? AppId,
     [property: JsonPropertyName("contentOutcome")] string? ContentOutcome,
-    [property: JsonPropertyName("skipReason")] string? SkipReason);
+    [property: JsonPropertyName("skipReason")] string? SkipReason,
+    [property: JsonPropertyName("categoryOutcome")] string? CategoryOutcome = null);
 
 /// <summary>Creates and writes stable JSON output for CI integrations.</summary>
 public static class PublishResultOutput
@@ -34,7 +42,8 @@ public static class PublishResultOutput
             ToWireValue(result.Outcome),
             result.AppId,
             result.ContentOutcome is null ? null : ToWireValue(result.ContentOutcome.Value),
-            result.SkipReason);
+            result.SkipReason,
+            ToCategoryWireValue(result));
 
     public static PublishResultEntry FromFailure(PublishRequest request, string message)
         => new(
@@ -113,6 +122,26 @@ public static class PublishResultOutput
             ContentUploadOutcome.SkippedUnchanged => "skipped-unchanged",
             _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, null),
         };
+
+    /// <summary>
+    /// Maps a publish result onto the additive <c>categoryOutcome</c> field. Only a completed publish
+    /// can report a category outcome: a skip never reaches the preflight, and a dry-run deliberately
+    /// performs no write, so both stay null rather than claiming categories were applied.
+    /// </summary>
+    public static string? ToCategoryWireValue(PublishResult result)
+    {
+        if (result.Outcome != PublishOutcome.Published || result.CategoryPlan is null)
+        {
+            return null;
+        }
+
+        if (!result.CategoryPlan.Requested)
+        {
+            return "not-requested";
+        }
+
+        return result.CategoryPlan.HasChanges ? "applied" : "unchanged";
+    }
 
     private static string Require(string? value, string fieldName)
         => string.IsNullOrWhiteSpace(value)

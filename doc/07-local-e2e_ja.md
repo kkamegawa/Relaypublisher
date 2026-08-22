@@ -312,7 +312,12 @@ dotnet run --configuration Release --project $CliProject -- `
   --dry-run
 ```
 
-選択された app identity、既存 app の照合、package version、input hash、assignment plan、tenant、platform 固有の mapping error を確認します。
+選択された app identity、既存 app の照合、package version、input hash、category plan、assignment plan、tenant、platform 固有の mapping error を確認します。
+
+manifest が `Categories` を宣言している場合、dry-run は tenant の category catalog と app の現在の category も
+read し、`Category plan for app <id>: N add, N keep, N remove` のブロックを表示します(新規 app は placeholder ID
+`(new app)`)。tenant に存在しない category 名を検出できるのはここだけです — `validate` は Graph に接続しません。
+dry-run では何も書き込まれません。
 
 ### 4.6 テスト tenant へ publish
 
@@ -340,7 +345,23 @@ dotnet run --configuration Release --project $CliProject -- `
   --result-file publish-result.json
 ```
 
-Intune admin center で display name、`notes` の management metadata、committed content、detection rule、assignment を確認します。運用上の情報を含む場合があるため、`publish-result.json` を公開 artifact に含めないでください。
+Intune admin center で display name、`notes` の management metadata、committed content、detection rule、assignment、および manifest が `Categories` を宣言している場合は app の category を確認します。運用上の情報を含む場合があるため、`publish-result.json` を公開 artifact に含めないでください。
+
+使い捨てのテスト tenant で category フローを end-to-end で確認する手順:
+
+1. Intune admin center(**アプリ** > **アプリ カテゴリ**)で使い捨ての category を 1〜2 個作成する
+   (例: `Relaypublisher E2E A`、`Relaypublisher E2E B`)。
+2. app entry に `Categories: [Relaypublisher E2E A]` を追加し、`publish --dry-run` を実行する(`+` が 1 行)。
+   その後実際に publish し、admin center で category が付いたことを確認する。`publish-result.json` は
+   `"categoryOutcome":"applied"` になる。
+3. 同じ publish をもう一度実行する。plan は `=`(keep)だけになり、result file は
+   `"categoryOutcome":"unchanged"` になる — これが冪等性の確認。
+4. 一覧を `[Relaypublisher E2E B]` に変更して publish する。plan は B を add し A を remove し、admin center が
+   指定どおりの集合になる。
+5. `Categories: []` にして publish するとすべての relationship が解除される。次に `Categories` キー自体を削除して
+   publish すると、app の category はそのまま維持され、category 関連の Graph 呼び出しも行われない
+   (`"categoryOutcome":"not-requested"`)。
+6. 終わったら使い捨ての category を tenant から削除する。Relaypublisher は category リソース自体を削除しない。
 
 ## 5. 安全な再実行と cleanup
 
@@ -348,6 +369,7 @@ Intune admin center で display name、`notes` の management metadata、committ
 - download または staging に失敗した場合は、同じ `manifest-list.json` を使って `package` を再実行できます。
 - `publish --dry-run` は Intune に書き込まずに再実行できます。
 - 実際の publish は収束するように設計されていますが、content activation を tool で取り消すことはできません。
+- category の `$ref` add/remove は冪等なので、途中で中断した category 同期は次回実行で収束します。
 - 意図した rollback では、以前の manifest version を package 化し、明示的に `--allow-downgrade` を指定します。
 - 不要になったら、ローカルの `out`、`manifest-list.json`、`publish-result.json` を削除します。package output、token、signed download URL は commit しないでください。
 

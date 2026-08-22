@@ -397,6 +397,49 @@ relaypublisher publish --manifest-list manifest-list.json --package-dir ./out \
 [samples/manifests/README_ja.md](../samples/manifests/README_ja.md#powershell-サンプルを新しいバージョンに更新する)
 を参照。
 
+## 4d. Intune app category
+
+app entry には、その app が属する Intune app category を宣言できる。category は tenant 全体で共有される
+`mobileAppCategory` リソースであり、Relaypublisher は app と既存 category の *relationship* だけを同期する。
+category 自体の作成・改名・削除は行わないため、category は事前に Intune 管理センターで作成しておく。
+
+```yaml
+Apps:
+  - Platform: windows
+    Architecture: x64
+    Categories:
+      - Business Apps
+      - Productivity
+```
+
+| Manifest | 動作 |
+|---|---|
+| `Categories` 省略 | app の現在の category を変更しない。category 関連の Graph 呼び出しを一切行わない |
+| `Categories: []` | app のすべての category relationship を解除する |
+| 1 件以上 | 列挙した集合を app の category 集合そのものとする(それ以外は解除) |
+
+運用上の注意:
+
+- 名前は `mobileAppCategory.displayName` と照合する。大小文字は無視するが、それ以外は verbatim(trim も Unicode
+  正規化もしない)。`validate` は tenant に接続しないため、**tenant に存在しない名前は `publish` または
+  `publish --dry-run` でしか検出できない**。検出はその app の最初の write より前の preflight で行われる。
+  名前の不存在・曖昧一致はその manifest entry だけを失敗させ、batch の残りは継続し、再実行で収束する。
+- `publish --dry-run` は tenant catalog と app の現在の category を read し、add/keep/remove の plan を表示する
+  だけで write は行わない。新規 app では placeholder ID `(new app)` を表示する。
+- category は app の作成/更新の直後、content upload の**前**に適用する。upload が失敗しても category が同期
+  されないままになる時間を最小化するため。
+- result file(`--result-file`)には entry ごとに additive field `categoryOutcome` が 1 つ増える。値は `applied` /
+  `unchanged` / `not-requested`、および category 処理に到達しなかった場合の null。category 単位の詳細は console
+  出力と log に出る。
+- `inputHash` は manifest 全体を対象とするため、**`Categories` だけを変更しても再package と content の再 upload が
+  発生し得る**。`Categories` を宣言していない manifest の hash は従来どおり変わらない。
+- いずれかの manifest が `Categories` を宣言したら、**その repository を扱うすべての CLI をバージョンで揃える**。
+  古い CLI は未知の manifest field を無視して古い hash を計算するため、新旧を交互に実行すると `inputHash` が振動
+  して毎回 content が再 upload される。
+- 追加の Graph permission は不要。`DeviceManagementApps.ReadWrite.All` で category relationship も操作できる。
+  tenant catalog 一覧取得での 403 は identity-wide であり、app 一覧での 403 と同じく batch 全体を停止する
+  ([06-troubleshooting_ja.md](06-troubleshooting_ja.md) の 2a を参照)。
+
 ## 5. Exit codes
 
 | Exit code | 意味 | Operator action |
