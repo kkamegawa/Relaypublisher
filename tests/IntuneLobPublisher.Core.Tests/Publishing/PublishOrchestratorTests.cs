@@ -78,7 +78,7 @@ public sealed class PublishOrchestratorTests
             return Task.FromResult(CreatedAppIdToReturn);
         }
 
-        public Task UpdateAppAsync(string appId, PublishRequest request, CancellationToken cancellationToken)
+        public Task UpdateAppAsync(string appId, PublishRequest request, ContentUploadOptions options, CancellationToken cancellationToken)
         {
             AppCalls.Add($"update {appId}");
             return Task.CompletedTask;

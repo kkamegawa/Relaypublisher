@@ -344,6 +344,12 @@ v1.0 に存在するため `AppType: lob` は `/v1.0/` のまま。両者は同�
 フラグが無いため、`AppType: lob` で `Requirements.MinimumOSVersion` に macOS 14 以降を指定すると publish 時に
 fail する(`AppType: pkg` への切り替えが必要)。
 
+**サポートする `Requirements.MinimumOSVersion`**(`MacOsMinimumOperatingSystemTable` が保持するマッピング):
+`10.13` / `10.14` / `10.15` / `11`(`11.0`)/ `12`(`12.0`)/ `13`(`13.0`)は `AppType: pkg` / `lob` の両方で
+使用できる。`14`(`14.0`)/ `15`(`15.0`)/ `26`(`26.0`)は Graph beta 専用の `v14_0` / `v15_0` / `v26_0`
+フラグを使うため `AppType: pkg` でのみ使用でき、`AppType: lob` で指定すると `UnsupportedMacOsVersionException`
+で fail する。上記いずれのマッピングも持たないバージョン文字列も同様に fail する。
+
 **pre/post install script**(`AppType: pkg` 限定、issue #86): Graph `macOSPkgApp` は `preInstallScript` /
 `postInstallScript`(型 `macOSAppScript`、プロパティは base64 エンコードされた `scriptContent` のみ)を持つが、
 `macOSLobApp` / `macOSDmgApp` には存在しない。manifest 側は app entry 直下の `Scripts.PreInstall` /
@@ -359,6 +365,21 @@ validation error とする。
   前提条件)。改行コードは base64 化の直前に CRLF → LF へ正規化する。
 - 運用前提として Intune management agent for macOS 2309.007 以降が必要。pre-install が非 0 終了で app は
   "failed" となり次回 check-in で再試行される。post-install の失敗は報告されない(app は "success" のまま)。
+
+**content upload のバイト列レイアウト**(`PkgContentPreparer`): Windows は IntuneWinAppUtil が生成する
+`.intunewin` の content entry をそのままアップロードするだけで済むが(`IntuneWinContentExtractor` が ZIP
+entry を無加工でストリームする)、macOS には同等のツールが無いため `.pkg` の暗号化を本ツールが in-process で
+行う。Intune がアップロード対象のバイト列に要求するレイアウトは **`[mac (32 バイト)][iv (16 バイト)][AES-256-CBC
+ciphertext]`** であり、これは `.intunewin` の content entry がすでに持っている形式と同一である。Graph の
+`fileEncryptionInfo` (https://learn.microsoft.com/graph/api/resources/intune-apps-fileencryptioninfo) は
+`mac` / `iv` / 各種鍵を commit 呼び出しの別パラメータとしても要求するため、アップロードする ciphertext 自体には
+このヘッダが不要に見えるが、実際には両方が必要になる。Microsoft の公式リファレンス実装
+(`microsoftgraph/powershell-intune-samples` の `LOB_Application/Application_LOB_Add.ps1`、
+`EncryptFileWithIV` 関数)で確認済み: 出力ファイルの先頭に `mac` + `iv` 分のバイトを予約してから ciphertext を
+書き込み、書き終えた後にオフセット 0(mac)とオフセット 32(iv)へ書き戻す。Graph へ報告する `sizeEncrypted` は
+この**ヘッダを含めたファイル全体の長さ**であり、ciphertext だけの長さではない。このヘッダが欠落していると
+content file は `azureStorageUriRequestSuccess` までは進むが `commitFileSuccess` に到達しない
+(doc/06-troubleshooting.md §6a 参照)。
 
 ### 6.14 Manifest schema のバージョニングとソース指定の統一
 

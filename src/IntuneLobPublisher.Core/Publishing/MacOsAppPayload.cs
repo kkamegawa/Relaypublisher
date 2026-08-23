@@ -191,11 +191,24 @@ public sealed class MacOsMinimumOperatingSystemPayload
     [JsonPropertyName("v13_0")]
     public bool V13_0 { get; init; }
 
-    /// <summary>Beta-only flag (<c>AppType: pkg</c> only; see <see cref="MacOsMinimumOperatingSystemTable"/>).</summary>
+    /// <summary>
+    /// Beta-only flag (<c>AppType: pkg</c> only; see <see cref="MacOsMinimumOperatingSystemTable"/>).
+    /// Nullable and omitted when unset (unlike the v1.0-only flags above): Graph's v1.0
+    /// <c>macOSMinimumOperatingSystem</c> has no <c>v14_0</c> property at all, so sending it as a plain
+    /// <c>false</c> on a <c>macOSLobApp</c> (v1.0) request makes Graph reject the whole call with 400
+    /// "The property 'v14_0' does not exist on type 'microsoft.graph.macOSMinimumOperatingSystem'".
+    /// </summary>
     [JsonPropertyName("v14_0")]
-    public bool V14_0 { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? V14_0 { get; init; }
 
-    /// <summary>Beta-only flag (<c>AppType: pkg</c> only; see <see cref="MacOsMinimumOperatingSystemTable"/>).</summary>
+    /// <summary>Beta-only flag; see <see cref="V14_0"/> for why this is nullable.</summary>
     [JsonPropertyName("v15_0")]
-    public bool V15_0 { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? V15_0 { get; init; }
+
+    /// <summary>Beta-only flag; see <see cref="V14_0"/> for why this is nullable.</summary>
+    [JsonPropertyName("v26_0")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? V26_0 { get; init; }
 }

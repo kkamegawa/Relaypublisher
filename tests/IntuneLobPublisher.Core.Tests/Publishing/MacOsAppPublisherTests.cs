@@ -52,6 +52,12 @@ public sealed class MacOsAppPublisherTests
             bool useBeta,
             CancellationToken cancellationToken)
             => throw new NotSupportedException("Not exercised by these tests.");
+
+        // Exercised by MacOsAppPublisher.UpdateAppAsync's pre-PATCH guard; a no-op is correct here since
+        // these tests are about script mapping, not Graph publishing-state behavior.
+        public Task WaitWhilePublishingStateProcessingAsync(
+            string appId, ContentUploadOptions options, bool useBeta, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     private sealed class ThrowingContentExtractor : IUploadableContentExtractor
@@ -213,7 +219,7 @@ public sealed class MacOsAppPublisherTests
         WriteScript(app.Scripts.PostInstall, "#!/bin/bash\r\necho post\r\n");
 
         var publisher = CreatePublisher(out var client);
-        await publisher.UpdateAppAsync("app-1", CreateRequest(app, manifest), CancellationToken.None);
+        await publisher.UpdateAppAsync("app-1", CreateRequest(app, manifest), new ContentUploadOptions(), CancellationToken.None);
 
         var payload = (MacOsPkgAppPayload)client.LastCreatePayload!;
         var decoded = Convert.FromBase64String(payload.PostInstallScript!.ScriptContent);

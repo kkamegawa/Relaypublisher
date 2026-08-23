@@ -293,7 +293,7 @@ Publish が package metadata missing を報告した場合:
 
 - **`UnsupportedMacOsVersionException`("no known macOS minimum-operating-system mapping")**:
   `Requirements.MinimumOSVersion` が `MacOsMinimumOperatingSystemTable` の認識する値(`10.13`〜`13.0`、または
-  `AppType: pkg` のみ有効な `14`/`14.0`/`15`/`15.0`)のいずれでもない。この mapping は `publish`(および
+  `AppType: pkg` のみ有効な `14`/`14.0`/`15`/`15.0`/`26`/`26.0`)のいずれでもない。この mapping は `publish`(および
   `--dry-run`)時にのみ実行され `package` では行われないため、publish 前に manifest のバージョン文字列を修正する。
 - **`UnsupportedMacOsVersionException`("AppType 'pkg'" に言及)**: manifest が `AppType: lob` かつ
   `Requirements.MinimumOSVersion` に macOS 14 以降を指定している。`macOSLobApp` は Graph v1.0 のままで、
@@ -304,12 +304,23 @@ Publish が package metadata missing を報告した場合:
   のみ表面化する。
 - **`Detection.IncludedApps` が欠落または空**: macOS のすべての app entry は `IncludedApps` を 1 件以上
   (`BundleId` + `BundleVersion`)必要とする。これは `publish` ではなく `validate` で fail する。
-- **PKG の content upload が `commitFileSuccess` に到達しない**: `PkgContentPreparer` の
-  AES-256-CBC + HMAC-SHA256 暗号化形式は Microsoft の公開仕様が無く(doc/00-overview.md §6.13 参照)、
-  `IntuneWinContentExtractor` が `.intunewin` の content 解析にすでに依拠しているコミュニティ由来のスキームを
-  踏襲し、公開されている `fileEncryptionInfo.mac` の仕様と突き合わせて導出したものである。macOS entry でのみ
-  (Windows entry は影響を受けない)commit が繰り返し失敗する場合は、闇雲に retry せず、ログの Graph エラーと
-  `client-request-id`/`request-id` を添えて issue を起票する。
+- **PKG の content upload が `commitFileSuccess` に到達しない、または SAS URI へのアップロード自体が
+  HTTP 400 になる(修正済み)**: 旧バージョンの `PkgContentPreparer` は AES-256-CBC の ciphertext のみを
+  アップロードしていたが、Intune はアップロードするバイト列の先頭に 48 バイトの
+  `[mac (32 バイト)][iv (16 バイト)]` ヘッダを要求する。これは `.intunewin` の content entry がすでに
+  持っている形式と同一であり、だからこそ `IntuneWinContentExtractor` は無加工でストリームできていた。この点は
+  推測ではなく、Microsoft 公式のリファレンス実装(`microsoftgraph/powershell-intune-samples` の
+  `LOB_Application/Application_LOB_Add.ps1`、`EncryptFileWithIV` 関数)で確認済み。現在の
+  `PkgContentPreparer` はこのヘッダを書き込む(doc/00-overview.md §6.13 参照)。アップグレード後も macOS
+  entry でのみ(Windows entry は影響を受けない)commit が繰り返し失敗する場合は、闇雲に retry せず、ログの
+  Graph エラーと `client-request-id`/`request-id` を添えて issue を起票する。
+- **`v14_0`/`v15_0` が `'microsoft.graph.macOSMinimumOperatingSystem'` に存在しないという 400
+  (`GraphRequestException`、修正済み)**: 旧バージョンはすべての macOS app payload に `v14_0`/`v15_0` を
+  (`false` であっても)常に含めていたが、Graph v1.0 の `macOSMinimumOperatingSystem` にはこれらのプロパティ
+  自体が存在しない(beta のみに存在する)。このため `Requirements.MinimumOSVersion` の値に関わらず、
+  `AppType: lob` の create/update がすべて失敗していた。`MacOsMinimumOperatingSystemPayload` は現在、
+  v1.0 向けの場合はこれらのフィールド(および新規追加した beta 専用の `v26_0`)を null のままにし、
+  リクエストボディから省略する(`false` として送信しない)。
 - **macOS `AppType: pkg` entry に特有の 403/404(`GraphRequestException`)**: pkg app の作成・更新・
   content upload はすべて Graph **beta** 経由で行われる(`macOSPkgApp` は v1.0 に存在しない)。service
   principal の Graph 権限(section 2a)とテナントの beta API 可用性を確認する。Windows や

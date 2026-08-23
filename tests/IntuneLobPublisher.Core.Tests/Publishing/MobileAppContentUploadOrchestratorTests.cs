@@ -46,23 +46,26 @@ public sealed class MobileAppContentUploadOrchestratorTests
 
         public List<string> ODataTypeCalls { get; } = [];
 
-        public Task<string> CreateContentVersionAsync(string appId, bool useBeta, CancellationToken cancellationToken)
+        public Task<string> CreateContentVersionAsync(string appId, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
             UseBetaCalls.Add(useBeta);
+            ODataTypeCalls.Add(oDataType);
             return Task.FromResult("cv-1");
         }
 
         public Task<string> CreateContentFileAsync(
-            string appId, string contentVersionId, string name, long size, long sizeEncrypted, bool useBeta, CancellationToken cancellationToken)
+            string appId, string contentVersionId, string name, long size, long sizeEncrypted, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
             CreateContentFileCalls.Add((name, size, sizeEncrypted));
             UseBetaCalls.Add(useBeta);
+            ODataTypeCalls.Add(oDataType);
             return Task.FromResult("file-1");
         }
 
         public Task<MobileAppContentFileResponse> GetContentFileAsync(
-            string appId, string contentVersionId, string fileId, bool useBeta, CancellationToken cancellationToken)
+            string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
+            ODataTypeCalls.Add(oDataType);
             if (FileResponses.Count == 0)
             {
                 throw new InvalidOperationException("No more queued file responses.");
@@ -71,16 +74,18 @@ public sealed class MobileAppContentUploadOrchestratorTests
             return Task.FromResult(FileResponses.Dequeue());
         }
 
-        public Task RenewUploadAsync(string appId, string contentVersionId, string fileId, bool useBeta, CancellationToken cancellationToken)
+        public Task RenewUploadAsync(string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
             RenewUploadCallCount++;
+            ODataTypeCalls.Add(oDataType);
             return Task.CompletedTask;
         }
 
         public Task CommitFileAsync(
-            string appId, string contentVersionId, string fileId, FileEncryptionInfoPayload fileEncryptionInfo, bool useBeta, CancellationToken cancellationToken)
+            string appId, string contentVersionId, string fileId, FileEncryptionInfoPayload fileEncryptionInfo, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
             CommitFileCalls.Add(fileEncryptionInfo);
+            ODataTypeCalls.Add(oDataType);
             return Task.CompletedTask;
         }
 
@@ -219,6 +224,7 @@ public sealed class MobileAppContentUploadOrchestratorTests
     public async Task PublishContentAsync_MatchingInputHash_SkipsUploadAndOnlyPatchesNotes()
     {
         var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("published");
         var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
         var metadata = CreateMetadata();
 
@@ -230,6 +236,47 @@ public sealed class MobileAppContentUploadOrchestratorTests
         Assert.HasCount(1, client.PatchedNotes);
         Assert.AreEqual(metadata.Serialize(), client.PatchedNotes[0]);
         Assert.IsNull(client.PatchedCommittedContentVersion);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_MatchingInputHash_WaitsForProcessingToClearBeforePatchingNotes()
+    {
+        // Regression test for the fixed bug: the skip path used to retry the notes PATCH *after* it
+        // failed with a 400, catching the exception and then polling for publishingState == "published"
+        // - which cannot work when the app has never had content committed (see
+        // WaitWhilePublishingStateProcessingAsync's doc comment). The fix guards *before* the PATCH and
+        // accepts any non-"processing" state, so this never issues a doomed PATCH in the first place.
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("processing");
+        client.PublishingStates.Enqueue("processing");
+        client.PublishingStates.Enqueue("notPublished");
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+        var metadata = CreateMetadata();
+
+        var result = await PublishAsync(
+            orchestrator, "app-1", CreateContent(inputHash: "same-hash"), storedInputHash: "same-hash", metadata, FastOptions());
+
+        Assert.AreEqual(ContentUploadOutcome.SkippedUnchanged, result.Outcome);
+        Assert.HasCount(1, client.PatchedNotes);
+        Assert.AreEqual(metadata.Serialize(), client.PatchedNotes[0]);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_MatchingInputHash_ProcessingNeverClears_ThrowsContentUploadTimedOutExceptionWithoutPatchingNotes()
+    {
+        var client = new FakeMobileAppContentClient();
+        for (var i = 0; i < 10; i++)
+        {
+            client.PublishingStates.Enqueue("processing");
+        }
+
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+
+        var ex = await Assert.ThrowsExactlyAsync<ContentUploadTimedOutException>(() => PublishAsync(
+            orchestrator, "app-1", CreateContent(inputHash: "same-hash"), storedInputHash: "same-hash", CreateMetadata(), FastOptions()));
+
+        Assert.AreEqual("publishingState", ex.Stage);
+        Assert.IsEmpty(client.PatchedNotes);
     }
 
     [TestMethod]
