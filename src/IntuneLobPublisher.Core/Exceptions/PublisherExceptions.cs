@@ -284,13 +284,15 @@ public sealed class PublishResultOutputException : PublisherException
 public sealed class GraphRequestException : PublisherException
 {
     public GraphRequestException(
-        string message, int? statusCode, string? clientRequestId, string? requestId, string? graphErrorCode = null)
+        string message, int? statusCode, string? clientRequestId, string? requestId, string? graphErrorCode = null,
+        string? graphErrorMessage = null)
         : base(message)
     {
         StatusCode = statusCode;
         ClientRequestId = clientRequestId;
         RequestId = requestId;
         GraphErrorCode = graphErrorCode;
+        GraphErrorMessage = graphErrorMessage;
     }
 
     public GraphRequestException(string message, Exception innerException)
@@ -309,6 +311,13 @@ public sealed class GraphRequestException : PublisherException
 
     /// <summary>Graph's `error.code` value, when the failing response carried an error body.</summary>
     public string? GraphErrorCode { get; }
+
+    /// <summary>
+    /// Graph's `error.message` text, when the failing response carried an error body. Prefer this over
+    /// pattern-matching <see cref="Exception.Message"/>, which also carries the request URI, status code
+    /// and correlation ids (see <see cref="GraphFailure.ErrorMessage"/>).
+    /// </summary>
+    public string? GraphErrorMessage { get; }
 }
 
 /// <summary>

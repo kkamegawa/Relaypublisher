@@ -20,8 +20,13 @@ public interface IPlatformAppPublisher
     /// <summary>Maps the manifest (with <paramref name="notes"/> so a brand-new app is never metadata-less) and creates the app. Returns the created app id.</summary>
     Task<string> CreateAppAsync(PublishRequest request, string notes, CancellationToken cancellationToken);
 
-    /// <summary>Maps the manifest and patches the existing app identified by <paramref name="appId"/>.</summary>
-    Task UpdateAppAsync(string appId, PublishRequest request, CancellationToken cancellationToken);
+    /// <summary>
+    /// Maps the manifest and patches the existing app identified by <paramref name="appId"/>.
+    /// <paramref name="options"/> is only needed to size the publishing-state guard implementations run
+    /// before this PATCH (an app left mid-"processing" by an interrupted previous run would otherwise
+    /// 400 here, before any content is even uploaded) - it does not otherwise affect the app payload itself.
+    /// </summary>
+    Task UpdateAppAsync(string appId, PublishRequest request, ContentUploadOptions options, CancellationToken cancellationToken);
 
     /// <summary>Uploads <paramref name="artifacts"/>' content to the app, using the platform's content extractor and Graph API version.</summary>
     Task<ContentUploadResult> PublishContentAsync(

@@ -330,6 +330,8 @@ public sealed class GraphMobileAppContentClientTests
     [TestMethod]
     public async Task CreateContentVersionAsync_UnrecognizedODataType_ThrowsGraphRequestExceptionWithoutCallingGraph()
     {
+        // The type-cast segment is a URL route element, not a data value: an unrecognized value must
+        // fail loudly here rather than being percent-encoded into a path Graph will 404 or 400 on.
         var (client, handler) = CreateClient(
             _ => throw new InvalidOperationException("Should not reach the network for an unrecognized OData type."));
 

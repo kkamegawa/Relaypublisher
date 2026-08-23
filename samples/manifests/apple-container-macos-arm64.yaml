@@ -52,10 +52,8 @@ Apps:
 
     Requirements:
       # Apple Container 1.2.2 requires macOS 26 per the official README.
-      # macOS 26 flag (v26_0) is not yet in the Relaypublisher macOS version table.
-      # Schema validation will reject this manifest due to:
-      #   1. Unknown macOS version (not in MacOsMinimumOperatingSystemTable)
-      #   2. Empty Detection.IncludedApps (required, cannot use false bundleId)
+      # "26.0" is supported by MacOsMinimumOperatingSystemTable (beta-only v26_0 flag, AppType: pkg).
+      # Schema validation still rejects this manifest because Detection.IncludedApps is empty below.
       MinimumOSVersion: "26.0"
 
     Detection:

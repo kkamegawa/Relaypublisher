@@ -6,8 +6,8 @@ namespace IntuneLobPublisher.Core.Publishing;
 /// Maps a manifest `Requirements.MinimumOSVersion` (e.g. "14.0", "13") to the Graph
 /// <c>macOSMinimumOperatingSystem</c> complex type, where exactly one version flag is true
 /// (https://learn.microsoft.com/graph/api/resources/intune-apps-macosminimumoperatingsystem).
-/// v1.0 only defines flags through <c>v13_0</c>; <c>v14_0</c>/<c>v15_0</c> are beta-only, so a
-/// <c>macOSLobApp</c> (v1.0, <see cref="Publishing.MacOsLobAppPayload"/>) cannot target macOS 14+.
+/// v1.0 only defines flags through <c>v13_0</c>; <c>v14_0</c>/<c>v15_0</c>/<c>v26_0</c> are beta-only,
+/// so a <c>macOSLobApp</c> (v1.0, <see cref="Publishing.MacOsLobAppPayload"/>) cannot target macOS 14+.
 /// </summary>
 public static class MacOsMinimumOperatingSystemTable
 {
@@ -27,6 +27,8 @@ public static class MacOsMinimumOperatingSystemTable
             ["14.0"] = (true, () => new MacOsMinimumOperatingSystemPayload { V14_0 = true }),
             ["15"] = (true, () => new MacOsMinimumOperatingSystemPayload { V15_0 = true }),
             ["15.0"] = (true, () => new MacOsMinimumOperatingSystemPayload { V15_0 = true }),
+            ["26"] = (true, () => new MacOsMinimumOperatingSystemPayload { V26_0 = true }),
+            ["26.0"] = (true, () => new MacOsMinimumOperatingSystemPayload { V26_0 = true }),
         };
 
     /// <param name="useBeta">Whether the app being mapped is beta-only (<c>AppType: pkg</c>). A v1.0-only

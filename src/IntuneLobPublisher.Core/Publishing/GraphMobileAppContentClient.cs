@@ -247,9 +247,11 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         => $"{ContentVersionPath(appId, contentVersionId, oDataType, useBeta)}/files/{Uri.EscapeDataString(fileId)}";
 
     /// <summary>
-    /// Validates the OData type-cast route segment instead of percent-encoding it. This client only
-    /// supports the three concrete mobile LOB app types used by the publishers; rejecting anything
-    /// else before the request prevents a malformed route and produces an actionable error.
+    /// The OData type-cast path segments this client is known to build a URL for. This is a route
+    /// element, not a data value, so it is validated against this fixed set rather than percent-encoded:
+    /// <see cref="Uri.EscapeDataString(string)"/> would silently corrupt the route for any input outside
+    /// this set instead of failing loudly, and every caller in this codebase only ever passes one of
+    /// these three (<see cref="WindowsAppPublisher"/>, <see cref="MacOsAppPayloadMapper"/>).
     /// </summary>
     private static readonly HashSet<string> KnownGraphTypeSegments = new(StringComparer.Ordinal)
     {
