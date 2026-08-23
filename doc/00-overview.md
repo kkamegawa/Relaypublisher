@@ -363,7 +363,9 @@ fail する(`AppType: pkg` への切り替えが必要)。
 具体的な OData 型キャスト(`microsoft.graph.win32LobApp` / `microsoft.graph.macOSPkgApp` /
 `microsoft.graph.macOSLobApp`)を含める。`/mobileApps/{id}/contentVersions` のようにキャストを省略すると、
 Graph が `Resource not found for the segment 'contentVersions'`(HTTP 400)を返すことがある。create、files、
-ファイル状態の取得、`renewUpload`、`commit` のすべてで同じ型付きルートを使用し、型セグメントは許可リストで検証する。
+ファイル状態の取得、`renewUpload`、`commit` では同じ型付きルートを使用し、型セグメントは許可リストで検証する。
+ただし、`mobileAppContentFile` の DELETE は Graph が型キャストなしのルートだけを公開しているため、
+`/mobileApps/{id}/contentVersions/{versionId}/files/{fileId}` を使用する。
 
 **macOS PKG content upload のバイト列と暗号化**: `PkgContentPreparer` は、Windows のような
 `IntuneWinAppUtil` が無いため、staged `.pkg` を in-process で AES-256-CBC(PKCS7) 暗号化する。Graph の

@@ -561,8 +561,10 @@ Tasks:
   `committedContentVersion` PATCH instead of uploading again.
 - Extract `.intunewin` and build `fileEncryptionInfo` from `Detection.xml`.
 - Upload encrypted payload to Azure Storage SAS URI(renewUpload 対応)。
-- Build every content URL with the concrete OData type-cast segment after the app id
+- Build content URLs with the concrete OData type-cast segment after the app id
   (`win32LobApp`, `macOSPkgApp`, or `macOSLobApp`); the uncast `/contentVersions` route is not reliable.
+  The `mobileAppContentFile` DELETE operation is the exception and uses Graph's uncast
+  `/mobileApps/{id}/contentVersions/{versionId}/files/{fileId}` route.
 - Commit file with `fileEncryptionInfo` and poll commit state.
 - PATCH `committedContentVersion`.
 - Poll publishing state.

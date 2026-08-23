@@ -117,15 +117,15 @@ public sealed class GraphMobileAppContentClientTests
     }
 
     [TestMethod]
-    public async Task DeleteContentFileAsync_NoContent_UsesTypedRouteAndNoBody()
+    public async Task DeleteContentFileAsync_NoContent_UsesUntypedBetaRouteAndNoBody()
     {
         var (client, handler) = CreateClient(_ => EmptyResponse(HttpStatusCode.NoContent));
 
-        await client.DeleteContentFileAsync("app-1", "cv-1", "file-1", WindowsODataType, useBeta: false, CancellationToken.None);
+        await client.DeleteContentFileAsync("app-1", "cv-1", "file-1", MacPkgODataType, useBeta: true, CancellationToken.None);
 
         Assert.AreEqual("DELETE", handler.Requests[0].Method);
         Assert.AreEqual(
-            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions/cv-1/files/file-1",
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/contentVersions/cv-1/files/file-1",
             handler.Requests[0].Uri);
         Assert.IsNull(handler.Requests[0].Body);
     }
@@ -139,6 +139,23 @@ public sealed class GraphMobileAppContentClientTests
         await client.DeleteContentFileAsync("app-1", "cv-1", "file-1", WindowsODataType, useBeta: false, CancellationToken.None);
 
         Assert.AreEqual("DELETE", handler.Requests[0].Method);
+        Assert.AreEqual(
+            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/contentVersions/cv-1/files/file-1",
+            handler.Requests[0].Uri);
+    }
+
+    [TestMethod]
+    public async Task DeleteContentFileAsync_UnrecognizedODataType_ThrowsWithoutCallingGraph()
+    {
+        var (client, handler) = CreateClient(
+            _ => throw new InvalidOperationException("Should not reach the network for an unrecognized OData type."));
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(
+            () => client.DeleteContentFileAsync(
+                "app-1", "cv-1", "file-1", "#microsoft.graph.unknownAppType", useBeta: false, CancellationToken.None));
+
+        StringAssert.Contains(ex.Message, "unknownAppType");
+        Assert.IsEmpty(handler.Requests);
     }
 
     [TestMethod]

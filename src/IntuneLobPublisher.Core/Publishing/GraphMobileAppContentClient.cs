@@ -10,8 +10,9 @@ namespace IntuneLobPublisher.Core.Publishing;
 /// file's upload state, commit it, patch the app's committed content version and notes, and poll the
 /// app's publishing state. See doc/issues/issue-003-intune-graph-win32.md "Content upload flow".
 /// <c>useBeta</c> routes the whole call through <c>/beta/</c> instead of <c>/v1.0/</c>: content
-/// sub-resources (contentVersions/files) are inherited from <c>mobileLobApp</c> and require an OData
-/// type-cast segment after the app id. A <c>macOSPkgApp</c> parent id is itself beta-only
+/// sub-resources (contentVersions/files) are inherited from <c>mobileLobApp</c> and generally require an
+/// OData type-cast segment after the app id. The file DELETE operation is the exception: Graph registers
+/// only its uncast route. A <c>macOSPkgApp</c> parent id is itself beta-only
 /// (https://learn.microsoft.com/graph/api/resources/intune-apps-macospkgapp), so every call touching
 /// that app - including its content sub-resources - stays on <c>/beta/</c> for consistency.
 /// </summary>
@@ -36,7 +37,10 @@ public interface IMobileAppContentClient
     Task<MobileAppContentFileResponse> GetContentFileAsync(
         string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken);
 
-    /// <summary>Deletes an uncommitted file. A 404 is accepted as an idempotent retry.</summary>
+    /// <summary>
+    /// Deletes an uncommitted file through the uncast mobileAppContentFile route.
+    /// A 404 is accepted as an idempotent retry.
+    /// </summary>
     Task DeleteContentFileAsync(
         string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken);
 
@@ -165,7 +169,8 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
     public async Task DeleteContentFileAsync(
         string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken)
     {
-        var requestUri = FilePath(appId, contentVersionId, fileId, oDataType, useBeta);
+        _ = ToGraphTypeSegment(oDataType);
+        var requestUri = UntypedFilePath(appId, contentVersionId, fileId, useBeta);
         using var response = await _httpClient.DeleteAsync(requestUri, cancellationToken).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
@@ -226,6 +231,9 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
 
     private static string FilePath(string appId, string contentVersionId, string fileId, string oDataType, bool useBeta)
         => $"{ContentVersionPath(appId, contentVersionId, oDataType, useBeta)}/files/{Uri.EscapeDataString(fileId)}";
+
+    private static string UntypedFilePath(string appId, string contentVersionId, string fileId, bool useBeta)
+        => $"{AppPath(appId, useBeta)}/contentVersions/{Uri.EscapeDataString(contentVersionId)}/files/{Uri.EscapeDataString(fileId)}";
 
     /// <summary>
     /// Validates the OData type-cast route segment instead of percent-encoding it. This client only

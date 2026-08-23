@@ -225,7 +225,8 @@ content upload の Graph URL は app の具体的な OData 型でキャストす
 Graph によって解決できず、`Resource not found for the segment 'contentVersions'`(HTTP 400)になる。
 `AppType: pkg` は beta の `microsoft.graph.macOSPkgApp`、`AppType: lob` は v1.0 の
 `microsoft.graph.macOSLobApp`、Windows は v1.0 の `microsoft.graph.win32LobApp` を使用する。
-content version の作成後も、files、状態取得、`renewUpload`、`commit` に同じキャストを付ける。
+content version の作成後も、files、状態取得、`renewUpload`、`commit` に同じキャストを付ける。ただし、
+`mobileAppContentFile` の DELETE は Graph が型キャストなしのルートだけを公開しているため、キャストを付けない。
 
 ### 5.4.1 Icon の制約(issue #63)
 
