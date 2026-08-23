@@ -28,11 +28,6 @@ AssignmentSync: merge
 Apps:
   - Platform: macos
     Architecture: arm64
-    Categories:
-      - Data management
-      - Computer management
-      - Development & Design
-      - Productivity
     InstallerType: pkg
     # pkg (default): unmanaged macOSPkgApp, unsigned allowed, up to 8 GB, and the
     # only AppType that can target MinimumOSVersion 14+ (v14_0/v15_0 are beta-only

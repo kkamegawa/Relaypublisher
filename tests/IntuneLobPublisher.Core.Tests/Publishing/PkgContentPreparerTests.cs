@@ -58,7 +58,7 @@ public sealed class PkgContentPreparerTests
     public void Extract_SmallFile_UploadedStreamStartsWithMacThenIv()
     {
         // Per Intune's expected upload layout (matching the .intunewin content entry, and Microsoft's
-        // own reference implementation in microsoftgraph/powershell-intune-samples'
+        // own reference implementation in microsoftgraph/powershell-intune-samples
         // Application_LOB_Add.ps1 EncryptFileWithIV): the uploaded bytes are [mac][iv][ciphertext].
         var plaintext = "fake-pkg-binary-content"u8.ToArray();
         var path = WritePlaintext(plaintext);
