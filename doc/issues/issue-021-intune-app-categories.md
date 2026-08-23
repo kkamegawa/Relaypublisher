@@ -120,7 +120,7 @@ category 専用 Learn ページには既存カテゴリの `$ref` request exampl
   だけを失敗させて batch は継続する。
 - tenant category 一覧の 403 は identity-wide なので既存の `GraphAccessDeniedException` 経路のままとし、CLI は
   batch を中断する(#94 と同じ扱い)。
-- app create/update 成功後に category apply が失敗した場合、その entry は `failed` として報告され
+- content activation 後の metadata update または category apply が失敗した場合、その entry は `failed` として報告され
   `PublishResultOutput.FromFailure` は `appId` を null のままにする。result file の形を安定させるため、この挙動は
   #99 で明示的に許容する。
 
@@ -144,14 +144,20 @@ payload から分離する。category の名前や ID は management metadata `n
 
 1. app resolution と downgrade guard
 2. category preflight(tenant 名前解決 + 既存 app なら現在の relationship 取得)と plan 作成 — **app write より前**
-3. app create/update
-4. category plan apply(add を先、remove を後)
-5. content publish
-6. assignment plan/apply
+3. app create(新規 app の場合のみ)
+4. content publish / activation(`publishingState` が `published` になるまで待機)
+5. app metadata update(既存 app の場合のみ)
+6. category plan apply(add を先、remove を後)
+7. assignment plan/apply
 
-category relationship は app が存在することにしか依存しないため、最大 8 GB になり得る content upload の**前**に
-適用して失敗ウィンドウを最小化する。新規 app では preflight で名前解決だけを行い(app ID がないので per-app GET は
-行わない)、作成後に解決済み ID で add を適用する。
+Graph は `publishingState` が `published` でない app への metadata / category / assignment write を拒否するため、
+content を Published 化してからこれらを適用する。新規 app では preflight で名前解決だけを行い(app ID がないので
+per-app GET は行わない)、作成後に content を activate してから解決済み ID で add を適用する。既存 app が
+`processing` の場合は既存の polling interval / timeout で `published` を待つ。`notPublished` の場合は保存済み
+`inputHash` が一致していても content の完了状態を確認する。content version が 0 件なら作成し、1 件なら再利用する。
+未 commit file は削除して現在の package を upload し直し、同じ `inputHash` の単一 file が commit 済みなら app の
+`committedContentVersion` PATCH から再開する。複数 version や commit 状態が混在・不明な場合は app / committed
+content を削除せず fail する。未知の `publishingState` や timeout も明確な Graph エラーとしてその entry を失敗させる。
 
 dry-run は Graph **read**(tenant / app の一覧取得)を行い、plan を表示して write は一切行わない。新規 app の plan
 では `(new app)` を app ID placeholder として使う。
@@ -189,8 +195,10 @@ dry-run は Graph **read**(tenant / app の一覧取得)を行い、plan を表�
 - `Categories` 省略時は category Graph call がなく、空配列時は全 relationship が remove plan になる。
 - 既存 relationship との差分が exact set として reconcile される。
 - dry-run が Graph write を行わず、add/keep/remove を表示し、新規 app では `(new app)` を使う。
-- 新規 app / 既存 app それぞれで orchestration 順序(preflight → app write → category apply → content →
-  assignment)が守られる。
+- 新規 app / 既存 app それぞれで orchestration 順序(preflight → create(新規のみ) → content activation →
+  metadata update(既存のみ) → category apply → assignment)が守られる。
+- `notPublished` の再実行で未完了 content version を再利用し、未 commit file だけを置換する。単一 committed file の
+  activation 再開と、複数 version / 混在 state の fail-safe も検証する。
 - `CategorySyncException` は batch を継続させ、tenant listing の `GraphAccessDeniedException` は batch を中断する。
 - result file の additive field と 4 つの outcome 値を検証する。
 - 2 回目の実行が Keep に収束する。

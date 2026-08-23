@@ -241,6 +241,7 @@ Rollback 後は Intune で app を確認し、assignments が意図した manife
 |---|---|---|
 | 既存 app が更新されず、Intune に別 app が増えた | `DisplayName`・`PackageIdentifier`・`Platform`・`Architecture` をバージョンと一緒に変更してしまい、identity 解決(doc/00-overview.md §6.1)が既存 app と一致しなくなった | 元の identity フィールドに戻して正しい app が更新されるよう再 publish し、余分に増えた app は Intune 管理センターで手動削除する(doc/00-overview.md §6.11 — リタイアは本ツールのスコープ外) |
 | run が `skipped (downgrade)` と報告した | manifest の version が Intune 側 metadata に保存された version より低い | 上記 §3 を参照 |
+| `Invalid operation: app's PublishingState is not 'Published'` で失敗した | Intune が app を処理中だった、または committed content version がまだ activate されていない状態で metadata / category を更新しようとした | 現在の CLI で同じ publish を再実行する。`processing` は `published` になるまで待機し、`notPublished` は `inputHash` が一致していても content を upload する。polling が timeout した場合は Intune の処理完了後に再実行する。app は削除・再作成しない |
 | `publish` は成功したが content が変わらない | `inputHash` が保存値と一致し、content upload が skip された(doc/00-overview.md §6.7) | manifest または入力ファイルが実際に変わっているか確認する。`inputHash` が変わっていなければ再アップロードを skip するのは仕様どおり |
 | macOS: publish 後もデバイス側の検出バージョンが変わらない | `Detection.IncludedApps[].BundleVersion` を新リリースに合わせて更新していない | manifest を修正して再 publish する |
 | ログに旧バージョンの `superseded by version X` が出る | 解決された set に同一 identity の複数バージョンが含まれる場合の仕様(doc/00-overview.md §6.8) | 対処不要 — 最高バージョンのみが publish される |
@@ -295,6 +296,12 @@ Publish が package metadata missing を報告した場合:
   `Requirements.MinimumOSVersion` が `MacOsMinimumOperatingSystemTable` の認識する値(`10.13`〜`13.0`、または
   `AppType: pkg` のみ有効な `14`/`14.0`/`15`/`15.0`)のいずれでもない。この mapping は `publish`(および
   `--dry-run`)時にのみ実行され `package` では行われないため、publish 前に manifest のバージョン文字列を修正する。
+- **`Resource not found for the segment 'contentVersions'` (HTTP 400)**: 古い CLI が app ID 直後の
+  OData 型キャストを付けずに content endpoint を呼び出している。Release 構成で CLI を再ビルドし、同じ
+  package artifact を使って publish を再実行する。修正版は `microsoft.graph.macOSPkgApp`（pkg）、
+  `microsoft.graph.macOSLobApp`（lob）、`microsoft.graph.win32LobApp`（Windows）の型付き URLを
+  content version 作成から files/commit まで一貫して使用する。このエラーが content version 作成時に
+  発生した場合、app を削除・再作成する必要はない。
 - **`UnsupportedMacOsVersionException`("AppType 'pkg'" に言及)**: manifest が `AppType: lob` かつ
   `Requirements.MinimumOSVersion` に macOS 14 以降を指定している。`macOSLobApp` は Graph v1.0 のままで、
   macOS 13 より先の minimum-OS フラグが無い。`MinimumOSVersion` を下げるか、`AppType: pkg`(Graph beta、
@@ -304,12 +311,20 @@ Publish が package metadata missing を報告した場合:
   のみ表面化する。
 - **`Detection.IncludedApps` が欠落または空**: macOS のすべての app entry は `IncludedApps` を 1 件以上
   (`BundleId` + `BundleVersion`)必要とする。これは `publish` ではなく `validate` で fail する。
-- **PKG の content upload が `commitFileSuccess` に到達しない**: `PkgContentPreparer` の
-  AES-256-CBC + HMAC-SHA256 暗号化形式は Microsoft の公開仕様が無く(doc/00-overview.md §6.13 参照)、
-  `IntuneWinContentExtractor` が `.intunewin` の content 解析にすでに依拠しているコミュニティ由来のスキームを
-  踏襲し、公開されている `fileEncryptionInfo.mac` の仕様と突き合わせて導出したものである。macOS entry でのみ
-  (Windows entry は影響を受けない)commit が繰り返し失敗する場合は、闇雲に retry せず、ログの Graph エラーと
-  `client-request-id`/`request-id` を添えて issue を起票する。
+- **PKG で `commitFileFailed` になる(または content upload が `commitFileSuccess` に到達しない)**:
+  旧 `PkgContentPreparer` は AES-256-CBC の ciphertext だけを upload していた。Intune が要求する upload
+  stream は `[MAC (32 バイト)][IV (16 バイト)][ciphertext]` で、`MAC = HMAC-SHA256(macKey, IV || ciphertext)`
+  とする。`sizeEncrypted` にも 48 バイトの header と ciphertext の両方を含める(doc/00-overview.md §6.13 参照)。
+  そのため SAS URI への upload は成功しても、commit 中に Graph が content を拒否することがある。現在の source
+  から Release 構成の CLI を再ビルドし、既存の package artifact を使って同じ `publish` を再実行する。PKG の
+  暗号化は `publish` 中に行われるため `package` の再実行は不要である。commit 失敗では app の有効な content は
+  変更されないので、app を削除・再作成しない。アップグレード後も `commitFileFailed` が続く場合は、ログの
+  Graph error と `client-request-id`/`request-id` を添えて issue を起票する。
+- **`The mobile app content cannot be updated before the first content version is committed` (HTTP 400)**:
+  以前の初回 upload が app を `notPublished`、content version を未 commit のまま残し、古い CLI が 2 件目の version を
+  作成しようとしている。Release CLI を再ビルドして同じ publish を再実行する。修正版は既存 version を列挙し、
+  `commitFileFailed` を含む未 commit file だけを削除して、同じ version に現在の package を upload する。app、content
+  version、commit 済み content は削除しない。複数 version や曖昧な commit state は推測せず明確なエラーで停止する。
 - **macOS `AppType: pkg` entry に特有の 403/404(`GraphRequestException`)**: pkg app の作成・更新・
   content upload はすべて Graph **beta** 経由で行われる(`macOSPkgApp` は v1.0 に存在しない)。service
   principal の Graph 権限(section 2a)とテナントの beta API 可用性を確認する。Windows や

@@ -388,10 +388,17 @@ relaypublisher publish --manifest-list manifest-list.json --package-dir ./out \
 ```
 
 8. `--dry-run` の出力を確認してから、`--dry-run` なしで `publish` を実行する。内部では、`publish` は notes
-   metadata から既存 app を解決し、downgrade guard(§6.8)を適用し、`inputHash` を比較して変化がなければ
-   content upload を skip し(§6.7)、そうでなければ新しい content version をアップロード・commit する。
-   `committedContentVersion` が patch された時点で新しい content が有効になり、この tool では戻せない
-   (§6.10) — rollback するには、以前のバージョンの manifest を `--allow-downgrade` 付きで再度 publish する。
+   metadata から既存 app を解決し、downgrade guard(§6.8)を適用する。`inputHash` の skip 判定の前に app の
+   `publishingState` を読み取り、`processing` なら `published` になるまで待機する。`notPublished` では 2 件目を
+   作成せず、中断した単一 content version を再利用する。未 commit file は置換し、同じ hash の単一 commit 済み
+   file は activation から再開する。未知または曖昧な state は app / committed content を削除せず失敗する。
+   `published` で hash が一致する場合だけ
+   content upload を skip し(§6.7)、それ以外は新しい content version をアップロード・commit する。content の
+   activation が完了してから既存 app の metadata、category、assignment を更新する — Graph は app が Published
+   でない間これらの write を拒否する。state polling が timeout した場合は Intune の処理完了後に同じ publish を
+   再実行し、app を削除・再作成しない。`committedContentVersion` が patch された時点で新しい content が有効になり、
+   この tool では戻せない(§6.10) — rollback するには、以前のバージョンの manifest を `--allow-downgrade` 付きで
+   再度 publish する。
 
 新しいバージョンフォルダを既存のものと並べて追加する実行可能な例は
 [samples/manifests/README_ja.md](../samples/manifests/README_ja.md#powershell-サンプルを新しいバージョンに更新する)
@@ -426,8 +433,11 @@ Apps:
   名前の不存在・曖昧一致はその manifest entry だけを失敗させ、batch の残りは継続し、再実行で収束する。
 - `publish --dry-run` は tenant catalog と app の現在の category を read し、add/keep/remove の plan を表示する
   だけで write は行わない。新規 app では placeholder ID `(new app)` を表示する。
-- category は app の作成/更新の直後、content upload の**前**に適用する。upload が失敗しても category が同期
-  されないままになる時間を最小化するため。
+- content を Published 化してから既存 app の metadata と category relationship を更新する。Graph は
+  `publishingState` が `published` でない app へのこれらの write を拒否する。`processing` の app は設定済みの
+  polling interval / timeout で待機する。`notPublished` の app は中断した単一 content version を再利用し、未 commit
+  file だけを置換するか、同じ `inputHash` の commit 済み file の activation を再開するため、同じ publish の再実行で
+  復旧できる。
 - result file(`--result-file`)には entry ごとに additive field `categoryOutcome` が 1 つ増える。値は `applied` /
   `unchanged` / `not-requested`、および category 処理に到達しなかった場合の null。category 単位の詳細は console
   出力と log に出る。

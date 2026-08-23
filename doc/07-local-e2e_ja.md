@@ -32,13 +32,14 @@ app-only の Graph token は `.default` scope により app 登録に事前設�
 
 この permission は実際の publish だけでなく `publish --dry-run` にも必要です。dry-run は何が変わるかを報告する前に既存の Intune app を解決するため、最初に `GET /deviceAppManagement/mobileApps` を呼び出し、permission がなければ 403 で失敗します。permission を付与する前に pipeline を試す手段として `--dry-run` を使うことはできません。
 
-client secret を使う Bash/zsh の例:
+client secret を使う Bash/zsh の例です。以下の共通構文を使ってください。Bash の `read -p` は zsh と互換性がなく、zsh では `-p` が coprocess からの読み込みを意味します。
 
 ```bash
 APP_ID="<application-client-id>"
 TENANT_ID="<tenant-id>"
-read -r -s -p "Client secret: " CLIENT_SECRET
-echo
+printf '%s' 'Client secret: ' >&2
+IFS= read -r -s CLIENT_SECRET
+printf '\n' >&2
 az login --service-principal \
   --username "$APP_ID" \
   --password "$CLIENT_SECRET" \
@@ -183,7 +184,7 @@ Azure Pipelines:
 
 ## 4. ローカル E2E ワークフロー
 
-以下の例は source tree から CLI を起動します。`--` は `dotnet run` の option と Relaypublisher の option を分けるために必要です。global tool としてインストール済みの `relaypublisher` を使う場合は、コマンド先頭を置き換えてください。
+以下の例は source tree の CLI を起動します。`--` は `dotnet run` の option と Relaypublisher の option を分けるために必要です。branch の変更を検証するときは、この source tree command をそのまま使用してください。global tool の `relaypublisher` は公開済み NuGet tool のため、古い content URL 実装が残っている場合があります。修正を含む release version をインストールした後だけ global tool に置き換えてください。
 
 ### 4.1 build と test
 
@@ -346,6 +347,32 @@ dotnet run --configuration Release --project $CliProject -- `
 ```
 
 Intune admin center で display name、`notes` の management metadata、committed content、detection rule、assignment、および manifest が `Categories` を宣言している場合は app の category を確認します。運用上の情報を含む場合があるため、`publish-result.json` を公開 artifact に含めないでください。
+
+Relaypublisher は content hash で skip を判断する前に app の `publishingState` を確認します。
+`processing` の app は `published` になるまで polling し、`notPublished` の app は中断した単一 content version を
+再利用して未 commit file を置換するか、同じ `inputHash` の commit 済み file の activation を再開します。
+polling が timeout した場合は Intune の処理完了後に同じ
+publish を再実行してください。app を削除・再作成する必要はありません。既存 app の metadata と category
+write は content activation 後にだけ実行されます。Graph は app が `Published` でない間これらの write を拒否します。
+
+content upload の Graph URL には app ID の直後に具体的な型キャストが必要です。既定の macOS `pkg` では
+`.../mobileApps/<app-id>/microsoft.graph.macOSPkgApp/contentVersions` になります。ログに
+`.../mobileApps/<app-id>/contentVersions` が出て `Resource not found for the segment 'contentVersions'`(HTTP 400)
+になった場合は、古い CLI が実行されています。現在のソースから Release 構成の CLI を再ビルドし、上記の
+source tree command で publish を再実行してください(または修正を含む release version を install します)。
+古い global tool に置き換えないでください。この失敗は content version 作成前に発生するため、app を削除・再作成する必要はありません。
+
+PKG でログに `Content upload step 'commit' failed with Graph uploadState 'commitFileFailed'` と出る場合は、
+旧 CLI が必要な `[MAC (32 バイト)][IV (16 バイト)]` header なしで ciphertext を upload した、または
+ciphertext だけの `sizeEncrypted` を報告した可能性があります。Release CLI を再ビルドします
+(`dotnet build IntuneLobPublisher.slnx --configuration Release`)。その後、既存の `manifest-list.json` と
+`./out` の package artifact を使い、同じ `publish` command を再実行してください。PKG の暗号化は
+`publish` 中に行われるため `package` の再実行は不要です。commit が失敗しただけでは新しい content は
+activate されないため、app を削除・再作成しないでください。
+
+次の実行で `The mobile app content cannot be updated before the first content version is committed` が出た場合は、
+古い CLI が 2 件目の version を作ろうとしています。現在の source から再ビルドして同じ publish を再実行します。
+修正版は最初の version を再利用し、未 commit の失敗 file だけを置換します。
 
 使い捨てのテスト tenant で category フローを end-to-end で確認する手順:
 

@@ -548,15 +548,27 @@ Tasks:
 Tasks:
 
 - Map manifest to win32LobApp(`allowedArchitectures` / `minimumSupportedWindowsRelease` / `returnCodes` / detection script の base64 埋め込みを含む。詳細は issue-003)。
-- Create or update app.
-- Skip content upload when stored `inputHash` matches.
 - Guard downgrade(既定 skip、`--allow-downgrade` で許可)。
+- Create a new app when the resolver reports no match. For an existing app, defer the metadata PATCH
+  until its content is published.
+- Read `publishingState` before deciding whether stored `inputHash` permits a skip. Wait for
+  `processing` to become `published`; force content upload for `notPublished` even when the hash matches;
+  fail immediately for an unknown state.
+- For `notPublished`, list typed `contentVersions` before creating one. Create a version when none exists;
+  reuse the sole existing version after deleting only its uncommitted files; reject multiple versions or
+  mixed/ambiguous committed state without deleting the app or committed content. When the stored and current
+  `inputHash` values match and the sole file is already committed, resume at the
+  `committedContentVersion` PATCH instead of uploading again.
 - Extract `.intunewin` and build `fileEncryptionInfo` from `Detection.xml`.
 - Upload encrypted payload to Azure Storage SAS URI(renewUpload 対応)。
+- Build every content URL with the concrete OData type-cast segment after the app id
+  (`win32LobApp`, `macOSPkgApp`, or `macOSLobApp`); the uncast `/contentVersions` route is not reliable.
 - Commit file with `fileEncryptionInfo` and poll commit state.
 - PATCH `committedContentVersion`.
 - Poll publishing state.
 - Update notes metadata.
+- After content activation reaches `published`, update the existing app metadata, then apply categories
+  and assignments.
 - Honor `Retry-After` on 429/503.
 
 ### Phase 7: Assignment management

@@ -9,11 +9,11 @@ namespace IntuneLobPublisher.Core.Publishing;
 /// <summary>
 /// Runs the per-app publish flow in the doc/00-overview.md 6.10 order: resolve the app, evaluate the
 /// version guard, run the category preflight (tenant name resolution, plus the current-relationship
-/// diff for an app that already exists) before any write, create/update the app resource, apply the
-/// category relationships, upload content, then plan and apply assignments. Categories are applied
-/// ahead of a possibly multi-GB content upload because they only depend on the app existing, which
-/// keeps the window where a failure leaves categories unsynchronized small. Dry-run computes and
-/// reports the same information without any Graph write.
+/// diff for an app that already exists) before any write, create a new app when needed, publish its
+/// content, update an existing app's metadata after the content is published, apply the category
+/// relationships, then plan and apply assignments. Content must be activated before metadata and
+/// category writes because Graph rejects writes to an app whose <c>publishingState</c> is not
+/// <c>published</c>. Dry-run computes and reports the same information without any Graph write.
 /// Platform-specific work (payload mapping, app create/update, content extraction) is delegated to
 /// an <see cref="IPlatformAppPublisher"/> chosen by <c>AppManifest.Platform</c>; a platform with no
 /// registered publisher is skipped rather than failing the whole run.
@@ -141,6 +141,18 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         else
         {
             appId = resolution.AppId!;
+        }
+
+        // Adopted apps have null resolution.Metadata, so content is always uploaded and the
+        // notes refresh inside the content flow performs the adopt write-back. The content flow also
+        // waits for an existing app to become published before deciding whether the input hash allows
+        // a skip, and activates a new content version before returning.
+        var contentResult = await platformPublisher.PublishContentAsync(
+                appId, request, artifacts, resolution.Metadata?.InputHash, managementMetadata, _contentUploadOptions, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!appCreated)
+        {
             await platformPublisher.UpdateAppAsync(appId, request, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation(
                 "Updated app {AppId} for {PackageIdentifier} {Platform}-{Architecture}",
@@ -151,12 +163,6 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         // resolved category ids stay valid, and a just-created app has no relationship to remove.
         categoryPlan = categoryPlan with { AppId = appId };
         await _categoryService.ApplyAsync(categoryPlan, app, cancellationToken).ConfigureAwait(false);
-
-        // Adopted apps have null resolution.Metadata, so content is always uploaded and the
-        // notes refresh inside the content flow performs the adopt write-back.
-        var contentResult = await platformPublisher.PublishContentAsync(
-                appId, request, artifacts, resolution.Metadata?.InputHash, managementMetadata, _contentUploadOptions, cancellationToken)
-            .ConfigureAwait(false);
 
         var plan = await _assignmentService.CreatePlanAsync(appId, app, syncMode, cancellationToken).ConfigureAwait(false);
         report?.ReportAssignmentPlan?.Invoke(plan);

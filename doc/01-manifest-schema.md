@@ -220,6 +220,13 @@ validation ルール:
 - `AppType: lob` の場合、top-level `Icon` を必須とする。
 - `AppType: lob` または `Platform: windows` の app entry に `Scripts` があれば fail(§5.4.2)。
 
+content upload の Graph URL は app の具体的な OData 型でキャストする。`contentVersions` は
+`mobileLobApp` から継承されるため、型キャストを省略した `/mobileApps/{id}/contentVersions` は
+Graph によって解決できず、`Resource not found for the segment 'contentVersions'`(HTTP 400)になる。
+`AppType: pkg` は beta の `microsoft.graph.macOSPkgApp`、`AppType: lob` は v1.0 の
+`microsoft.graph.macOSLobApp`、Windows は v1.0 の `microsoft.graph.win32LobApp` を使用する。
+content version の作成後も、files、状態取得、`renewUpload`、`commit` に同じキャストを付ける。
+
 ### 5.4.1 Icon の制約(issue #63)
 
 top-level `Icon`(§2 参照)には次の制約がある。`validate` / `package` / `publish` はすべて、Graph 呼び出し前にこれらを検証する。

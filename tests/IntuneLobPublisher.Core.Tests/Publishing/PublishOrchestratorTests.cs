@@ -64,6 +64,8 @@ public sealed class PublishOrchestratorTests
 
         public List<(string AppId, string? StoredInputHash)> ContentCalls { get; } = [];
 
+        public Exception? ContentException { get; set; }
+
         public int EnsureMappableCallCount { get; private set; }
 
         public string? CreatedNotes { get; private set; }
@@ -97,6 +99,11 @@ public sealed class PublishOrchestratorTests
         {
             ContentCalls.Add((appId, storedInputHash));
             _log.Add($"content {appId}");
+            if (ContentException is not null)
+            {
+                return Task.FromException<ContentUploadResult>(ContentException);
+            }
+
             return Task.FromResult(new ContentUploadResult(ContentUploadOutcome.Uploaded, "cv-1"));
         }
     }
@@ -484,10 +491,10 @@ public sealed class PublishOrchestratorTests
     }
 
     [TestMethod]
-    public async Task PublishAsync_ExistingAppWithCategories_PreflightsBeforeWriteAndAppliesBeforeContent()
+    public async Task PublishAsync_ExistingAppWithCategories_PublishesContentBeforeMetadataAndCategory()
     {
-        // The order the issue pins: preflight before any app write, apply after create/update but
-        // before the (possibly multi-GB) content upload, assignments last.
+        // Category preflight remains before any write. Existing apps publish content first so Graph
+        // accepts the subsequent metadata and category writes only after publishingState is published.
         var harness = CreateHarness([ExistingManagedApp()]);
         harness.CategoryService.CurrentCategories.Add(new IntuneAppCategory("cat-old", "Legacy"));
 
@@ -499,9 +506,9 @@ public sealed class PublishOrchestratorTests
             new[]
             {
                 $"category plan {ExistingAppId}",
+                $"content {ExistingAppId}",
                 $"app update {ExistingAppId}",
                 $"category apply {ExistingAppId}",
-                $"content {ExistingAppId}",
                 $"assignment plan {ExistingAppId}",
                 $"assignment apply {ExistingAppId}",
             },
@@ -522,8 +529,8 @@ public sealed class PublishOrchestratorTests
             {
                 $"category plan {PublishOrchestrator.NewAppPlaceholderId}",
                 "app create",
-                $"category apply {CreatedAppId}",
                 $"content {CreatedAppId}",
+                $"category apply {CreatedAppId}",
                 $"assignment plan {CreatedAppId}",
                 $"assignment apply {CreatedAppId}",
             },
@@ -567,7 +574,7 @@ public sealed class PublishOrchestratorTests
     }
 
     [TestMethod]
-    public async Task PublishAsync_CategoryApplyFails_DoesNotUploadContentOrTouchAssignments()
+    public async Task PublishAsync_CategoryApplyFails_AfterContentAndDoesNotTouchAssignments()
     {
         var harness = CreateHarness([ExistingManagedApp()]);
         harness.CategoryService.ApplyException = new CategorySyncException("Failed to add category.");
@@ -576,7 +583,23 @@ public sealed class PublishOrchestratorTests
             () => harness.Orchestrator.PublishAsync(
                 CreateRequest(ManifestWithCategories("Business Apps")), null, CancellationToken.None));
 
-        Assert.IsEmpty(harness.Publisher.ContentCalls);
+        Assert.HasCount(1, harness.Publisher.ContentCalls);
+        Assert.IsEmpty(harness.AssignmentService.Calls);
+    }
+
+    [TestMethod]
+    public async Task PublishAsync_ContentFails_DoesNotUpdateMetadataApplyCategoriesOrAssignments()
+    {
+        var harness = CreateHarness([ExistingManagedApp()]);
+        harness.Publisher.ContentException = new ContentUploadTimedOutException("publishingState", TimeSpan.FromMinutes(1));
+
+        await Assert.ThrowsExactlyAsync<ContentUploadTimedOutException>(
+            () => harness.Orchestrator.PublishAsync(
+                CreateRequest(ManifestWithCategories("Business Apps")), null, CancellationToken.None));
+
+        CollectionAssert.AreEqual(new[] { $"category plan {ExistingAppId}", $"content {ExistingAppId}" }, harness.Log);
+        Assert.IsEmpty(harness.Publisher.AppCalls);
+        Assert.IsEmpty(harness.CategoryService.Calls.Where(c => c.StartsWith("apply")));
         Assert.IsEmpty(harness.AssignmentService.Calls);
     }
 
