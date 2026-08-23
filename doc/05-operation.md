@@ -400,11 +400,18 @@ relaypublisher publish --manifest-list manifest-list.json --package-dir ./out \
 ```
 
 8. Review the `--dry-run` output before running `publish` without `--dry-run`. Behind the scenes,
-   `publish` resolves the existing app from notes metadata, applies the downgrade guard (§6.8), compares
-   `inputHash` and skips the content upload if it is unchanged (§6.7), then uploads and commits a new
-   content version. Once `committedContentVersion` is patched the new content is live and this tool
-   cannot revert it (§6.10) - rolling back means publishing the previous version's manifest again with
-   `--allow-downgrade`.
+   `publish` resolves the existing app from notes metadata and applies the downgrade guard (§6.8).
+   Before deciding whether the `inputHash` allows a skip, it reads the app's `publishingState`: an app in
+   `processing` is polled until `published`, while an app in `notPublished` recovers its sole interrupted
+   content version instead of creating a second one. Uncommitted files are replaced; a sole committed file
+   with the same hash resumes activation. Unknown or ambiguous states fail without deleting the app or
+   committed content. A `published` app with the same hash skips the content upload
+   (§6.7); otherwise the tool uploads and commits a new content version. Content activation completes before
+   existing-app metadata, category, or assignment writes, because Graph rejects those writes while the app is
+   not published. If the state polling times out, rerun the same publish after Intune finishes processing -
+   do not delete and recreate the app. Once `committedContentVersion` is patched the new content is live and
+   this tool cannot revert it (§6.10) - rolling back means publishing the previous version's manifest again
+   with `--allow-downgrade`.
 
 See [samples/manifests/README.md](../samples/manifests/README.md#updating-the-powershell-sample-to-a-new-version)
 for a runnable example that adds a new version folder next to an existing one.
@@ -440,8 +447,11 @@ Operational notes:
   of the batch continues and a rerun converges.
 - `publish --dry-run` reads the tenant catalog and the app's current categories and prints the
   add/keep/remove plan without writing anything. A new app shows the placeholder id `(new app)`.
-- Categories are applied right after the app is created or updated and *before* content is uploaded, so a
-  failed upload never leaves categories unsynchronized for longer than necessary.
+- Content is activated before an existing app's metadata and category relationships are written. Graph rejects
+  these writes while `publishingState` is not `published`; if Intune reports `processing`, Relaypublisher waits
+  using the configured publishing-state interval and timeout. A `notPublished` app reuses its sole interrupted
+  content version, replacing only uncommitted files or resuming activation of a committed file for the same
+  `inputHash`, so rerunning the same command repairs an app that was never activated.
 - The result file (`--result-file`) gains one additive field per entry, `categoryOutcome`: `applied`,
   `unchanged`, `not-requested`, or null when publishing never reached the category step. Per-category
   detail is in the console output and logs.

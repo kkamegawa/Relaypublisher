@@ -32,13 +32,14 @@ The app-only Graph token uses the permissions preconfigured on the app registrat
 
 This permission is required for `publish --dry-run` as well, not only for a real publish. A dry-run resolves the existing Intune app before it reports what would change, so it calls `GET /deviceAppManagement/mobileApps` first and fails with 403 without the permission. Do not treat `--dry-run` as a way to rehearse the pipeline before permissions are granted.
 
-Bash/zsh with a client secret:
+Bash/zsh with a client secret. Use the portable prompt form below: Bash's `read -p` option is not compatible with zsh, where `-p` means reading from a coprocess.
 
 ```bash
 APP_ID="<application-client-id>"
 TENANT_ID="<tenant-id>"
-read -r -s -p "Client secret: " CLIENT_SECRET
-echo
+printf '%s' 'Client secret: ' >&2
+IFS= read -r -s CLIENT_SECRET
+printf '\n' >&2
 az login --service-principal \
   --username "$APP_ID" \
   --password "$CLIENT_SECRET" \
@@ -183,7 +184,7 @@ Azure Pipelines:
 
 ## 4. Local E2E workflow
 
-The examples invoke the CLI from the source tree. The `--` separates `dotnet run` options from Relaypublisher options. A globally installed `relaypublisher` command can be used instead after replacing the command prefix.
+The examples invoke the CLI from the source tree. The `--` separates `dotnet run` options from Relaypublisher options. When validating changes on a branch, keep using this source-tree command: a globally installed `relaypublisher` command is a published NuGet tool and can still contain the old content URL implementation. Use the global command only after a release containing the change has been installed.
 
 ### 4.1 Build and test
 
@@ -347,6 +348,33 @@ dotnet run --configuration Release --project $CliProject -- `
 ```
 
 Verify the app in the Intune admin center, including its display name, management metadata in `notes`, committed content, detection rules, assignments, and - when the manifest declares `Categories` - the app's categories. Keep `publish-result.json` out of public artifacts if it contains operational details.
+
+Relaypublisher checks the app's `publishingState` before deciding whether the content hash permits a
+skip. An app in `processing` is polled until `published`; an app in `notPublished` reuses its sole
+interrupted content version, replacing uncommitted files or resuming activation of a committed file for the
+same `inputHash`. If polling times out, wait for Intune to finish
+processing and rerun the same publish. Do not delete and recreate the app. Existing-app metadata and
+category writes are performed only after content activation, because Graph rejects them while the app is
+not `Published`.
+
+For content upload, the Graph request URL must include the concrete app type after the app id, for example
+`.../mobileApps/<app-id>/microsoft.graph.macOSPkgApp/contentVersions` for the default macOS `pkg` app.
+If the log instead shows `.../mobileApps/<app-id>/contentVersions` and Graph returns
+`Resource not found for the segment 'contentVersions'`, the old CLI was executed. Rebuild the Release CLI from
+the current source and rerun the publish with the source-tree command shown above (or install a released tool
+version that contains the fix); do not substitute an older global tool. This failure occurs before a content
+version is created.
+
+If the log reports `Content upload step 'commit' failed with Graph uploadState 'commitFileFailed'` for a PKG,
+the old CLI may have uploaded ciphertext without the required `[MAC (32 bytes)][IV (16 bytes)]` header, or
+reported a ciphertext-only `sizeEncrypted`. Rebuild the Release CLI (`dotnet build IntuneLobPublisher.slnx
+--configuration Release`) and rerun the same `publish` command with the existing `manifest-list.json` and
+`./out` package artifact. PKG encryption is performed during `publish`, so do not rerun `package`; a failed
+commit does not activate the new content, so do not delete or recreate the app.
+
+If the next run reports `The mobile app content cannot be updated before the first content version is
+committed`, it used an older CLI that tried to create a second version. Rebuild again from the current source
+and rerun: the fixed flow reuses the first version and replaces only its uncommitted failed file.
 
 To exercise the category flow end to end on a disposable test tenant:
 

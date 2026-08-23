@@ -241,6 +241,7 @@ Symptoms after bumping `PackageVersion` for an existing app (doc/05-operation.md
 |---|---|---|
 | A second app showed up in Intune instead of the existing one being updated | `DisplayName`, `PackageIdentifier`, `Platform`, or `Architecture` changed along with the version, so identity resolution (doc/00-overview.md §6.1) no longer matched the existing app | Restore the original identity fields, republish so the correct app is updated, and remove the extra app manually in the Intune admin center (doc/00-overview.md §6.11 - retirement is out of scope for this tool) |
 | The run reported `skipped (downgrade)` | The manifest version is lower than the version stored in Intune metadata | See §3 above |
+| The run failed with `Invalid operation: app's PublishingState is not 'Published'` | Intune was still processing the app, or the app had never activated a committed content version when metadata/category was written | Rerun with the current CLI. Relaypublisher waits for `processing` to become `published` and forces a content upload for `notPublished` even when `inputHash` matches. If polling times out, wait for Intune to finish and rerun; the app is not deleted or recreated |
 | `publish` succeeded but the content did not change | `inputHash` matched the stored value, so content upload was skipped (doc/00-overview.md §6.7) | Confirm the manifest or its input files actually changed; an unchanged `inputHash` is expected to skip re-upload |
 | macOS: devices still report the old detected version after publish | `Detection.IncludedApps[].BundleVersion` was not updated to match the new release | Fix the manifest and republish |
 | The log shows `superseded by version X` for the older manifest | Expected when a resolved set contains more than one version of the same identity (doc/00-overview.md §6.8) | No action needed - only the highest version is published |
@@ -295,6 +296,12 @@ If publish reports missing package metadata:
   `Requirements.MinimumOSVersion` is not one of the values `MacOsMinimumOperatingSystemTable` recognizes
   (`10.13`-`13.0`, or `14`/`14.0`/`15`/`15.0` for `AppType: pkg` only). This mapping only runs during
   `publish` (including `--dry-run`), not `package`, so fix the version string before publishing.
+- **`Resource not found for the segment 'contentVersions'` (HTTP 400)**: an old CLI called the content
+  endpoint without the OData type cast after the app id. Rebuild the Release CLI and rerun publish with the
+  same package artifact. The fixed client uses typed routes consistently from content-version creation
+  through files and commit: `microsoft.graph.macOSPkgApp` for `pkg`, `microsoft.graph.macOSLobApp` for
+  `lob`, and `microsoft.graph.win32LobApp` for Windows. If this occurred during content-version creation,
+  the app does not need to be deleted or recreated.
 - **`UnsupportedMacOsVersionException` mentioning "AppType 'pkg'"**: the manifest has `AppType: lob` with
   `Requirements.MinimumOSVersion` set to macOS 14 or later. `macOSLobApp` stays on Graph v1.0, which has no
   minimum-OS flag past macOS 13. Either lower `MinimumOSVersion`, or switch to `AppType: pkg` (Graph beta,
@@ -304,12 +311,21 @@ If publish reports missing package metadata:
   this kind of error before any Graph write).
 - **`Detection.IncludedApps` missing or empty**: every macOS app entry requires at least one
   `IncludedApps` item (`BundleId` + `BundleVersion`); this fails at `validate`, not `publish`.
-- **PKG content upload never reaches `commitFileSuccess`**: `PkgContentPreparer`'s AES-256-CBC + HMAC-SHA256
-  encryption format has no published Microsoft specification (see doc/00-overview.md §6.13) - it is derived
-  from the same community-established scheme `IntuneWinContentExtractor` already relies on to parse
-  `.intunewin` content, cross-checked against the documented `fileEncryptionInfo.mac` semantics. If commit
-  repeatedly fails for macOS entries specifically (Windows entries unaffected), file an issue with the
-  Graph error and `client-request-id`/`request-id` from the log rather than retrying blindly.
+- **`commitFileFailed` (or the content upload never reaches `commitFileSuccess`) for a PKG**: an older
+  `PkgContentPreparer` uploaded only the AES-256-CBC ciphertext. Intune expects the uploaded stream to be
+  `[MAC (32 bytes)][IV (16 bytes)][ciphertext]`, with `MAC = HMAC-SHA256(macKey, IV || ciphertext)`;
+  `sizeEncrypted` must include the 48-byte header as well as the ciphertext (doc/00-overview.md §6.13).
+  The SAS upload can therefore succeed while Graph rejects the content during commit. Rebuild the Release
+  CLI from the current source, then rerun the exact same `publish` with the existing package artifact.
+  PKG encryption happens during `publish`, so rerunning `package` is not required. The app's active content
+  was not changed by a failed commit; do not delete or recreate the app. If `commitFileFailed` persists after
+  upgrading, report the Graph error and `client-request-id`/`request-id` from the log.
+- **`The mobile app content cannot be updated before the first content version is committed` (HTTP 400)**:
+  a previous first upload left the app `notPublished` with an uncommitted content version, and an older CLI
+  tried to create a second version. Rebuild the Release CLI and rerun the same publish. The fixed client lists
+  the existing version, removes only its uncommitted files (including `commitFileFailed`), and uploads the
+  current package into that same version. It does not delete the app, content version, or committed content.
+  Multiple versions or ambiguous committed state fail safely with an actionable error instead of guessing.
 - **`GraphRequestException` with a 403/404 specific to macOS `AppType: pkg` entries**: pkg apps are
   created, updated, and content-uploaded entirely through Graph **beta** (`macOSPkgApp` does not exist in
   v1.0). Confirm the service principal's Graph permissions (section 2a) and the tenant's beta API

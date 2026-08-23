@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace IntuneLobPublisher.Core.Publishing;
 
-/// <summary>Request body for <c>POST .../mobileApps/{id}/contentVersions</c>.</summary>
+/// <summary>Request body for <c>POST .../mobileApps/{id}/{appType}/contentVersions</c>.</summary>
 public sealed class MobileAppContentCreateRequest
 {
     [JsonPropertyName("@odata.type")]
@@ -16,7 +16,7 @@ public sealed class MobileAppContentResponse
     public string? Id { get; init; }
 }
 
-/// <summary>Request body for <c>POST .../contentVersions/{cv}/files</c>.</summary>
+/// <summary>Request body for <c>POST .../mobileApps/{id}/{appType}/contentVersions/{cv}/files</c>.</summary>
 public sealed class MobileAppContentFileCreateRequest
 {
     [JsonPropertyName("@odata.type")]
@@ -48,6 +48,13 @@ public sealed class MobileAppContentFileResponse
 
     [JsonPropertyName("azureStorageUriExpirationDateTime")]
     public DateTimeOffset? AzureStorageUriExpirationDateTime { get; init; }
+
+    /// <summary>
+    /// Whether Intune has fully committed this file. Nullable so recovery fails safely when Graph omits
+    /// the field instead of treating an unknown state as an uncommitted file that may be deleted.
+    /// </summary>
+    [JsonPropertyName("isCommitted")]
+    public bool? IsCommitted { get; init; }
 
     /// <summary>
     /// A <c>mobileAppContentFileUploadState</c> member name, e.g. <c>azureStorageUriRequestSuccess</c> or

@@ -308,10 +308,12 @@ manifest はバージョン別フォルダで管理するが、app identity は�
 
 Rollback 機能は実装しないが、Win32 コンテンツ更新のトランザクション境界を明文化する。
 
-- 新しい content version の作成・ファイルアップロード・commit までは、**既存クライアントには旧コンテンツが配信され続ける**。この区間での失敗は安全であり、再実行すれば収束する。
+- 新しい content version の作成・ファイルアップロード・commit までは、**既存クライアントには旧コンテンツが配信され続ける**。この区間での失敗は安全であり、再実行時は Graph の未完了 content state を確認して収束させる。
 - `win32LobApp.committedContentVersion` を PATCH した時点で新コンテンツが有効になる。**この操作以降は戻せない**(戻すには旧バージョンの manifest を `--allow-downgrade` で再 publish する)。
-- app 本体のプロパティ PATCH と assignment 適用は個別に冪等であり、部分失敗しても再実行で収束する。
-- category relationship の `$ref` add/remove も個別に冪等であり、app create/update の直後・content upload の前に適用する(6.20)。content upload や assignment sync が失敗しても、次回実行時に Graph の現在値から plan を再計算して収束する。
+- 既存 app の publish は `publishingState` を先に確認する。`processing` の場合は `published` になるまで待機し、`notPublished` の場合は保存済み `inputHash` が一致していても content を upload・activate する。未知の state は即時に fail する。待機が timeout した場合は失敗として報告し、app を削除・再作成せずに再実行で復旧する。
+- `notPublished` の app は、最初の content version が未 commit のまま残っている可能性がある。content version が 0 件なら新規作成し、1 件ならその version を再利用する。再利用する version に未 commit file だけがある場合は、それらを削除して現在の package を新しい file として upload する。現在の `inputHash` と保存済み `inputHash` が一致し、単一の file が commit 済みなら、file を削除せず `committedContentVersion` の PATCH から再開する。content version が複数ある、commit 済み file と未 commit file が混在する、または commit 済み file と現在の input の対応を証明できない場合は、app / version / commit 済み file を自動削除せず fail する。
+- content の commit と `committedContentVersion` PATCH、`publishingState = published` の確認を完了してから、既存 app のプロパティ PATCH、category relationship、assignment を適用する。Graph は `publishingState` が `published` でない app へのこれらの更新を拒否する。
+- app 本体のプロパティ PATCH、category relationship の `$ref` add/remove、assignment 適用は個別に冪等であり、部分失敗しても再実行で収束する。category relationship は content の**後**に適用する(6.20)。content upload や assignment sync が失敗しても、次回実行時に Graph の現在値から plan を再計算して収束する。
 
 ### 6.11 App 削除・リタイアのライフサイクル
 
@@ -356,6 +358,28 @@ v1.0 に存在するため `AppType: lob` は `/v1.0/` のまま。両者は同�
 使用する API バージョンを判定する。副作用として、v1.0 の `macOSMinimumOperatingSystem` には macOS 14 以降の
 フラグが無いため、`AppType: lob` で `Requirements.MinimumOSVersion` に macOS 14 以降を指定すると publish 時に
 fail する(`AppType: pkg` への切り替えが必要)。
+
+`contentVersions` は `mobileLobApp` から継承されるため、content upload の URL では app ID の直後に
+具体的な OData 型キャスト(`microsoft.graph.win32LobApp` / `microsoft.graph.macOSPkgApp` /
+`microsoft.graph.macOSLobApp`)を含める。`/mobileApps/{id}/contentVersions` のようにキャストを省略すると、
+Graph が `Resource not found for the segment 'contentVersions'`(HTTP 400)を返すことがある。create、files、
+ファイル状態の取得、`renewUpload`、`commit` のすべてで同じ型付きルートを使用し、型セグメントは許可リストで検証する。
+
+**macOS PKG content upload のバイト列と暗号化**: `PkgContentPreparer` は、Windows のような
+`IntuneWinAppUtil` が無いため、staged `.pkg` を in-process で AES-256-CBC(PKCS7) 暗号化する。Graph の
+SAS URI へ送るバイト列は、ciphertext だけではなく、先頭に **`[MAC (32 バイト)][IV (16 バイト)]`** を付けた
+次のレイアウトにする。
+
+```text
+[MAC (32 bytes)][IV (16 bytes)][AES-256-CBC ciphertext]
+```
+
+ここで `MAC = HMAC-SHA256(macKey, IV || ciphertext)` であり、`IV || ciphertext` が HMAC の対象である。
+暗号化 key、`macKey`、IV、MAC は `fileEncryptionInfo` として `commit` に渡すが、アップロードする content
+stream にも MAC と IV の header が必要である。Graph の `sizeEncrypted` は ciphertext の長さではなく、
+この **48 バイトの header を含む全体長**(`32 + 16 + ciphertext.Length`)を指定する。header が欠落したり
+`sizeEncrypted` が ciphertext のみの長さだったりすると、SAS への upload 自体は成功しても Graph の
+`commitFileFailed` になる(復旧方法は doc/06-troubleshooting.md §6a を参照)。
 
 **pre/post install script**(`AppType: pkg` 限定、issue #86): Graph `macOSPkgApp` は `preInstallScript` /
 `postInstallScript`(型 `macOSAppScript`、プロパティは base64 エンコードされた `scriptContent` のみ)を持つが、
@@ -456,15 +480,18 @@ Intune の app category は tenant 共有の `mobileAppCategory` リソースで
 
   1. app resolution と downgrade guard
   2. category preflight(tenant 名前解決 + 既存 app なら現在の relationship 取得と plan 作成)
-  3. app create/update
-  4. category relationship apply(add を先、remove を後)
-  5. content publish
-  6. assignment plan / apply
+  3. app create(新規 app の場合のみ)
+  4. content publish / activation(`publishingState` が `published` になるまで待機)
+  5. app metadata update(既存 app の場合のみ)
+  6. category relationship apply(add を先、remove を後)
+  7. assignment plan / apply
 
-  category relationship は app が存在することにしか依存しないため、最大 8 GB になり得る content upload の**前**に
-  適用して失敗ウィンドウを最小化する。新規 app では preflight で名前解決だけを済ませ(app ID がまだ無いので
-  per-app GET は行わない)、作成後に解決済み ID で add だけを適用する。dry-run は read のみ行い、plan を表示して
-  write は行わない。新規 app の plan では `(new app)` を app ID placeholder として使う。
+  Graph は `publishingState` が `published` でない app の metadata や category relationship を拒否するため、content を
+  Published 化してから metadata、category、assignment を適用する。新規 app では preflight で名前解決だけを済ませ
+  (app ID がまだ無いので per-app GET は行わない)、作成後に content を activate してから解決済み ID で add を適用する。
+  既存 app が `processing` の場合は同じ polling interval / timeout で `published` を待ち、`notPublished` の場合は
+  hash 一致でも content を再 upload する。dry-run は read のみ行い、plan を表示して write は行わない。新規 app の plan
+  では `(new app)` を app ID placeholder として使う。
 - `$ref` の冪等性: `GraphRetryHandler` は 429/503 で request body ごと再送するため、POST が二重に届き得る。
   **「既に関連付け済み」を明示するレスポンスだけを成功として扱い**、DELETE の 404 も成功として扱う。判定できない
   4xx は失敗のままとする(400 / 409 を一律に握り潰さない)。Learn には既存 category の `$ref` request example が

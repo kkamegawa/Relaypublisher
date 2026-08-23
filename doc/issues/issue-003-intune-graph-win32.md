@@ -55,7 +55,7 @@ The `.intunewin` file produced by IntuneWinAppUtil is a ZIP container holding th
 
 1. Extract the `.intunewin` container; parse `Detection.xml` into a `fileEncryptionInfo` payload (encryptionKey, initializationVector, mac, macKey, profileIdentifier=ProfileVersion1, fileDigest, fileDigestAlgorithm=SHA256).
 2. `POST .../mobileApps/{id}/microsoft.graph.win32LobApp/contentVersions` to create a new content version.
-3. `POST .../contentVersions/{cv}/files` with `name`, `size` (unencrypted), `sizeEncrypted`.
+3. `POST .../mobileApps/{id}/microsoft.graph.win32LobApp/contentVersions/{cv}/files` with `name`, `size` (unencrypted), `sizeEncrypted`.
 4. Poll the file until `uploadState = azureStorageUriRequestSuccess` and read `azureStorageUri`.
 5. Upload the encrypted payload to the SAS URI as Azure block blob chunks. For long uploads, call the `renewUpload` action before SAS expiry and continue.
 6. `POST .../files/{f}/commit` with the `fileEncryptionInfo`.
@@ -64,7 +64,7 @@ The `.intunewin` file produced by IntuneWinAppUtil is a ZIP container holding th
 9. Poll `publishingState` until `published`.
 10. Update notes management metadata (packageVersion, inputHash, manifestHash, sourceCommit).
 
-Transaction boundary: steps 1–7 are safe to retry — existing clients keep receiving the previous committed content. Step 8 activates the new content and cannot be undone by this tool (rollback = republish the previous manifest version with `--allow-downgrade`).
+Transaction boundary: steps 1–7 are safe to retry — existing clients keep receiving the previous committed content. On retry, a `notPublished` app reuses its sole existing content version: uncommitted files are removed and replaced, while a sole committed file for the same `inputHash` resumes from step 8. Multiple versions, mixed committed/uncommitted files, or a committed file that cannot be tied to the current input fail without deleting the app or committed content. Step 8 activates the new content and cannot be undone by this tool (rollback = republish the previous manifest version with `--allow-downgrade`).
 
 ## Acceptance criteria
 

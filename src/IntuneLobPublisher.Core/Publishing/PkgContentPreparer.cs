@@ -53,10 +53,17 @@ public sealed class PkgContent : IUploadableContent
 /// Windows content. Per the Graph <c>fileEncryptionInfo</c> resource
 /// (https://learn.microsoft.com/graph/api/resources/intune-apps-fileencryptioninfo), <c>mac</c> is
 /// "the hash of the concatenation of the IV and encrypted file content" - HMAC-SHA256 keyed by
-/// <c>macKey</c> - computed here over IV ‖ ciphertext, while only the ciphertext itself (no IV, no MAC)
-/// is uploaded as the content stream, matching how the Win32 flow already separates the two: the
-/// uploaded bytes are pure ciphertext, and IV/MAC/keys travel out of band in the commit call
-/// (<see cref="IMobileAppContentClient.CommitFileAsync"/>).
+/// <c>macKey</c> - computed here over IV ‖ ciphertext. The uploaded content stream itself must carry
+/// a 48-byte <c>[mac (32 bytes)][iv (16 bytes)]</c> header in front of the ciphertext - this is the same
+/// layout the <c>IntunePackage.intunewin</c> content entry already has, which is why
+/// <see cref="IntuneWinContentExtractor"/> can stream that entry unmodified and never needed to add a
+/// header itself. Confirmed against Microsoft's reference implementation
+/// (microsoftgraph/powershell-intune-samples, LOB_Application/Application_LOB_Add.ps1,
+/// <c>EncryptFileWithIV</c>): it reserves <c>hmacLength + ivLength</c> bytes at the start of the target
+/// file, streams the ciphertext after them, then seeks back to fill in the IV and the HMAC. <c>sizeEncrypted</c>
+/// reported to Graph is the full header-plus-ciphertext file length, not the ciphertext length alone.
+/// The encryption key itself never appears in the uploaded bytes; it travels out of band only in the
+/// commit call (<see cref="IMobileAppContentClient.CommitFileAsync"/>).
 /// </summary>
 public sealed class PkgContentPreparer : IUploadableContentExtractor
 {
@@ -65,6 +72,12 @@ public sealed class PkgContentPreparer : IUploadableContentExtractor
 
     // Must be a multiple of the AES block size (16 bytes) so only the final chunk needs PKCS7 padding.
     private const int ChunkSizeBytes = 1024 * 1024;
+
+    // HMAC-SHA256 output is 32 bytes, AES IV is 16 bytes; Intune expects the uploaded content stream to
+    // start with [mac][iv] ahead of the ciphertext (see the class doc for the reference citation).
+    private const int MacLengthBytes = 32;
+    private const int IvLengthBytes = 16;
+    private const int HeaderLengthBytes = MacLengthBytes + IvLengthBytes;
 
     public IUploadableContent Extract(string contentPath)
     {
@@ -106,7 +119,11 @@ public sealed class PkgContentPreparer : IUploadableContentExtractor
     /// Streams <paramref name="contentPath"/> through AES-CBC encryption into <paramref name="encryptedPath"/>
     /// in bounded-size chunks (rather than buffering the whole file) since a PKG may be up to 8 GB
     /// (doc/00-overview.md §6.13). Computes the plaintext SHA256 digest and the IV ‖ ciphertext HMAC in
-    /// the same pass.
+    /// the same pass, and writes the result as <c>[mac (32 bytes)][iv (16 bytes)][ciphertext]</c> -
+    /// the layout Intune expects on the wire (see the class doc for the reference-implementation
+    /// citation). The mac is not known until the whole ciphertext has been hashed, so the header starts
+    /// as a zero-filled placeholder and is back-filled with two small seeks once encryption finishes,
+    /// rather than buffering the ciphertext in memory or re-reading the file from disk.
     /// </summary>
     private static (byte[] FileDigest, byte[] Mac) EncryptToFile(
         string contentPath, string encryptedPath, byte[] key, byte[] iv, byte[] macKey)
@@ -124,6 +141,9 @@ public sealed class PkgContentPreparer : IUploadableContentExtractor
 
         using var input = File.OpenRead(contentPath);
         using var output = File.Create(encryptedPath);
+
+        // Reserve the 48-byte [mac][iv] header; back-filled below once the mac is known.
+        output.Write(new byte[HeaderLengthBytes]);
 
         var readBuffer = new byte[ChunkSizeBytes];
         var writeBuffer = new byte[ChunkSizeBytes];
@@ -147,6 +167,12 @@ public sealed class PkgContentPreparer : IUploadableContentExtractor
         hmac.TransformBlock(finalBlock, 0, finalBlock.Length, null, 0);
         hmac.TransformFinalBlock([], 0, 0);
         var mac = hmac.Hash!;
+
+        // Back-fill the header now that the mac is known: [mac][iv], matching the layout Intune expects.
+        output.Seek(0, SeekOrigin.Begin);
+        output.Write(mac, 0, mac.Length);
+        output.Write(iv, 0, iv.Length);
+        output.Flush();
 
         return (fileDigest, mac);
     }
