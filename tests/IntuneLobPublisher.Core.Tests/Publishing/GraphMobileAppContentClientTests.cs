@@ -98,7 +98,7 @@ public sealed class GraphMobileAppContentClientTests
         const string nextLink = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.macOSPkgApp/contentVersions/cv-1/files?$skiptoken=next";
         var (client, handler) = CreateClient(
             _ => JsonResponse(HttpStatusCode.OK, $$"""
-                {"value":[{"id":"file-1","uploadState":"commitFileFailed","isCommitted":false}],"@odata.nextLink":"{{nextLink}}"}
+                {"value":[{"id":"file-1","uploadState":"commitFileFailed","isCommitted":false,"name":"app.pkg","size":123,"sizeEncrypted":171}],"@odata.nextLink":"{{nextLink}}"}
                 """),
             _ => JsonResponse(HttpStatusCode.OK, """{"value":[{"id":"file-2","uploadState":"commitFileSuccess","isCommitted":true}]}"""));
 
@@ -108,54 +108,15 @@ public sealed class GraphMobileAppContentClientTests
         Assert.AreEqual("file-1", files[0].Id);
         Assert.IsTrue(files[0].IsCommitted == false);
         Assert.AreEqual("commitFileFailed", files[0].UploadState);
+        Assert.AreEqual("app.pkg", files[0].Name);
+        Assert.AreEqual(123, files[0].Size);
+        Assert.AreEqual(171, files[0].SizeEncrypted);
         Assert.AreEqual("file-2", files[1].Id);
         Assert.IsTrue(files[1].IsCommitted == true);
         Assert.AreEqual(
-            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.macOSPkgApp/contentVersions/cv-1/files?$select=id,isCommitted,uploadState",
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.macOSPkgApp/contentVersions/cv-1/files?$select=id,isCommitted,uploadState,name,size,sizeEncrypted",
             handler.Requests[0].Uri);
         Assert.AreEqual(nextLink, handler.Requests[1].Uri);
-    }
-
-    [TestMethod]
-    public async Task DeleteContentFileAsync_NoContent_UsesUntypedBetaRouteAndNoBody()
-    {
-        var (client, handler) = CreateClient(_ => EmptyResponse(HttpStatusCode.NoContent));
-
-        await client.DeleteContentFileAsync("app-1", "cv-1", "file-1", MacPkgODataType, useBeta: true, CancellationToken.None);
-
-        Assert.AreEqual("DELETE", handler.Requests[0].Method);
-        Assert.AreEqual(
-            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/contentVersions/cv-1/files/file-1",
-            handler.Requests[0].Uri);
-        Assert.IsNull(handler.Requests[0].Body);
-    }
-
-    [TestMethod]
-    public async Task DeleteContentFileAsync_NotFound_IsIdempotent()
-    {
-        var (client, handler) = CreateClient(
-            _ => JsonResponse(HttpStatusCode.NotFound, """{"error":{"code":"itemNotFound","message":"already deleted"}}"""));
-
-        await client.DeleteContentFileAsync("app-1", "cv-1", "file-1", WindowsODataType, useBeta: false, CancellationToken.None);
-
-        Assert.AreEqual("DELETE", handler.Requests[0].Method);
-        Assert.AreEqual(
-            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/contentVersions/cv-1/files/file-1",
-            handler.Requests[0].Uri);
-    }
-
-    [TestMethod]
-    public async Task DeleteContentFileAsync_UnrecognizedODataType_ThrowsWithoutCallingGraph()
-    {
-        var (client, handler) = CreateClient(
-            _ => throw new InvalidOperationException("Should not reach the network for an unrecognized OData type."));
-
-        var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(
-            () => client.DeleteContentFileAsync(
-                "app-1", "cv-1", "file-1", "#microsoft.graph.unknownAppType", useBeta: false, CancellationToken.None));
-
-        StringAssert.Contains(ex.Message, "unknownAppType");
-        Assert.IsEmpty(handler.Requests);
     }
 
     [TestMethod]
@@ -281,6 +242,57 @@ public sealed class GraphMobileAppContentClientTests
 
         Assert.AreEqual("published", state);
         StringAssert.Contains(handler.Requests[0].Uri, "$select=publishingState");
+    }
+
+    [TestMethod]
+    public async Task GetContentStateAsync_ReadsFullAppWithoutDerivedPropertySelect()
+    {
+        var (client, handler) = CreateClient(
+            _ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"notPublished"}"""),
+            _ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"notPublished","committedContentVersion":"cv-1"}"""));
+
+        var state = await client.GetContentStateAsync("app-1", MacPkgODataType, useBeta: true, CancellationToken.None);
+
+        Assert.AreEqual("notPublished", state.PublishingState);
+        Assert.AreEqual("cv-1", state.CommittedContentVersion);
+        Assert.AreEqual(
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1?$select=publishingState",
+            handler.Requests[0].Uri);
+        Assert.AreEqual(
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1",
+            handler.Requests[1].Uri);
+    }
+
+    [TestMethod]
+    public async Task GetContentStateAsync_Published_DoesNotRequestFullApp()
+    {
+        var (client, handler) = CreateClient(
+            _ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"published"}"""));
+
+        var state = await client.GetContentStateAsync("app-1", MacPkgODataType, useBeta: true, CancellationToken.None);
+
+        Assert.AreEqual("published", state.PublishingState);
+        Assert.IsNull(state.CommittedContentVersion);
+        Assert.HasCount(1, handler.Requests);
+        Assert.AreEqual(
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1?$select=publishingState",
+            handler.Requests[0].Uri);
+    }
+
+    [TestMethod]
+    public async Task GetContentStateAsync_GenericBadRequestOnFullApp_RetriesRead()
+    {
+        var (client, handler) = CreateClient(
+            _ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"notPublished"}"""),
+            _ => JsonResponse(HttpStatusCode.BadRequest, """{"error":{"code":"BadRequest","message":"An error has occurred"}}"""),
+            _ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"notPublished","committedContentVersion":null}"""));
+
+        var state = await client.GetContentStateAsync("app-1", MacPkgODataType, useBeta: true, CancellationToken.None);
+
+        Assert.AreEqual("notPublished", state.PublishingState);
+        Assert.IsNull(state.CommittedContentVersion);
+        Assert.HasCount(3, handler.Requests);
+        Assert.AreEqual(handler.Requests[1].Uri, handler.Requests[2].Uri);
     }
 
     [TestMethod]

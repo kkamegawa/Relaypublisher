@@ -403,7 +403,9 @@ relaypublisher publish --manifest-list manifest-list.json --package-dir ./out \
    `publish` resolves the existing app from notes metadata and applies the downgrade guard (§6.8).
    Before deciding whether the `inputHash` allows a skip, it reads the app's `publishingState`: an app in
    `processing` is polled until `published`, while an app in `notPublished` recovers its sole interrupted
-   content version instead of creating a second one. Uncommitted files are replaced; a sole committed file
+   content version instead of creating a second one. A version with no files gets its first file. When stale
+   files exist, exactly one compatible uncommitted file in a supported terminal failure state is renewed and
+   reused; zero matches or multiple files fail without adding another file. A sole committed file
    with the same hash resumes activation. Unknown or ambiguous states fail without deleting the app or
    committed content. A `published` app with the same hash skips the content upload
    (§6.7); otherwise the tool uploads and commits a new content version. Content activation completes before
@@ -450,7 +452,7 @@ Operational notes:
 - Content is activated before an existing app's metadata and category relationships are written. Graph rejects
   these writes while `publishingState` is not `published`; if Intune reports `processing`, Relaypublisher waits
   using the configured publishing-state interval and timeout. A `notPublished` app reuses its sole interrupted
-  content version, replacing only uncommitted files or resuming activation of a committed file for the same
+  content version, renewing a compatible uncommitted file, or resuming activation of a committed file for the same
   `inputHash`, so rerunning the same command repairs an app that was never activated.
 - The result file (`--result-file`) gains one additive field per entry, `categoryOutcome`: `applied`,
   `unchanged`, `not-requested`, or null when publishing never reached the category step. Per-category

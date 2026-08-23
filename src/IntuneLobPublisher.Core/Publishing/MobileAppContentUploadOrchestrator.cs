@@ -24,8 +24,9 @@ public sealed record PublishableContent(string ContentPath, string InputHash);
 /// encrypted payload, commit it, activate it, wait for publishing, and refresh the app's notes metadata.
 /// Before the hash-based skip decision it reads the app's <c>publishingState</c>; an app still in
 /// <c>processing</c> is waited on. For <c>notPublished</c>, an interrupted first content version is
-/// recovered without creating a second version: uncommitted files are replaced, while a sole committed
-/// file for the same input resumes at app activation. Ambiguous states fail without destructive cleanup.
+/// recovered without creating a second version when its uncommitted file metadata matches the current
+/// package. Incompatible or mixed file states fail without destructive cleanup because Intune exposes no
+/// working file-delete route for this app type. A sole committed file for the same input resumes at activation.
 /// Platform-neutral: the caller supplies the right <see cref="IUploadableContentExtractor"/>
 /// (<see cref="IntuneWinContentExtractor"/> for Windows, <see cref="PkgContentPreparer"/> for macOS) and
 /// whether this app's Graph calls must stay on <c>/beta/</c> (macOS <c>AppType: pkg</c>).
@@ -85,9 +86,10 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         bool useBeta,
         CancellationToken cancellationToken)
     {
-        var publishingState = await _contentClient
-            .GetPublishingStateAsync(appId, useBeta, cancellationToken)
+        var appContentState = await _contentClient
+            .GetContentStateAsync(appId, oDataType, useBeta, cancellationToken)
             .ConfigureAwait(false);
+        var publishingState = appContentState.PublishingState;
 
         switch (publishingState)
         {
@@ -115,7 +117,8 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
 
         var recovery = publishingState == "notPublished"
             ? await ResolveNotPublishedContentAsync(
-                    appId, storedInputHash, content.InputHash, oDataType, useBeta, cancellationToken)
+                    appId, storedInputHash, content.InputHash, appContentState.CommittedContentVersion,
+                    oDataType, useBeta, cancellationToken)
                 .ConfigureAwait(false)
             : ContentRecoveryPlan.CreateNew;
 
@@ -126,33 +129,61 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
                 .ConfigureAwait(false);
         }
 
-        // Prepare the local payload before deleting stale Graph files. A local extraction/encryption
-        // failure must leave the remote recovery state untouched so the next run can try again.
+        // Prepare the local payload before selecting or creating its Graph file record. A local
+        // extraction/encryption failure must leave the remote recovery state untouched.
         using var uploadable = extractor.Extract(content.ContentPath);
 
         var contentVersionId = recovery.ContentVersionId
             ?? await _contentClient.CreateContentVersionAsync(appId, oDataType, useBeta, cancellationToken).ConfigureAwait(false);
 
-        foreach (var staleFileId in recovery.UncommittedFileIds)
+        if (recovery.UncommittedFiles.Count > 1)
         {
-            await _contentClient
-                .DeleteContentFileAsync(appId, contentVersionId, staleFileId, oDataType, useBeta, cancellationToken)
-                .ConfigureAwait(false);
+            throw UnsafeRecoveryState(
+                appId,
+                $"Content version '{contentVersionId}' contains {recovery.UncommittedFiles.Count} uncommitted files; " +
+                "exactly one metadata-compatible file is required for non-destructive recovery.");
         }
 
-        var fileId = await _contentClient.CreateContentFileAsync(
-                appId, contentVersionId, uploadable.ContentFileName, uploadable.UnencryptedContentSize, uploadable.EncryptedContentSize,
-                oDataType, useBeta, cancellationToken)
-            .ConfigureAwait(false);
+        var reusableFiles = recovery.UncommittedFiles
+            .Where(file => MatchesPackageMetadata(file, uploadable))
+            .ToList();
 
-        var readyFile = await PollFileStateAsync(
-                appId, contentVersionId, fileId, stage: "azureStorageUriRequest",
-                successState: "azureStorageUriRequestSuccess", failureStates: AzureStorageUriRequestFailureStates,
-                options.AzureStorageUriPollInterval, options.AzureStorageUriTimeout, oDataType, useBeta, cancellationToken)
-            .ConfigureAwait(false);
+        if (recovery.UncommittedFiles.Count != 0 && reusableFiles.Count == 0)
+        {
+            throw UnsafeRecoveryState(
+                appId,
+                $"Content version '{contentVersionId}' contains uncommitted files that do not match the current package metadata. " +
+                "Intune does not expose a working delete route for these files, so the notPublished app must be explicitly recreated.");
+        }
 
-        var sasUri = new Uri(RequireAzureStorageUri(readyFile, "azureStorageUriRequestSuccess"));
-        var expiresAt = RequireAzureStorageUriExpiration(readyFile, "azureStorageUriRequestSuccess");
+        string fileId;
+        Uri sasUri;
+        DateTimeOffset expiresAt;
+        if (reusableFiles.Count == 1)
+        {
+            fileId = reusableFiles[0].Id!;
+            var renewal = await RenewSasUriAsync(
+                    appId, contentVersionId, fileId, options, oDataType, useBeta, cancellationToken)
+                .ConfigureAwait(false);
+            sasUri = renewal.Uri;
+            expiresAt = renewal.ExpiresAt;
+        }
+        else
+        {
+            fileId = await _contentClient.CreateContentFileAsync(
+                    appId, contentVersionId, uploadable.ContentFileName, uploadable.UnencryptedContentSize, uploadable.EncryptedContentSize,
+                    oDataType, useBeta, cancellationToken)
+                .ConfigureAwait(false);
+
+            var readyFile = await PollFileStateAsync(
+                    appId, contentVersionId, fileId, stage: "azureStorageUriRequest",
+                    successState: "azureStorageUriRequestSuccess", failureStates: AzureStorageUriRequestFailureStates,
+                    options.AzureStorageUriPollInterval, options.AzureStorageUriTimeout, oDataType, useBeta, cancellationToken)
+                .ConfigureAwait(false);
+
+            sasUri = new Uri(RequireAzureStorageUri(readyFile, "azureStorageUriRequestSuccess"));
+            expiresAt = RequireAzureStorageUriExpiration(readyFile, "azureStorageUriRequestSuccess");
+        }
 
         using (var payloadStream = uploadable.OpenEncryptedContentStream())
         {
@@ -197,6 +228,7 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         string appId,
         string? storedInputHash,
         string currentInputHash,
+        string? committedContentVersion,
         string oDataType,
         bool useBeta,
         CancellationToken cancellationToken)
@@ -207,6 +239,13 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
 
         if (contentVersions.Count == 0)
         {
+            if (!string.IsNullOrWhiteSpace(committedContentVersion))
+            {
+                throw UnsafeRecoveryState(
+                    appId,
+                    $"Graph reports committedContentVersion '{committedContentVersion}' but returned no content versions.");
+            }
+
             return ContentRecoveryPlan.CreateNew;
         }
 
@@ -218,6 +257,14 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         }
 
         var contentVersionId = contentVersions[0].Id!;
+        if (!string.IsNullOrWhiteSpace(committedContentVersion)
+            && !string.Equals(committedContentVersion, contentVersionId, StringComparison.Ordinal))
+        {
+            throw UnsafeRecoveryState(
+                appId,
+                $"Graph reports committedContentVersion '{committedContentVersion}', which does not match sole content version '{contentVersionId}'.");
+        }
+
         var files = await _contentClient
             .ListContentFilesAsync(appId, contentVersionId, oDataType, useBeta, cancellationToken)
             .ConfigureAwait(false);
@@ -232,12 +279,23 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         var committedFiles = files.Where(file => file.IsCommitted is true).ToList();
         var uncommittedFiles = files.Where(file => file.IsCommitted is false).ToList();
 
+        if (uncommittedFiles.Any(file => !IsRecoverableUncommittedUploadState(file.UploadState)))
+        {
+            throw UnsafeRecoveryState(
+                appId,
+                $"Content version '{contentVersionId}' contains an uncommitted file whose uploadState is still pending or unsupported.");
+        }
+
         if (committedFiles.Count == 0)
         {
-            return new ContentRecoveryPlan(
-                contentVersionId,
-                uncommittedFiles.Select(file => file.Id!).ToArray(),
-                ResumeActivation: false);
+            if (string.Equals(committedContentVersion, contentVersionId, StringComparison.Ordinal))
+            {
+                throw UnsafeRecoveryState(
+                    appId,
+                    $"Content version '{contentVersionId}' is referenced by committedContentVersion but contains no committed file.");
+            }
+
+            return new ContentRecoveryPlan(contentVersionId, uncommittedFiles, ResumeActivation: false);
         }
 
         if (uncommittedFiles.Count != 0 || committedFiles.Count != 1)
@@ -256,6 +314,17 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
 
         return new ContentRecoveryPlan(contentVersionId, [], ResumeActivation: true);
     }
+
+    private static bool MatchesPackageMetadata(MobileAppContentFileResponse file, IUploadableContent uploadable)
+        => string.Equals(file.Name, uploadable.ContentFileName, StringComparison.Ordinal)
+            && file.Size == uploadable.UnencryptedContentSize
+            && file.SizeEncrypted == uploadable.EncryptedContentSize;
+
+    private static bool IsRecoverableUncommittedUploadState(string uploadState)
+        => uploadState is "azureStorageUriRequestFailed"
+            or "azureStorageUriRenewalFailed"
+            or "commitFileFailed"
+            or "error";
 
     private async Task<ContentUploadResult> ActivateContentVersionAsync(
         string appId,
@@ -379,7 +448,7 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
 
     private sealed record ContentRecoveryPlan(
         string? ContentVersionId,
-        IReadOnlyList<string> UncommittedFileIds,
+        IReadOnlyList<MobileAppContentFileResponse> UncommittedFiles,
         bool ResumeActivation)
     {
         public static ContentRecoveryPlan CreateNew { get; } = new(null, [], ResumeActivation: false);

@@ -350,7 +350,9 @@ Intune admin center で display name、`notes` の management metadata、committ
 
 Relaypublisher は content hash で skip を判断する前に app の `publishingState` を確認します。
 `processing` の app は `published` になるまで polling し、`notPublished` の app は中断した単一 content version を
-再利用して未 commit file を置換するか、同じ `inputHash` の commit 済み file の activation を再開します。
+再利用します。file が 0 件なら最初の file を作成し、対応する終端失敗 state の互換な未 commit file が総数 1 件なら
+renew して再利用します。一致しない、または複数 file の場合は追加せず安全に停止します。
+同じ `inputHash` の commit 済み file がある場合は activation を再開します。
 polling が timeout した場合は Intune の処理完了後に同じ
 publish を再実行してください。app を削除・再作成する必要はありません。既存 app の metadata と category
 write は content activation 後にだけ実行されます。Graph は app が `Published` でない間これらの write を拒否します。
@@ -372,7 +374,8 @@ activate されないため、app を削除・再作成しないでください�
 
 次の実行で `The mobile app content cannot be updated before the first content version is committed` が出た場合は、
 古い CLI が 2 件目の version を作ろうとしています。現在の source から再ビルドして同じ publish を再実行します。
-修正版は最初の version を再利用し、未 commit の失敗 file だけを置換します。
+修正版は、互換な未 commit file を renew できる場合だけ最初の version を再利用します。一致しない古い file が
+残る場合は、同じ version に sibling file を追加せず停止します。
 
 使い捨てのテスト tenant で category フローを end-to-end で確認する手順:
 

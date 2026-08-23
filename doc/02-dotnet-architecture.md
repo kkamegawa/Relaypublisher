@@ -555,7 +555,9 @@ Tasks:
   `processing` to become `published`; force content upload for `notPublished` even when the hash matches;
   fail immediately for an unknown state.
 - For `notPublished`, list typed `contentVersions` before creating one. Create a version when none exists;
-  reuse the sole existing version after deleting only its uncommitted files; reject multiple versions or
+  reuse a sole existing version. When that version has no files, create its first file. When it contains
+  uncommitted files, renew and reuse only when the total count is one, its terminal failure state is supported,
+  and its name and sizes match the current payload; reject non-matching or multiple files, multiple versions, or
   mixed/ambiguous committed state without deleting the app or committed content. When the stored and current
   `inputHash` values match and the sole file is already committed, resume at the
   `committedContentVersion` PATCH instead of uploading again.
@@ -563,8 +565,8 @@ Tasks:
 - Upload encrypted payload to Azure Storage SAS URI(renewUpload 対応)。
 - Build content URLs with the concrete OData type-cast segment after the app id
   (`win32LobApp`, `macOSPkgApp`, or `macOSLobApp`); the uncast `/contentVersions` route is not reliable.
-  The `mobileAppContentFile` DELETE operation is the exception and uses Graph's uncast
-  `/mobileApps/{id}/contentVersions/{versionId}/files/{fileId}` route.
+  Interrupted-upload recovery uses `renewUpload` for a metadata-compatible file and does not depend on
+  content-version/file DELETE or PATCH routes. It fails instead of adding a sibling file when stale file metadata differs.
 - Commit file with `fileEncryptionInfo` and poll commit state.
 - PATCH `committedContentVersion`.
 - Poll publishing state.

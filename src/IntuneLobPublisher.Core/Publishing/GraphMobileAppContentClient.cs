@@ -11,8 +11,7 @@ namespace IntuneLobPublisher.Core.Publishing;
 /// app's publishing state. See doc/issues/issue-003-intune-graph-win32.md "Content upload flow".
 /// <c>useBeta</c> routes the whole call through <c>/beta/</c> instead of <c>/v1.0/</c>: content
 /// sub-resources (contentVersions/files) are inherited from <c>mobileLobApp</c> and generally require an
-/// OData type-cast segment after the app id. The file DELETE operation is the exception: Graph registers
-/// only its uncast route. A <c>macOSPkgApp</c> parent id is itself beta-only
+/// OData type-cast segment after the app id. A <c>macOSPkgApp</c> parent id is itself beta-only
 /// (https://learn.microsoft.com/graph/api/resources/intune-apps-macospkgapp), so every call touching
 /// that app - including its content sub-resources - stays on <c>/beta/</c> for consistency.
 /// </summary>
@@ -37,13 +36,6 @@ public interface IMobileAppContentClient
     Task<MobileAppContentFileResponse> GetContentFileAsync(
         string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Deletes an uncommitted file through the uncast mobileAppContentFile route.
-    /// A 404 is accepted as an idempotent retry.
-    /// </summary>
-    Task DeleteContentFileAsync(
-        string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken);
-
     /// <summary>Requests a fresh Azure Storage SAS URI before the current one expires.</summary>
     Task RenewUploadAsync(string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken);
 
@@ -59,6 +51,10 @@ public interface IMobileAppContentClient
 
     /// <summary>Reads the app's current <c>publishingState</c> ("notPublished", "processing" or "published").</summary>
     Task<string> GetPublishingStateAsync(string appId, bool useBeta, CancellationToken cancellationToken);
+
+    /// <summary>Reads the state needed before deciding whether an interrupted content version can be recovered.</summary>
+    Task<MobileAppContentState> GetContentStateAsync(
+        string appId, string oDataType, bool useBeta, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -121,7 +117,7 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
     {
         var results = new List<MobileAppContentFileResponse>();
         string? requestUri = ContentVersionPath(appId, contentVersionId, oDataType, useBeta)
-            + "/files?$select=id,isCommitted,uploadState";
+            + "/files?$select=id,isCommitted,uploadState,name,size,sizeEncrypted";
 
         while (requestUri is not null)
         {
@@ -166,20 +162,6 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         return await GraphResponseReader.ReadJsonAsync<MobileAppContentFileResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeleteContentFileAsync(
-        string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken)
-    {
-        _ = ToGraphTypeSegment(oDataType);
-        var requestUri = UntypedFilePath(appId, contentVersionId, fileId, useBeta);
-        using var response = await _httpClient.DeleteAsync(requestUri, cancellationToken).ConfigureAwait(false);
-        if (response.StatusCode == HttpStatusCode.NotFound)
-        {
-            return;
-        }
-
-        await GraphResponseReader.EnsureSuccessAsync(response, requestUri, cancellationToken).ConfigureAwait(false);
-    }
-
     public async Task RenewUploadAsync(string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken)
     {
         var requestUri = FilePath(appId, contentVersionId, fileId, oDataType, useBeta) + "/renewUpload";
@@ -216,8 +198,40 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
     {
         var requestUri = AppPath(appId, useBeta) + "?$select=publishingState";
         using var response = await _httpClient.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
-        var body = await GraphResponseReader.ReadJsonAsync<Win32LobAppPublishingStateResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
+        var body = await GraphResponseReader.ReadJsonAsync<MobileLobAppContentStateResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
         return body.PublishingState;
+    }
+
+    public async Task<MobileAppContentState> GetContentStateAsync(
+        string appId, string oDataType, bool useBeta, CancellationToken cancellationToken)
+    {
+        _ = ToGraphTypeSegment(oDataType);
+        var publishingState = await GetPublishingStateAsync(appId, useBeta, cancellationToken).ConfigureAwait(false);
+        if (!string.Equals(publishingState, "notPublished", StringComparison.Ordinal))
+        {
+            return new MobileAppContentState(publishingState, null);
+        }
+
+        // Intune's untyped singleton is the only route that exposes the derived
+        // committedContentVersion property for macOSPkgApp, but the backend can intermittently return
+        // a generic 400 for this read. Retry only this idempotent GET; malformed OData requests still
+        // fail after the bounded attempts and mutation requests are never retried on 400.
+        var requestUri = AppPath(appId, useBeta);
+        for (var attempt = 0; ; attempt++)
+        {
+            using var response = await _httpClient.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var body = await GraphResponseReader
+                    .ReadJsonAsync<MobileLobAppContentStateResponse>(response, requestUri, cancellationToken)
+                    .ConfigureAwait(false);
+                return new MobileAppContentState(body.PublishingState, body.CommittedContentVersion);
+            }
+            catch (GraphRequestException ex) when (ex.StatusCode == (int)HttpStatusCode.BadRequest && attempt < 3)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(200 * (1 << attempt)), cancellationToken).ConfigureAwait(false);
+            }
+        }
     }
 
     private static string AppPath(string appId, bool useBeta)
@@ -231,9 +245,6 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
 
     private static string FilePath(string appId, string contentVersionId, string fileId, string oDataType, bool useBeta)
         => $"{ContentVersionPath(appId, contentVersionId, oDataType, useBeta)}/files/{Uri.EscapeDataString(fileId)}";
-
-    private static string UntypedFilePath(string appId, string contentVersionId, string fileId, bool useBeta)
-        => $"{AppPath(appId, useBeta)}/contentVersions/{Uri.EscapeDataString(contentVersionId)}/files/{Uri.EscapeDataString(fileId)}";
 
     /// <summary>
     /// Validates the OData type-cast route segment instead of percent-encoding it. This client only

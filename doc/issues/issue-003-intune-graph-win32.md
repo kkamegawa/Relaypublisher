@@ -64,7 +64,7 @@ The `.intunewin` file produced by IntuneWinAppUtil is a ZIP container holding th
 9. Poll `publishingState` until `published`.
 10. Update notes management metadata (packageVersion, inputHash, manifestHash, sourceCommit).
 
-Transaction boundary: steps 1–7 are safe to retry — existing clients keep receiving the previous committed content. On retry, a `notPublished` app reuses its sole existing content version: uncommitted files are removed and replaced, while a sole committed file for the same `inputHash` resumes from step 8. Multiple versions, mixed committed/uncommitted files, or a committed file that cannot be tied to the current input fail without deleting the app or committed content. Step 8 activates the new content and cannot be undone by this tool (rollback = republish the previous manifest version with `--allow-downgrade`).
+Transaction boundary: steps 1–7 are safe to retry — existing clients keep receiving the previous committed content. On retry, a `notPublished` app reuses its sole existing content version: zero files permits creation of the first file, exactly one compatible uncommitted file in a supported terminal failure state can be renewed and reused, and a sole committed file for the same `inputHash` resumes from step 8. No matching file, multiple versions, mixed committed/uncommitted files, multiple uncommitted files, or a committed file that cannot be tied to the current input fail without deleting the app or content. Step 8 activates the new content and cannot be undone by this tool (rollback = republish the previous manifest version with `--allow-downgrade`).
 
 ## Acceptance criteria
 
