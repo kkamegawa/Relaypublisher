@@ -1,4 +1,5 @@
 using IntuneLobPublisher.Core.Manifests;
+using IntuneLobPublisher.Core.Validation;
 
 namespace IntuneLobPublisher.Core.Publishing.Categories;
 
@@ -50,12 +51,13 @@ public sealed record CategoryPlan(
 
 /// <summary>
 /// Picks the Graph API version for category calls the same way the app and content clients do
-/// (doc/00-overview.md §6.13): <c>macOSPkgApp</c> is beta-only, everything else uses v1.0. Category
-/// relationships exist on <c>mobileApp</c> in both versions, so this only has to stay consistent with
-/// the version the rest of the app's calls use.
+/// (doc/00-overview.md §6.13): <c>macOSPkgApp</c> is beta-only, everything else uses v1.0. The
+/// macOS default app type is <see cref="ManifestValues.DefaultMacOsAppType"/>, and category
+/// relationships exist on <c>mobileApp</c> in both versions, so this only has to stay consistent
+/// with the version the rest of the app's calls use.
 /// </summary>
 public static class CategoryApiVersion
 {
     public static bool UseBeta(AppManifest app)
-        => app.Platform == "macos" && (app.AppType ?? "pkg") == "pkg";
+        => app.Platform == "macos" && (app.AppType ?? ManifestValues.DefaultMacOsAppType) == ManifestValues.DefaultMacOsAppType;
 }

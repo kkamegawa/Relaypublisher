@@ -124,9 +124,10 @@ public static class PublishResultOutput
         };
 
     /// <summary>
-    /// Maps a publish result onto the additive <c>categoryOutcome</c> field. Only a completed publish
-    /// can report a category outcome: a skip never reaches the preflight, and a dry-run deliberately
-    /// performs no write, so both stay null rather than claiming categories were applied.
+    /// Maps a publish result onto the additive <c>categoryOutcome</c> field. Only a completed
+    /// publish (Outcome == Published) with a CategoryPlan reports a value; all other cases
+    /// (skipped downloads, unsupported platforms, dry-runs, or failures before the preflight step)
+    /// return null.
     /// </summary>
     public static string? ToCategoryWireValue(PublishResult result)
     {
