@@ -294,7 +294,7 @@ Publish が package metadata missing を報告した場合:
 
 - **`UnsupportedMacOsVersionException`("no known macOS minimum-operating-system mapping")**:
   `Requirements.MinimumOSVersion` が `MacOsMinimumOperatingSystemTable` の認識する値(`10.13`〜`13.0`、または
-  `AppType: pkg` のみ有効な `14`/`14.0`/`15`/`15.0`)のいずれでもない。この mapping は `publish`(および
+  `AppType: pkg` のみ有効な `14`/`14.0`/`15`/`15.0`/`26`/`26.0`)のいずれでもない。この mapping は `publish`(および
   `--dry-run`)時にのみ実行され `package` では行われないため、publish 前に manifest のバージョン文字列を修正する。
 - **`Resource not found for the segment 'contentVersions'` (HTTP 400)**: 古い CLI が app ID 直後の
   OData 型キャストを付けずに content endpoint を呼び出している。Release 構成で CLI を再ビルドし、同じ
@@ -327,6 +327,13 @@ Publish が package metadata missing を報告した場合:
   名前・サイズが一致する未 commit file が総数 1 件のときだけ renew して再利用する。一致する file が無い、または複数なら、
   stale な失敗 file が残る version を Intune が activate できないため、追加 file を作成せず停止する。app、content version、
   file は自動削除しない。複数 version、複数の一致 file、または曖昧な commit state も明確なエラーで停止する。
+- **`v14_0`/`v15_0` が `'microsoft.graph.macOSMinimumOperatingSystem'` に存在しないという 400
+  (`GraphRequestException`、修正済み)**: 旧バージョンはすべての macOS app payload に `v14_0`/`v15_0` を
+  (`false` であっても)常に含めていたが、Graph v1.0 の `macOSMinimumOperatingSystem` にはこれらのプロパティ
+  自体が存在しない(beta のみに存在する)。このため `Requirements.MinimumOSVersion` の値に関わらず、
+  `AppType: lob` の create/update がすべて失敗していた。`MacOsMinimumOperatingSystemPayload` は現在、
+  v1.0 向けの場合はこれらのフィールド(および新規追加した beta 専用の `v26_0`)を null のままにし、
+  リクエストボディから省略する(`false` として送信しない)。
 - **macOS `AppType: pkg` entry に特有の 403/404(`GraphRequestException`)**: pkg app の作成・更新・
   content upload はすべて Graph **beta** 経由で行われる(`macOSPkgApp` は v1.0 に存在しない)。service
   principal の Graph 権限(section 2a)とテナントの beta API 可用性を確認する。Windows や

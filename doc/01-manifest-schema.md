@@ -327,7 +327,7 @@ macOS:
 
 | manifest | Graph | 備考 |
 |---|---|---|
-| `MinimumOSVersion: "14.0"` | `minimumSupportedOperatingSystem` | boolean flag の複合型。v1.0 は `v13_0` までしか無く、macOS 14/15 のフラグは beta 専用。`AppType: lob`(v1.0)で 14 以降を指定すると fail する |
+| `MinimumOSVersion: "14.0"` | `minimumSupportedOperatingSystem` | boolean flag の複合型。v1.0 は `v13_0` までしか無く、macOS 14/15/26 のフラグは beta 専用。`AppType: lob`(v1.0)で 14 以降を指定すると fail する |
 | `Detection.IncludedApps`(`AppType: pkg`) | `includedApps`(`macOSIncludedApp`: `bundleId` + `bundleVersion`) | 先頭要素の値がそのまま `primaryBundleId` / `primaryBundleVersion` にもなる |
 | `Detection.IncludedApps`(`AppType: lob`) | `childApps`(`macOSLobChildApp`: `bundleId` + `buildNumber` + `versionNumber`)。先頭要素が top-level `buildNumber` / `versionNumber` にもなる | `pkg` の `includedApps` とはフィールド名・形が異なる点に注意 |
 

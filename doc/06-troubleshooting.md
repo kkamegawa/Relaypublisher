@@ -294,7 +294,7 @@ If publish reports missing package metadata:
 
 - **`UnsupportedMacOsVersionException` mentioning "no known macOS minimum-operating-system mapping"**:
   `Requirements.MinimumOSVersion` is not one of the values `MacOsMinimumOperatingSystemTable` recognizes
-  (`10.13`-`13.0`, or `14`/`14.0`/`15`/`15.0` for `AppType: pkg` only). This mapping only runs during
+  (`10.13`-`13.0`, or `14`/`14.0`/`15`/`15.0`/`26`/`26.0` for `AppType: pkg` only). This mapping only runs during
   `publish` (including `--dry-run`), not `package`, so fix the version string before publishing.
 - **`Resource not found for the segment 'contentVersions'` (HTTP 400)**: an old CLI called the content
   endpoint without the OData type cast after the app id. Rebuild the Release CLI and rerun publish with the
@@ -328,6 +328,13 @@ If publish reports missing package metadata:
   match the current package. When none matches or multiple files exist, it fails without adding another file because Intune cannot activate
   a version that retains the stale failed file. It does not automatically delete the app, content version, or
   files. Multiple versions, multiple matching files, or ambiguous committed state also fail safely.
+- **`GraphRequestException` 400 mentioning `v14_0`/`v15_0` "does not exist on type
+  'microsoft.graph.macOSMinimumOperatingSystem'" (fixed)**: earlier versions always serialized `v14_0`
+  and `v15_0` (even as `false`) on every macOS app payload, but Graph v1.0's `macOSMinimumOperatingSystem`
+  has no such properties at all - only the beta resource does. This made every `AppType: lob` create/update
+  fail, regardless of `Requirements.MinimumOSVersion`. `MacOsMinimumOperatingSystemPayload` now leaves
+  those fields (and the newly-added beta-only `v26_0`) null for a v1.0 target, so they are omitted from
+  the request body instead of sent as a literal `false`.
 - **`GraphRequestException` with a 403/404 specific to macOS `AppType: pkg` entries**: pkg apps are
   created, updated, and content-uploaded entirely through Graph **beta** (`macOSPkgApp` does not exist in
   v1.0). Confirm the service principal's Graph permissions (section 2a) and the tenant's beta API

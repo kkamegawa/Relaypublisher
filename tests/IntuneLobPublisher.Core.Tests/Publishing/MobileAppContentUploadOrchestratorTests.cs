@@ -688,6 +688,23 @@ public sealed class MobileAppContentUploadOrchestratorTests
     }
 
     [TestMethod]
+    public async Task PublishContentAsync_MatchingInputHash_ProcessingNeverClears_ThrowsContentUploadTimedOutExceptionWithoutPatchingNotes()
+    {
+        var client = new FakeMobileAppContentClient();
+        for (var i = 0; i < 10; i++)
+        {
+            client.PublishingStates.Enqueue("processing");
+        }
+
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+
+        var ex = await Assert.ThrowsExactlyAsync<ContentUploadTimedOutException>(() => PublishAsync(
+            orchestrator, "app-1", CreateContent(inputHash: "same-hash"), storedInputHash: "same-hash", CreateMetadata(), FastOptions()));
+
+        Assert.AreEqual("publishingState", ex.Stage);
+        Assert.IsEmpty(client.PatchedNotes);
+    }
+    [TestMethod]
     public async Task PublishContentAsync_HappyPath_RunsAllStepsAndReturnsUploaded()
     {
         var client = new FakeMobileAppContentClient();

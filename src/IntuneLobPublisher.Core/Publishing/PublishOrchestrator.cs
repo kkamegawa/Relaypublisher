@@ -153,7 +153,7 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
 
         if (!appCreated)
         {
-            await platformPublisher.UpdateAppAsync(appId, request, cancellationToken).ConfigureAwait(false);
+            await platformPublisher.UpdateAppAsync(appId, request, _contentUploadOptions, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation(
                 "Updated app {AppId} for {PackageIdentifier} {Platform}-{Architecture}",
                 appId, identity.PackageIdentifier, identity.Platform, identity.Architecture);

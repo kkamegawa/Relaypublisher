@@ -50,6 +50,19 @@ public interface IMobileAppContentUploadOrchestrator
         string oDataType,
         bool useBeta,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Waits until the app publishingState leaves "processing". Graph rejects a full app-payload PATCH
+    /// while a previous content commit is still finishing, so callers that issue such a PATCH ahead of
+    /// (or independently of) a content upload - currently <see cref="IPlatformAppPublisher.UpdateAppAsync"/> -
+    /// should call this first, in case the app was left mid-"processing" by an interrupted previous run.
+    /// Unlike waiting for "published" specifically, this accepts either "notPublished" or "published" as
+    /// ready-to-write: a brand-new app that has never had a content version committed sits at
+    /// "notPublished" indefinitely until its first <c>committedContentVersion</c> PATCH, so requiring
+    /// "published" here would deadlock that case.
+    /// </summary>
+    Task WaitWhilePublishingStateProcessingAsync(
+        string appId, ContentUploadOptions options, bool useBeta, CancellationToken cancellationToken);
 }
 
 public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUploadOrchestrator
@@ -336,17 +349,17 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         CancellationToken cancellationToken)
     {
         // Point of no return (doc/00-overview.md 6.10): existing clients are served this content from here on.
-        await _contentClient
-            .PatchCommittedContentVersionAsync(appId, contentVersionId, oDataType, useBeta, cancellationToken)
+        // No pre-guard here: waiting for publishingState to leave "processing" before this call would
+        // deadlock a brand-new app, which sits at "notPublished" until this very PATCH gives it a
+        // committedContentVersion for the first time.
+        await _contentClient.PatchCommittedContentVersionAsync(appId, contentVersionId, oDataType, useBeta, cancellationToken)
             .ConfigureAwait(false);
 
-        await PollPublishingStateAsync(
-                appId, options.PublishingStatePollInterval, options.PublishingStateTimeout, useBeta, cancellationToken)
+        await PollPublishingStateAsync(appId, options.PublishingStatePollInterval, options.PublishingStateTimeout, useBeta, cancellationToken)
             .ConfigureAwait(false);
 
-        await _contentClient
-            .PatchNotesAsync(appId, metadata.Serialize(), oDataType, useBeta, cancellationToken)
-            .ConfigureAwait(false);
+        // publishingState is already confirmed "published" by the poll above, so this PATCH needs no guard.
+        await _contentClient.PatchNotesAsync(appId, metadata.Serialize(), oDataType, useBeta, cancellationToken).ConfigureAwait(false);
 
         return new ContentUploadResult(ContentUploadOutcome.Uploaded, contentVersionId);
     }
@@ -391,6 +404,26 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
             null,
             null,
             null);
+    public async Task WaitWhilePublishingStateProcessingAsync(
+        string appId, ContentUploadOptions options, bool useBeta, CancellationToken cancellationToken)
+    {
+        var deadline = _timeProvider.GetUtcNow() + options.PublishingStateTimeout;
+        while (true)
+        {
+            var state = await _contentClient.GetPublishingStateAsync(appId, useBeta, cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(state, "processing", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (_timeProvider.GetUtcNow() >= deadline)
+            {
+                throw new ContentUploadTimedOutException("publishingState", options.PublishingStateTimeout);
+            }
+
+            await _delayAsync(options.PublishingStatePollInterval, cancellationToken).ConfigureAwait(false);
+        }
+    }
 
     private async Task<MobileAppContentFileResponse> PollFileStateAsync(
         string appId, string contentVersionId, string fileId, string stage,

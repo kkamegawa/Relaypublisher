@@ -1,3 +1,4 @@
+using System.Text.Json;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Publishing;
 
@@ -173,5 +174,24 @@ public sealed class MacOsAppPayloadMapperTests
         var payload = MacOsAppPayloadMapper.Map(manifest, app, iconBytes: null);
 
         Assert.IsInstanceOfType<MacOsLobAppPayload>(payload);
+    }
+
+    [TestMethod]
+    public void Map_Lob_SerializedJsonOmitsBetaOnlyMinimumOsFlags()
+    {
+        // Regression test: v1.0's macOSMinimumOperatingSystem has no v14_0/v15_0/v26_0 property, so
+        // serializing them as a literal "false" on a macOSLobApp (v1.0) request makes Graph reject the
+        // whole call with 400 "The property 'v14_0' does not exist on type ...".
+        var manifest = CreateManifest(appType: "lob");
+        var app = manifest.Apps[0];
+        app.Requirements!.MinimumOSVersion = "13.0";
+
+        var payload = MacOsAppPayloadMapper.Map(manifest, app, iconBytes: null);
+        var json = JsonSerializer.Serialize(payload, payload.GetType());
+
+        StringAssert.DoesNotMatch(json, new System.Text.RegularExpressions.Regex("\"v14_0\""));
+        StringAssert.DoesNotMatch(json, new System.Text.RegularExpressions.Regex("\"v15_0\""));
+        StringAssert.DoesNotMatch(json, new System.Text.RegularExpressions.Regex("\"v26_0\""));
+        StringAssert.Contains(json, "\"v13_0\":true");
     }
 }

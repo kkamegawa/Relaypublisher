@@ -44,12 +44,18 @@ public sealed class MacOsAppPublisher : IPlatformAppPublisher
         return await _appClient.CreateAppAsync(payload, target.UseBeta, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task UpdateAppAsync(string appId, PublishRequest request, CancellationToken cancellationToken)
+    public async Task UpdateAppAsync(string appId, PublishRequest request, ContentUploadOptions options, CancellationToken cancellationToken)
     {
+        var target = MacOsAppPayloadMapper.ResolveTarget(request.App);
+
+        // Guards against an app left mid-"processing" by an interrupted previous run: this PATCH is the
+        // first Graph write of the run, ahead of any content upload.
+        await _contentOrchestrator.WaitWhilePublishingStateProcessingAsync(appId, options, target.UseBeta, cancellationToken)
+            .ConfigureAwait(false);
+
         var iconBytes = await ManifestAssetReader.ReadIconAsync(request, request.Manifest, cancellationToken).ConfigureAwait(false);
         var scripts = await ManifestAssetReader.ReadMacOsScriptsAsync(request, request.App, _logger, cancellationToken).ConfigureAwait(false);
         var payload = MacOsAppPayloadMapper.Map(request.Manifest, request.App, iconBytes, scripts);
-        var target = MacOsAppPayloadMapper.ResolveTarget(request.App);
         await _appClient.UpdateAppAsync(appId, payload, target.UseBeta, cancellationToken).ConfigureAwait(false);
     }
 

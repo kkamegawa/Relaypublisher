@@ -367,21 +367,11 @@ Graph が `Resource not found for the segment 'contentVersions'`(HTTP 400)を返
 中断状態の復旧では content version / file の DELETE や PATCH に依存せず、package metadata が一致する既存 file の
 `renewUpload` を使用する。不一致 file が残る場合、同じ version への file 追加では activation できないため安全に fail する。
 
-**macOS PKG content upload のバイト列と暗号化**: `PkgContentPreparer` は、Windows のような
-`IntuneWinAppUtil` が無いため、staged `.pkg` を in-process で AES-256-CBC(PKCS7) 暗号化する。Graph の
-SAS URI へ送るバイト列は、ciphertext だけではなく、先頭に **`[MAC (32 バイト)][IV (16 バイト)]`** を付けた
-次のレイアウトにする。
-
-```text
-[MAC (32 bytes)][IV (16 bytes)][AES-256-CBC ciphertext]
-```
-
-ここで `MAC = HMAC-SHA256(macKey, IV || ciphertext)` であり、`IV || ciphertext` が HMAC の対象である。
-暗号化 key、`macKey`、IV、MAC は `fileEncryptionInfo` として `commit` に渡すが、アップロードする content
-stream にも MAC と IV の header が必要である。Graph の `sizeEncrypted` は ciphertext の長さではなく、
-この **48 バイトの header を含む全体長**(`32 + 16 + ciphertext.Length`)を指定する。header が欠落したり
-`sizeEncrypted` が ciphertext のみの長さだったりすると、SAS への upload 自体は成功しても Graph の
-`commitFileFailed` になる(復旧方法は doc/06-troubleshooting.md §6a を参照)。
+**サポートする `Requirements.MinimumOSVersion`**(`MacOsMinimumOperatingSystemTable` が保持するマッピング):
+`10.13` / `10.14` / `10.15` / `11`(`11.0`)/ `12`(`12.0`)/ `13`(`13.0`)は `AppType: pkg` / `lob` の両方で
+使用できる。`14`(`14.0`)/ `15`(`15.0`)/ `26`(`26.0`)は Graph beta 専用の `v14_0` / `v15_0` / `v26_0`
+フラグを使うため `AppType: pkg` でのみ使用でき、`AppType: lob` で指定すると `UnsupportedMacOsVersionException`
+で fail する。上記いずれのマッピングも持たないバージョン文字列も同様に fail する。
 
 **pre/post install script**(`AppType: pkg` 限定、issue #86): Graph `macOSPkgApp` は `preInstallScript` /
 `postInstallScript`(型 `macOSAppScript`、プロパティは base64 エンコードされた `scriptContent` のみ)を持つが、
@@ -398,6 +388,21 @@ validation error とする。
   前提条件)。改行コードは base64 化の直前に CRLF → LF へ正規化する。
 - 運用前提として Intune management agent for macOS 2309.007 以降が必要。pre-install が非 0 終了で app は
   "failed" となり次回 check-in で再試行される。post-install の失敗は報告されない(app は "success" のまま)。
+
+**content upload のバイト列レイアウト**(`PkgContentPreparer`): Windows は IntuneWinAppUtil が生成する
+`.intunewin` の content entry をそのままアップロードするだけで済むが(`IntuneWinContentExtractor` が ZIP
+entry を無加工でストリームする)、macOS には同等のツールが無いため `.pkg` の暗号化を本ツールが in-process で
+行う。Intune がアップロード対象のバイト列に要求するレイアウトは **`[mac (32 バイト)][iv (16 バイト)][AES-256-CBC
+ciphertext]`** であり、これは `.intunewin` の content entry がすでに持っている形式と同一である。Graph の
+`fileEncryptionInfo` (https://learn.microsoft.com/graph/api/resources/intune-apps-fileencryptioninfo) は
+`mac` / `iv` / 各種鍵を commit 呼び出しの別パラメータとしても要求するため、アップロードする ciphertext 自体には
+このヘッダが不要に見えるが、実際には両方が必要になる。Microsoft の公式リファレンス実装
+(`microsoftgraph/powershell-intune-samples` の `LOB_Application/Application_LOB_Add.ps1`、
+`EncryptFileWithIV` 関数)で確認済み: 出力ファイルの先頭に `mac` + `iv` 分のバイトを予約してから ciphertext を
+書き込み、書き終えた後にオフセット 0(mac)とオフセット 32(iv)へ書き戻す。Graph へ報告する `sizeEncrypted` は
+この**ヘッダを含めたファイル全体の長さ**であり、ciphertext だけの長さではない。このヘッダが欠落していると
+content file は `azureStorageUriRequestSuccess` までは進むが `commitFileSuccess` に到達しない
+(doc/06-troubleshooting.md §6a 参照)。
 
 ### 6.14 Manifest schema のバージョニングとソース指定の統一
 
