@@ -33,7 +33,7 @@ Apps:
     # only AppType that can target MinimumOSVersion 14+ (v14_0/v15_0 are beta-only
     # flags; see doc/01-manifest-schema.md 5.7 and MacOsMinimumOperatingSystemTable).
     AppType: pkg
-    DisplayName: PowerShell [macOS Arm64]
+    DisplayName: PowerShell [macOS ARM64]
 
     # Single Source item for macOS (unified source item shape, doc/01-manifest-schema.md 5.0.1).
     # PowerShell/PowerShell is a public repository, so Auth.Type: none is enough
