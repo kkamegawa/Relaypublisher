@@ -155,7 +155,9 @@ content を Published 化してからこれらを適用する。新規 app で�
 per-app GET は行わない)、作成後に content を activate してから解決済み ID で add を適用する。既存 app が
 `processing` の場合は既存の polling interval / timeout で `published` を待つ。`notPublished` の場合は保存済み
 `inputHash` が一致していても content の完了状態を確認する。content version が 0 件なら作成し、1 件なら再利用する。
-未 commit file は削除して現在の package を upload し直し、同じ `inputHash` の単一 file が commit 済みなら app の
+file が 0 件の単一 version には最初の file を作成する。未 commit file がある場合は、総数 1 件かつ対応する終端失敗
+state で、現在の package と名前・サイズが一致するときだけ `renewUpload` して再利用する。一致しない、または複数 file
+なら追加 file を作成せず fail する。同じ `inputHash` の単一 file が commit 済みなら app の
 `committedContentVersion` PATCH から再開する。複数 version や commit 状態が混在・不明な場合は app / committed
 content を削除せず fail する。未知の `publishingState` や timeout も明確な Graph エラーとしてその entry を失敗させる。
 
@@ -197,7 +199,7 @@ dry-run は Graph **read**(tenant / app の一覧取得)を行い、plan を表�
 - dry-run が Graph write を行わず、add/keep/remove を表示し、新規 app では `(new app)` を使う。
 - 新規 app / 既存 app それぞれで orchestration 順序(preflight → create(新規のみ) → content activation →
   metadata update(既存のみ) → category apply → assignment)が守られる。
-- `notPublished` の再実行で未完了 content version を再利用し、未 commit file だけを置換する。単一 committed file の
+- `notPublished` の再実行で単一 content version を再利用する。file 0 件なら最初の file を作成し、対応する終端失敗 state の互換な未 commit file が総数 1 件なら renew/reuse する。不一致または複数 file は追加 file を作成せず fail する。単一 committed file の
   activation 再開と、複数 version / 混在 state の fail-safe も検証する。
 - `CategorySyncException` は batch を継続させ、tenant listing の `GraphAccessDeniedException` は batch を中断する。
 - result file の additive field と 4 つの outcome 値を検証する。

@@ -311,7 +311,7 @@ Rollback 機能は実装しないが、Win32 コンテンツ更新のトラン�
 - 新しい content version の作成・ファイルアップロード・commit までは、**既存クライアントには旧コンテンツが配信され続ける**。この区間での失敗は安全であり、再実行時は Graph の未完了 content state を確認して収束させる。
 - `win32LobApp.committedContentVersion` を PATCH した時点で新コンテンツが有効になる。**この操作以降は戻せない**(戻すには旧バージョンの manifest を `--allow-downgrade` で再 publish する)。
 - 既存 app の publish は `publishingState` を先に確認する。`processing` の場合は `published` になるまで待機し、`notPublished` の場合は保存済み `inputHash` が一致していても content を upload・activate する。未知の state は即時に fail する。待機が timeout した場合は失敗として報告し、app を削除・再作成せずに再実行で復旧する。
-- `notPublished` の app は、最初の content version が未 commit のまま残っている可能性がある。content version が 0 件なら新規作成し、1 件ならその version を再利用する。再利用する version に未 commit file だけがある場合は、それらを削除して現在の package を新しい file として upload する。現在の `inputHash` と保存済み `inputHash` が一致し、単一の file が commit 済みなら、file を削除せず `committedContentVersion` の PATCH から再開する。content version が複数ある、commit 済み file と未 commit file が混在する、または commit 済み file と現在の input の対応を証明できない場合は、app / version / commit 済み file を自動削除せず fail する。
+- `notPublished` の app は、最初の content version が未 commit のまま残っている可能性がある。content version が 0 件なら新規作成し、1 件ならその version を再利用する。単一 version に file が 0 件なら最初の file を作成する。未 commit file がある場合は、総数が 1 件、`uploadState` が `azureStorageUriRequestFailed` / `azureStorageUriRenewalFailed` / `commitFileFailed` / `error` のいずれか、かつ現在の package と `name` / `size` / `sizeEncrypted` が一致するときだけ `renewUpload` して再 upload する。一致する file が無い、file が複数ある、pending / timed out / 未知の state の場合は fail し、同じ version への追加 file 作成や既存 file の自動削除は行わない。現在の `inputHash` と保存済み `inputHash` が一致し、単一の file が commit 済みなら、version / file を削除せず `committedContentVersion` の PATCH から再開する。content version が複数ある、commit 済み file と未 commit file が混在する、または commit 済み file と現在の input の対応を証明できない場合は、app / version / file を自動削除せず fail する。Intune の macOS PKG backend には動作する content file DELETE がなく、失敗 file を残した version は activation できないため、明示的な運用判断で未公開 app を再作成する。
 - content の commit と `committedContentVersion` PATCH、`publishingState = published` の確認を完了してから、既存 app のプロパティ PATCH、category relationship、assignment を適用する。Graph は `publishingState` が `published` でない app へのこれらの更新を拒否する。
 - app 本体のプロパティ PATCH、category relationship の `$ref` add/remove、assignment 適用は個別に冪等であり、部分失敗しても再実行で収束する。category relationship は content の**後**に適用する(6.20)。content upload や assignment sync が失敗しても、次回実行時に Graph の現在値から plan を再計算して収束する。
 
@@ -363,7 +363,9 @@ fail する(`AppType: pkg` への切り替えが必要)。
 具体的な OData 型キャスト(`microsoft.graph.win32LobApp` / `microsoft.graph.macOSPkgApp` /
 `microsoft.graph.macOSLobApp`)を含める。`/mobileApps/{id}/contentVersions` のようにキャストを省略すると、
 Graph が `Resource not found for the segment 'contentVersions'`(HTTP 400)を返すことがある。create、files、
-ファイル状態の取得、`renewUpload`、`commit` のすべてで同じ型付きルートを使用し、型セグメントは許可リストで検証する。
+ファイル状態の取得、`renewUpload`、`commit` では同じ具体型のルートを使用し、型セグメントは許可リストで検証する。
+中断状態の復旧では content version / file の DELETE や PATCH に依存せず、package metadata が一致する既存 file の
+`renewUpload` を使用する。不一致 file が残る場合、同じ version への file 追加では activation できないため安全に fail する。
 
 **macOS PKG content upload のバイト列と暗号化**: `PkgContentPreparer` は、Windows のような
 `IntuneWinAppUtil` が無いため、staged `.pkg` を in-process で AES-256-CBC(PKCS7) 暗号化する。Graph の

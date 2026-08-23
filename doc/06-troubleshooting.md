@@ -323,9 +323,11 @@ If publish reports missing package metadata:
 - **`The mobile app content cannot be updated before the first content version is committed` (HTTP 400)**:
   a previous first upload left the app `notPublished` with an uncommitted content version, and an older CLI
   tried to create a second version. Rebuild the Release CLI and rerun the same publish. The fixed client lists
-  the existing version, removes only its uncommitted files (including `commitFileFailed`), and uploads the
-  current package into that same version. It does not delete the app, content version, or committed content.
-  Multiple versions or ambiguous committed state fail safely with an actionable error instead of guessing.
+  the existing version and its files. A version with no files gets its first file. When stale files exist, it
+  renews and reuses only one total uncommitted file in a supported terminal failure state whose name and sizes
+  match the current package. When none matches or multiple files exist, it fails without adding another file because Intune cannot activate
+  a version that retains the stale failed file. It does not automatically delete the app, content version, or
+  files. Multiple versions, multiple matching files, or ambiguous committed state also fail safely.
 - **`GraphRequestException` with a 403/404 specific to macOS `AppType: pkg` entries**: pkg apps are
   created, updated, and content-uploaded entirely through Graph **beta** (`macOSPkgApp` does not exist in
   v1.0). Confirm the service principal's Graph permissions (section 2a) and the tenant's beta API

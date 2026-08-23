@@ -390,7 +390,9 @@ relaypublisher publish --manifest-list manifest-list.json --package-dir ./out \
 8. `--dry-run` の出力を確認してから、`--dry-run` なしで `publish` を実行する。内部では、`publish` は notes
    metadata から既存 app を解決し、downgrade guard(§6.8)を適用する。`inputHash` の skip 判定の前に app の
    `publishingState` を読み取り、`processing` なら `published` になるまで待機する。`notPublished` では 2 件目を
-   作成せず、中断した単一 content version を再利用する。未 commit file は置換し、同じ hash の単一 commit 済み
+   作成せず、中断した単一 content version を再利用する。file が 0 件なら最初の file を作成する。stale file が
+   ある場合は、対応する終端失敗 state の互換な未 commit file が総数 1 件のときだけ renew して再利用し、
+   一致する file が無い場合や複数 file は追加 file を作成せず失敗する。同じ hash の単一 commit 済み
    file は activation から再開する。未知または曖昧な state は app / committed content を削除せず失敗する。
    `published` で hash が一致する場合だけ
    content upload を skip し(§6.7)、それ以外は新しい content version をアップロード・commit する。content の

@@ -351,7 +351,9 @@ Verify the app in the Intune admin center, including its display name, managemen
 
 Relaypublisher checks the app's `publishingState` before deciding whether the content hash permits a
 skip. An app in `processing` is polled until `published`; an app in `notPublished` reuses its sole
-interrupted content version, replacing uncommitted files or resuming activation of a committed file for the
+interrupted content version, creating the first file when none exists, renewing a sole compatible uncommitted
+file in a supported terminal failure state, and failing safely for non-matching or multiple files,
+or resuming activation of a committed file for the
 same `inputHash`. If polling times out, wait for Intune to finish
 processing and rerun the same publish. Do not delete and recreate the app. Existing-app metadata and
 category writes are performed only after content activation, because Graph rejects them while the app is
@@ -374,7 +376,8 @@ commit does not activate the new content, so do not delete or recreate the app.
 
 If the next run reports `The mobile app content cannot be updated before the first content version is
 committed`, it used an older CLI that tried to create a second version. Rebuild again from the current source
-and rerun: the fixed flow reuses the first version and replaces only its uncommitted failed file.
+and rerun: the fixed flow reuses the first version only when it can renew a compatible failed file. When the
+old file metadata does not match the current encrypted payload, it fails without adding a sibling file.
 
 To exercise the category flow end to end on a disposable test tenant:
 

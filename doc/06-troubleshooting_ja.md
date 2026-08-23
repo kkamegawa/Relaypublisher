@@ -322,9 +322,11 @@ Publish が package metadata missing を報告した場合:
   Graph error と `client-request-id`/`request-id` を添えて issue を起票する。
 - **`The mobile app content cannot be updated before the first content version is committed` (HTTP 400)**:
   以前の初回 upload が app を `notPublished`、content version を未 commit のまま残し、古い CLI が 2 件目の version を
-  作成しようとしている。Release CLI を再ビルドして同じ publish を再実行する。修正版は既存 version を列挙し、
-  `commitFileFailed` を含む未 commit file だけを削除して、同じ version に現在の package を upload する。app、content
-  version、commit 済み content は削除しない。複数 version や曖昧な commit state は推測せず明確なエラーで停止する。
+  作成しようとしている。Release CLI を再ビルドして同じ publish を再実行する。修正版は既存 version と file を列挙し、
+  file が 0 件なら最初の file を作成する。stale file がある場合は、対応する終端失敗 state で現在の package と
+  名前・サイズが一致する未 commit file が総数 1 件のときだけ renew して再利用する。一致する file が無い、または複数なら、
+  stale な失敗 file が残る version を Intune が activate できないため、追加 file を作成せず停止する。app、content version、
+  file は自動削除しない。複数 version、複数の一致 file、または曖昧な commit state も明確なエラーで停止する。
 - **macOS `AppType: pkg` entry に特有の 403/404(`GraphRequestException`)**: pkg app の作成・更新・
   content upload はすべて Graph **beta** 経由で行われる(`macOSPkgApp` は v1.0 に存在しない)。service
   principal の Graph 権限(section 2a)とテナントの beta API 可用性を確認する。Windows や
