@@ -33,4 +33,14 @@ public sealed class AppManifest
     public MacOsScriptsManifest? Scripts { get; set; }
 
     public List<AssignmentManifest> Assignments { get; set; } = [];
+
+    /// <summary>
+    /// Intune app category display names this entry should be related to (doc/01-manifest-schema.md §5.8).
+    /// Deliberately nullable with no initializer so "omitted" and "empty list" stay distinguishable:
+    /// null preserves the app's current category relationships and issues no category Graph call, an
+    /// empty list removes every relationship, and a non-empty list is the exact desired set. The
+    /// canonical JSON used by <c>InputHashCalculator</c> drops nulls, so manifests that do not declare
+    /// Categories keep their existing manifestHash/inputHash.
+    /// </summary>
+    public List<string>? Categories { get; set; }
 }

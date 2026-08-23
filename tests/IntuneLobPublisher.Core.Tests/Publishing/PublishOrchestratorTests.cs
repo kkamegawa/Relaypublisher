@@ -4,6 +4,7 @@ using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Packaging;
 using IntuneLobPublisher.Core.Publishing;
 using IntuneLobPublisher.Core.Publishing.Assignments;
+using IntuneLobPublisher.Core.Publishing.Categories;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IntuneLobPublisher.Core.Tests.Publishing;
@@ -55,9 +56,15 @@ public sealed class PublishOrchestratorTests
     /// <summary>Fake <see cref="IPlatformAppPublisher"/> that records calls instead of touching Graph.</summary>
     private sealed class FakePlatformAppPublisher : IPlatformAppPublisher
     {
+        private readonly List<string> _log;
+
+        public FakePlatformAppPublisher(List<string>? log = null) => _log = log ?? [];
+
         public List<string> AppCalls { get; } = [];
 
         public List<(string AppId, string? StoredInputHash)> ContentCalls { get; } = [];
+
+        public Exception? ContentException { get; set; }
 
         public int EnsureMappableCallCount { get; private set; }
 
@@ -74,6 +81,7 @@ public sealed class PublishOrchestratorTests
         public Task<string> CreateAppAsync(PublishRequest request, string notes, CancellationToken cancellationToken)
         {
             AppCalls.Add("create");
+            _log.Add("app create");
             CreatedNotes = notes;
             return Task.FromResult(CreatedAppIdToReturn);
         }
@@ -81,6 +89,7 @@ public sealed class PublishOrchestratorTests
         public Task UpdateAppAsync(string appId, PublishRequest request, ContentUploadOptions options, CancellationToken cancellationToken)
         {
             AppCalls.Add($"update {appId}");
+            _log.Add($"app update {appId}");
             return Task.CompletedTask;
         }
 
@@ -89,39 +98,111 @@ public sealed class PublishOrchestratorTests
             ManagementMetadata metadata, ContentUploadOptions options, CancellationToken cancellationToken)
         {
             ContentCalls.Add((appId, storedInputHash));
+            _log.Add($"content {appId}");
+            if (ContentException is not null)
+            {
+                return Task.FromException<ContentUploadResult>(ContentException);
+            }
+
             return Task.FromResult(new ContentUploadResult(ContentUploadOutcome.Uploaded, "cv-1"));
         }
     }
 
     private sealed class FakeAssignmentService : IAssignmentService
     {
+        private readonly List<string> _log;
+
+        public FakeAssignmentService(List<string>? log = null) => _log = log ?? [];
+
         public List<string> Calls { get; } = [];
 
         public Task<AssignmentPlan> CreatePlanAsync(
             string appId, AppManifest app, AssignmentSyncMode mode, CancellationToken cancellationToken)
         {
             Calls.Add($"plan {appId}");
+            _log.Add($"assignment plan {appId}");
             return Task.FromResult(AssignmentPlanner.CreatePlan(appId, app, mode, []));
         }
 
         public Task ApplyAsync(AssignmentPlan plan, AppManifest app, CancellationToken cancellationToken)
         {
             Calls.Add($"apply {plan.AppId}");
+            _log.Add($"assignment apply {plan.AppId}");
             return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Fake <see cref="ICategoryService"/>: records the plan/apply calls and honors the
+    /// omitted-Categories contract so "no manifest categories means no category work" is observable.
+    /// </summary>
+    private sealed class FakeCategoryService : ICategoryService
+    {
+        private readonly List<string> _log;
+
+        public FakeCategoryService(List<string>? log = null) => _log = log ?? [];
+
+        public List<string> Calls { get; } = [];
+
+        /// <summary>Tenant categories the fake resolves manifest names against, by display name.</summary>
+        public Dictionary<string, string> TenantCategoryIds { get; } = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Business Apps"] = "cat-business",
+            ["Productivity"] = "cat-productivity",
+        };
+
+        /// <summary>Categories the existing app is already related to.</summary>
+        public List<IntuneAppCategory> CurrentCategories { get; } = [];
+
+        public Exception? PlanException { get; set; }
+
+        public Exception? ApplyException { get; set; }
+
+        public Task<CategoryPlan> CreatePlanAsync(string? existingAppId, AppManifest app, CancellationToken cancellationToken)
+        {
+            Calls.Add($"plan {existingAppId ?? PublishOrchestrator.NewAppPlaceholderId}");
+            _log.Add($"category plan {existingAppId ?? PublishOrchestrator.NewAppPlaceholderId}");
+            if (PlanException is not null)
+            {
+                throw PlanException;
+            }
+
+            if (app.Categories is null)
+            {
+                return Task.FromResult(CategoryPlan.NotRequested(existingAppId ?? PublishOrchestrator.NewAppPlaceholderId));
+            }
+
+            var desired = app.Categories
+                .Select(name => new IntuneAppCategory(TenantCategoryIds[name], name))
+                .ToList();
+            var current = existingAppId is null ? [] : CurrentCategories;
+            return Task.FromResult(CategoryPlanner.CreatePlan(
+                existingAppId ?? PublishOrchestrator.NewAppPlaceholderId, desired, current));
+        }
+
+        public Task ApplyAsync(CategoryPlan plan, AppManifest app, CancellationToken cancellationToken)
+        {
+            Calls.Add($"apply {plan.AppId}");
+            _log.Add($"category apply {plan.AppId}");
+            return ApplyException is null ? Task.CompletedTask : Task.FromException(ApplyException);
         }
     }
 
     private sealed record Harness(
         PublishOrchestrator Orchestrator,
         FakePlatformAppPublisher Publisher,
-        FakeAssignmentService AssignmentService);
+        FakeCategoryService CategoryService,
+        FakeAssignmentService AssignmentService,
+        List<string> Log);
 
     private static Harness CreateHarness(
         IntuneAppSummary[]? existingApps = null, IReadOnlyDictionary<string, IPlatformAppPublisher>? extraPublishers = null)
     {
         existingApps ??= [];
-        var publisher = new FakePlatformAppPublisher();
-        var assignmentService = new FakeAssignmentService();
+        var log = new List<string>();
+        var publisher = new FakePlatformAppPublisher(log);
+        var categoryService = new FakeCategoryService(log);
+        var assignmentService = new FakeAssignmentService(log);
         var platformPublishers = new Dictionary<string, IPlatformAppPublisher>(StringComparer.Ordinal) { ["windows"] = publisher };
         if (extraPublishers is not null)
         {
@@ -134,9 +215,10 @@ public sealed class PublishOrchestratorTests
         var orchestrator = new PublishOrchestrator(
             new IntuneAppResolver(new FakeAppDirectory(existingApps)),
             platformPublishers,
+            categoryService,
             assignmentService,
             NullLogger<PublishOrchestrator>.Instance);
-        return new Harness(orchestrator, publisher, assignmentService);
+        return new Harness(orchestrator, publisher, categoryService, assignmentService, log);
     }
 
     private PublishRequest CreateRequest(
@@ -173,6 +255,11 @@ public sealed class PublishOrchestratorTests
         return new IntuneAppSummary(ExistingAppId, "Contoso Tool [Windows x64]", notes);
     }
 
+    /// <summary>Builds the plan-report object; both callbacks are optional.</summary>
+    private static PublishReport Report(
+        Action<AssignmentPlan>? assignments = null, Action<CategoryPlan>? categories = null)
+        => new() { ReportAssignmentPlan = assignments, ReportCategoryPlan = categories };
+
     [TestMethod]
     public async Task PublishAsync_NewApp_CreatesThenUploadsThenPlansThenApplies()
     {
@@ -180,7 +267,7 @@ public sealed class PublishOrchestratorTests
         var reported = new List<AssignmentPlan>();
 
         var result = await harness.Orchestrator.PublishAsync(
-            CreateRequest(), reported.Add, CancellationToken.None);
+            CreateRequest(), Report(reported.Add), CancellationToken.None);
 
         Assert.AreEqual(PublishOutcome.Published, result.Outcome);
         Assert.AreEqual(CreatedAppId, result.AppId);
@@ -231,7 +318,7 @@ public sealed class PublishOrchestratorTests
 
         await harness.Orchestrator.PublishAsync(
             CreateRequest(),
-            _ => applyCallsWhenReported = harness.AssignmentService.Calls.Count(c => c.StartsWith("apply")),
+            Report(_ => applyCallsWhenReported = harness.AssignmentService.Calls.Count(c => c.StartsWith("apply"))),
             CancellationToken.None);
 
         Assert.AreEqual(0, applyCallsWhenReported, "The plan must be reported before ApplyAsync runs.");
@@ -353,7 +440,7 @@ public sealed class PublishOrchestratorTests
         var reported = new List<AssignmentPlan>();
 
         var result = await harness.Orchestrator.PublishAsync(
-            CreateRequest(dryRun: true), reported.Add, CancellationToken.None);
+            CreateRequest(dryRun: true), Report(reported.Add), CancellationToken.None);
 
         Assert.AreEqual(PublishOutcome.DryRunCompleted, result.Outcome);
         Assert.AreEqual(ExistingAppId, result.AppId);
@@ -372,7 +459,7 @@ public sealed class PublishOrchestratorTests
         var reported = new List<AssignmentPlan>();
 
         var result = await harness.Orchestrator.PublishAsync(
-            CreateRequest(dryRun: true), reported.Add, CancellationToken.None);
+            CreateRequest(dryRun: true), Report(reported.Add), CancellationToken.None);
 
         Assert.AreEqual(PublishOutcome.DryRunCompleted, result.Outcome);
         Assert.IsNull(result.AppId);
@@ -394,5 +481,189 @@ public sealed class PublishOrchestratorTests
         Assert.AreEqual(PublishOutcome.Published, result.Outcome);
         Assert.IsFalse(result.AppCreated);
         Assert.AreEqual((ExistingAppId, (string?)null), harness.Publisher.ContentCalls.Single());
+    }
+
+    private static IntunePackageManifest ManifestWithCategories(params string[] categories)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Categories = [.. categories];
+        return manifest;
+    }
+
+    [TestMethod]
+    public async Task PublishAsync_ExistingAppWithCategories_PublishesContentBeforeMetadataAndCategory()
+    {
+        // Category preflight remains before any write. Existing apps publish content first so Graph
+        // accepts the subsequent metadata and category writes only after publishingState is published.
+        var harness = CreateHarness([ExistingManagedApp()]);
+        harness.CategoryService.CurrentCategories.Add(new IntuneAppCategory("cat-old", "Legacy"));
+
+        var result = await harness.Orchestrator.PublishAsync(
+            CreateRequest(ManifestWithCategories("Business Apps")), null, CancellationToken.None);
+
+        Assert.AreEqual(PublishOutcome.Published, result.Outcome);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                $"category plan {ExistingAppId}",
+                $"content {ExistingAppId}",
+                $"app update {ExistingAppId}",
+                $"category apply {ExistingAppId}",
+                $"assignment plan {ExistingAppId}",
+                $"assignment apply {ExistingAppId}",
+            },
+            harness.Log);
+    }
+
+    [TestMethod]
+    public async Task PublishAsync_NewAppWithCategories_ResolvesBeforeCreateThenAppliesWithTheRealAppId()
+    {
+        var harness = CreateHarness();
+
+        var result = await harness.Orchestrator.PublishAsync(
+            CreateRequest(ManifestWithCategories("Business Apps", "Productivity")), null, CancellationToken.None);
+
+        Assert.AreEqual(PublishOutcome.Published, result.Outcome);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                $"category plan {PublishOrchestrator.NewAppPlaceholderId}",
+                "app create",
+                $"content {CreatedAppId}",
+                $"category apply {CreatedAppId}",
+                $"assignment plan {CreatedAppId}",
+                $"assignment apply {CreatedAppId}",
+            },
+            harness.Log);
+
+        // A new app has no relationships, so everything the manifest wants is an add.
+        Assert.IsNotNull(result.CategoryPlan);
+        Assert.AreEqual(CreatedAppId, result.CategoryPlan.AppId);
+        Assert.IsTrue(result.CategoryPlan.Entries.All(e => e.Action == CategoryPlanAction.Add));
+    }
+
+    [TestMethod]
+    public async Task PublishAsync_CategoriesOmitted_ReportsNotRequestedPlanAndAppliesNothing()
+    {
+        var harness = CreateHarness([ExistingManagedApp()]);
+        var reportedCategoryPlans = new List<CategoryPlan>();
+
+        var result = await harness.Orchestrator.PublishAsync(
+            CreateRequest(), Report(categories: reportedCategoryPlans.Add), CancellationToken.None);
+
+        Assert.AreEqual(PublishOutcome.Published, result.Outcome);
+        Assert.IsNotNull(result.CategoryPlan);
+        Assert.IsFalse(result.CategoryPlan.Requested);
+        Assert.IsEmpty(result.CategoryPlan.Entries);
+        Assert.IsEmpty(reportedCategoryPlans, "A manifest without Categories has no plan worth printing.");
+    }
+
+    [TestMethod]
+    public async Task PublishAsync_CategoryPreflightFails_MakesNoAppWrite()
+    {
+        var harness = CreateHarness([ExistingManagedApp()]);
+        harness.CategoryService.PlanException = new CategorySyncException("Category 'Missing' does not exist in the tenant.");
+
+        await Assert.ThrowsExactlyAsync<CategorySyncException>(
+            () => harness.Orchestrator.PublishAsync(
+                CreateRequest(ManifestWithCategories("Business Apps")), null, CancellationToken.None));
+
+        Assert.IsEmpty(harness.Publisher.AppCalls);
+        Assert.IsEmpty(harness.Publisher.ContentCalls);
+        Assert.IsEmpty(harness.AssignmentService.Calls);
+    }
+
+    [TestMethod]
+    public async Task PublishAsync_CategoryApplyFails_AfterContentAndDoesNotTouchAssignments()
+    {
+        var harness = CreateHarness([ExistingManagedApp()]);
+        harness.CategoryService.ApplyException = new CategorySyncException("Failed to add category.");
+
+        await Assert.ThrowsExactlyAsync<CategorySyncException>(
+            () => harness.Orchestrator.PublishAsync(
+                CreateRequest(ManifestWithCategories("Business Apps")), null, CancellationToken.None));
+
+        Assert.HasCount(1, harness.Publisher.ContentCalls);
+        Assert.IsEmpty(harness.AssignmentService.Calls);
+    }
+
+    [TestMethod]
+    public async Task PublishAsync_ContentFails_DoesNotUpdateMetadataApplyCategoriesOrAssignments()
+    {
+        var harness = CreateHarness([ExistingManagedApp()]);
+        harness.Publisher.ContentException = new ContentUploadTimedOutException("publishingState", TimeSpan.FromMinutes(1));
+
+        await Assert.ThrowsExactlyAsync<ContentUploadTimedOutException>(
+            () => harness.Orchestrator.PublishAsync(
+                CreateRequest(ManifestWithCategories("Business Apps")), null, CancellationToken.None));
+
+        CollectionAssert.AreEqual(new[] { $"category plan {ExistingAppId}", $"content {ExistingAppId}" }, harness.Log);
+        Assert.IsEmpty(harness.Publisher.AppCalls);
+        Assert.IsEmpty(harness.CategoryService.Calls.Where(c => c.StartsWith("apply")));
+        Assert.IsEmpty(harness.AssignmentService.Calls);
+    }
+
+    [TestMethod]
+    public async Task PublishAsync_DowngradeSkip_MakesNoCategoryCall()
+    {
+        var harness = CreateHarness([ExistingManagedApp(packageVersion: "2.0.0")]);
+
+        var result = await harness.Orchestrator.PublishAsync(
+            CreateRequest(ManifestWithCategories("Business Apps")), null, CancellationToken.None);
+
+        Assert.AreEqual(PublishOutcome.SkippedDowngrade, result.Outcome);
+        Assert.IsNull(result.CategoryPlan);
+        Assert.IsEmpty(harness.CategoryService.Calls);
+    }
+
+    [TestMethod]
+    public async Task PublishAsync_DryRunWithCategories_ReportsPlanWithoutApplying()
+    {
+        var harness = CreateHarness([ExistingManagedApp()]);
+        harness.CategoryService.CurrentCategories.Add(new IntuneAppCategory("cat-old", "Legacy"));
+        var reportedCategoryPlans = new List<CategoryPlan>();
+
+        var result = await harness.Orchestrator.PublishAsync(
+            CreateRequest(ManifestWithCategories("Business Apps"), dryRun: true),
+            Report(categories: reportedCategoryPlans.Add),
+            CancellationToken.None);
+
+        Assert.AreEqual(PublishOutcome.DryRunCompleted, result.Outcome);
+        CollectionAssert.AreEqual(new[] { $"plan {ExistingAppId}" }, harness.CategoryService.Calls);
+        var plan = reportedCategoryPlans.Single();
+        CollectionAssert.AreEqual(
+            new[] { CategoryPlanAction.Add, CategoryPlanAction.Remove },
+            plan.Entries.Select(e => e.Action).ToList());
+    }
+
+    [TestMethod]
+    public async Task PublishAsync_DryRunNewAppWithCategories_UsesTheNewAppPlaceholder()
+    {
+        var harness = CreateHarness();
+        var reportedCategoryPlans = new List<CategoryPlan>();
+
+        await harness.Orchestrator.PublishAsync(
+            CreateRequest(ManifestWithCategories("Business Apps"), dryRun: true),
+            Report(categories: reportedCategoryPlans.Add),
+            CancellationToken.None);
+
+        var plan = reportedCategoryPlans.Single();
+        Assert.AreEqual(PublishOrchestrator.NewAppPlaceholderId, plan.AppId);
+        Assert.AreEqual(CategoryPlanAction.Add, plan.Entries.Single().Action);
+        Assert.IsEmpty(harness.CategoryService.Calls.Where(c => c.StartsWith("apply")));
+    }
+
+    [TestMethod]
+    public async Task PublishAsync_SecondRunWithSameCategories_ConvergesOnKeep()
+    {
+        var harness = CreateHarness([ExistingManagedApp()]);
+        harness.CategoryService.CurrentCategories.Add(new IntuneAppCategory("cat-business", "Business Apps"));
+
+        var result = await harness.Orchestrator.PublishAsync(
+            CreateRequest(ManifestWithCategories("Business Apps")), null, CancellationToken.None);
+
+        Assert.IsNotNull(result.CategoryPlan);
+        Assert.IsFalse(result.CategoryPlan.HasChanges);
+        Assert.AreEqual(CategoryPlanAction.Keep, result.CategoryPlan.Entries.Single().Action);
     }
 }

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Publishing;
+using IntuneLobPublisher.Core.Publishing.Categories;
 
 namespace IntuneLobPublisher.Core.Tests.Publishing;
 
@@ -127,6 +128,98 @@ public sealed class PublishResultOutputTests
             () => PublishResultOutput.WriteAsync(resultPath, [], CancellationToken.None));
 
         StringAssert.Contains(exception.Message, "does not exist");
+    }
+
+    private static CategoryPlan CategoryPlanWith(params CategoryPlanAction[] actions)
+        => new(
+            "app-1",
+            Requested: true,
+            [.. actions.Select((action, index) => new CategoryPlanEntry(action, $"cat-{index}", $"Category {index}"))]);
+
+    [TestMethod]
+    public void Serialize_PublishedEntry_KeepsTheExistingFieldOrderAndAppendsCategoryOutcome()
+    {
+        // categoryOutcome is purely additive: every previously written field keeps its name, type and position.
+        var request = CreateRequest();
+        var result = new PublishResult(
+            PublishOutcome.Published,
+            "app-1",
+            AppCreated: true,
+            ContentUploadOutcome.Uploaded,
+            AssignmentPlan: null,
+            SkipReason: null,
+            CategoryPlan: CategoryPlanWith(CategoryPlanAction.Add));
+
+        var json = PublishResultOutput.Serialize([PublishResultOutput.FromResult(request, result)]);
+
+        using var document = JsonDocument.Parse(json);
+        var entry = document.RootElement[0];
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "packageIdentifier", "packageVersion", "platform", "architecture", "manifestPath",
+                "outcome", "appId", "contentOutcome", "skipReason", "categoryOutcome",
+            },
+            entry.EnumerateObject().Select(p => p.Name).ToList());
+        Assert.AreEqual("applied", entry.GetProperty("categoryOutcome").GetString());
+    }
+
+    [TestMethod]
+    public void Serialize_PublishedEntryWithNoCategoryDiff_WritesUnchanged()
+    {
+        var request = CreateRequest();
+        var result = new PublishResult(
+            PublishOutcome.Published, "app-1", false, ContentUploadOutcome.SkippedUnchanged, null, null,
+            CategoryPlanWith(CategoryPlanAction.Keep));
+
+        var json = PublishResultOutput.Serialize([PublishResultOutput.FromResult(request, result)]);
+
+        using var document = JsonDocument.Parse(json);
+        Assert.AreEqual("unchanged", document.RootElement[0].GetProperty("categoryOutcome").GetString());
+    }
+
+    [TestMethod]
+    public void Serialize_PublishedEntryWithoutManifestCategories_WritesNotRequested()
+    {
+        var request = CreateRequest();
+        var result = new PublishResult(
+            PublishOutcome.Published, "app-1", false, ContentUploadOutcome.Uploaded, null, null,
+            CategoryPlan.NotRequested("app-1"));
+
+        var json = PublishResultOutput.Serialize([PublishResultOutput.FromResult(request, result)]);
+
+        using var document = JsonDocument.Parse(json);
+        Assert.AreEqual("not-requested", document.RootElement[0].GetProperty("categoryOutcome").GetString());
+    }
+
+    [TestMethod]
+    public void Serialize_DryRunAndSkips_LeaveCategoryOutcomeNull()
+    {
+        // Nothing was written, so claiming a category outcome would be wrong.
+        var request = CreateRequest();
+        var entries = new[]
+        {
+            PublishResultOutput.FromResult(
+                request,
+                new PublishResult(
+                    PublishOutcome.DryRunCompleted, "app-1", false, null, null, null,
+                    CategoryPlanWith(CategoryPlanAction.Add))),
+            PublishResultOutput.FromResult(
+                request,
+                new PublishResult(PublishOutcome.SkippedDowngrade, "app-1", false, null, null, "older version")),
+            PublishResultOutput.FromFailure(request, "category sync failed"),
+        };
+
+        var json = PublishResultOutput.Serialize(entries);
+
+        using var document = JsonDocument.Parse(json);
+        foreach (var entry in document.RootElement.EnumerateArray())
+        {
+            Assert.AreEqual(JsonValueKind.Null, entry.GetProperty("categoryOutcome").ValueKind);
+        }
+
+        // Issue #99 explicitly accepts that a late failure still reports a null appId.
+        Assert.AreEqual(JsonValueKind.Null, document.RootElement[2].GetProperty("appId").ValueKind);
     }
 
     [TestMethod]

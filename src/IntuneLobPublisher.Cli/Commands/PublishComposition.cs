@@ -1,6 +1,7 @@
 using Azure.Identity;
 using IntuneLobPublisher.Core.Publishing;
 using IntuneLobPublisher.Core.Publishing.Assignments;
+using IntuneLobPublisher.Core.Publishing.Categories;
 using Microsoft.Extensions.Logging;
 
 namespace IntuneLobPublisher.Cli.Commands;
@@ -13,7 +14,9 @@ namespace IntuneLobPublisher.Cli.Commands;
 /// that needs to reach <c>/beta/</c> (app resolution, macOS <c>AppType: pkg</c>, filter-bearing
 /// assignments) builds an absolute path instead, replacing the base path segment correctly
 /// (<see cref="AssignmentGraphClient"/>, <see cref="GraphIntuneAppDirectory"/>,
-/// <see cref="GraphMacOsAppClient"/>, <see cref="GraphMobileAppContentClient"/>).
+/// <see cref="GraphMacOsAppClient"/>, <see cref="GraphMobileAppContentClient"/>,
+/// <see cref="CategoryGraphClient"/>). <see cref="CategoryGraphClient"/> additionally reads the base
+/// address to build the <c>@odata.id</c> of a category reference from its scheme and authority.
 /// </summary>
 internal sealed class PublishComposition : IDisposable
 {
@@ -58,6 +61,9 @@ internal sealed class PublishComposition : IDisposable
         var orchestrator = new PublishOrchestrator(
             new IntuneAppResolver(new GraphIntuneAppDirectory(httpClient)),
             platformPublishers,
+            new CategoryService(
+                new CategoryGraphClient(httpClient),
+                loggerFactory.CreateLogger<CategoryService>()),
             new AssignmentService(
                 new AssignmentGraphClient(httpClient),
                 loggerFactory.CreateLogger<AssignmentService>()),

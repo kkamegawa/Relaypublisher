@@ -32,13 +32,14 @@ The app-only Graph token uses the permissions preconfigured on the app registrat
 
 This permission is required for `publish --dry-run` as well, not only for a real publish. A dry-run resolves the existing Intune app before it reports what would change, so it calls `GET /deviceAppManagement/mobileApps` first and fails with 403 without the permission. Do not treat `--dry-run` as a way to rehearse the pipeline before permissions are granted.
 
-Bash/zsh with a client secret:
+Bash/zsh with a client secret. Use the portable prompt form below: Bash's `read -p` option is not compatible with zsh, where `-p` means reading from a coprocess.
 
 ```bash
 APP_ID="<application-client-id>"
 TENANT_ID="<tenant-id>"
-read -r -s -p "Client secret: " CLIENT_SECRET
-echo
+printf '%s' 'Client secret: ' >&2
+IFS= read -r -s CLIENT_SECRET
+printf '\n' >&2
 az login --service-principal \
   --username "$APP_ID" \
   --password "$CLIENT_SECRET" \
@@ -183,7 +184,7 @@ Azure Pipelines:
 
 ## 4. Local E2E workflow
 
-The examples invoke the CLI from the source tree. The `--` separates `dotnet run` options from Relaypublisher options. A globally installed `relaypublisher` command can be used instead after replacing the command prefix.
+The examples invoke the CLI from the source tree. The `--` separates `dotnet run` options from Relaypublisher options. When validating changes on a branch, keep using this source-tree command: a globally installed `relaypublisher` command is a published NuGet tool and can still contain the old content URL implementation. Use the global command only after a release containing the change has been installed.
 
 ### 4.1 Build and test
 
@@ -313,7 +314,12 @@ dotnet run --configuration Release --project $CliProject -- `
   --dry-run
 ```
 
-Check the selected app identity, existing app resolution, package version, input hash, assignment plan, tenant, and platform-specific mapping errors.
+Check the selected app identity, existing app resolution, package version, input hash, category plan, assignment plan, tenant, and platform-specific mapping errors.
+
+If the manifest declares `Categories`, the dry-run also reads the tenant category catalog and the app's
+current categories, then prints a `Category plan for app <id>: N add, N keep, N remove` block (a new app uses
+the placeholder id `(new app)`). This is the only point where a category name that does not exist in the
+tenant is detected - `validate` never contacts Graph. Nothing is written during the dry-run.
 
 ### 4.6 Publish to the test tenant
 
@@ -341,7 +347,54 @@ dotnet run --configuration Release --project $CliProject -- `
   --result-file publish-result.json
 ```
 
-Verify the app in the Intune admin center, including its display name, management metadata in `notes`, committed content, detection rules, and assignments. Keep `publish-result.json` out of public artifacts if it contains operational details.
+Verify the app in the Intune admin center, including its display name, management metadata in `notes`, committed content, detection rules, assignments, and - when the manifest declares `Categories` - the app's categories. Keep `publish-result.json` out of public artifacts if it contains operational details.
+
+Relaypublisher checks the app's `publishingState` before deciding whether the content hash permits a
+skip. An app in `processing` is polled until `published`; an app in `notPublished` reuses its sole
+interrupted content version, creating the first file when none exists, renewing a sole compatible uncommitted
+file in a supported terminal failure state, and failing safely for non-matching or multiple files,
+or resuming activation of a committed file for the
+same `inputHash`. If polling times out, wait for Intune to finish
+processing and rerun the same publish. Do not delete and recreate the app. Existing-app metadata and
+category writes are performed only after content activation, because Graph rejects them while the app is
+not `Published`.
+
+For content upload, the Graph request URL must include the concrete app type after the app id, for example
+`.../mobileApps/<app-id>/microsoft.graph.macOSPkgApp/contentVersions` for the default macOS `pkg` app.
+If the log instead shows `.../mobileApps/<app-id>/contentVersions` and Graph returns
+`Resource not found for the segment 'contentVersions'`, the old CLI was executed. Rebuild the Release CLI from
+the current source and rerun the publish with the source-tree command shown above (or install a released tool
+version that contains the fix); do not substitute an older global tool. This failure occurs before a content
+version is created.
+
+If the log reports `Content upload step 'commit' failed with Graph uploadState 'commitFileFailed'` for a PKG,
+the old CLI may have uploaded ciphertext without the required `[MAC (32 bytes)][IV (16 bytes)]` header, or
+reported a ciphertext-only `sizeEncrypted`. Rebuild the Release CLI (`dotnet build IntuneLobPublisher.slnx
+--configuration Release`) and rerun the same `publish` command with the existing `manifest-list.json` and
+`./out` package artifact. PKG encryption is performed during `publish`, so do not rerun `package`; a failed
+commit does not activate the new content, so do not delete or recreate the app.
+
+If the next run reports `The mobile app content cannot be updated before the first content version is
+committed`, it used an older CLI that tried to create a second version. Rebuild again from the current source
+and rerun: the fixed flow reuses the first version only when it can renew a compatible failed file. When the
+old file metadata does not match the current encrypted payload, it fails without adding a sibling file.
+
+To exercise the category flow end to end on a disposable test tenant:
+
+1. Create one or two throwaway categories in the Intune admin center (**Apps** > **App categories**), for
+   example `Relaypublisher E2E A` and `Relaypublisher E2E B`.
+2. Add `Categories: [Relaypublisher E2E A]` to the app entry, run `publish --dry-run` (expect one `+` line),
+   then publish for real and confirm the category in the admin center. `publish-result.json` should show
+   `"categoryOutcome":"applied"`.
+3. Run the same publish again unchanged. The plan should show only `=` (keep) lines and the result file
+   should report `"categoryOutcome":"unchanged"` - this is the idempotency check.
+4. Change the list to `[Relaypublisher E2E B]` and publish: the plan adds B and removes A, and the admin
+   center reflects the exact set.
+5. Set `Categories: []` and publish: every relationship is removed. Then remove the `Categories` key entirely
+   and publish once more - the app's categories must stay exactly as they are, with no category Graph call
+   made (`"categoryOutcome":"not-requested"`).
+6. Delete the throwaway categories from the tenant afterwards. Relaypublisher never deletes a category
+   resource itself.
 
 ## 5. Safe rerun and cleanup
 
@@ -349,6 +402,7 @@ Verify the app in the Intune admin center, including its display name, managemen
 - `package` can be rerun when an input download or staging operation fails. Reuse the same `manifest-list.json`.
 - `publish --dry-run` can be rerun without writing to Intune.
 - A real publish is designed to converge, but content activation cannot be undone by the tool.
+- Category `$ref` add/remove is idempotent, so an interrupted category synchronization converges on the next run.
 - For an intentional rollback, package the previous manifest version and use `--allow-downgrade` explicitly.
 - Remove local `out`, `manifest-list.json`, and `publish-result.json` after the test when they are no longer needed. Never commit package output, tokens, or signed download URLs.
 

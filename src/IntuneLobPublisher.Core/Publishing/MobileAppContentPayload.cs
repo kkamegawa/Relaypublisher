@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace IntuneLobPublisher.Core.Publishing;
 
-/// <summary>Request body for <c>POST .../mobileApps/{id}/contentVersions</c>.</summary>
+/// <summary>Request body for <c>POST .../mobileApps/{id}/{appType}/contentVersions</c>.</summary>
 public sealed class MobileAppContentCreateRequest
 {
     [JsonPropertyName("@odata.type")]
@@ -16,7 +16,7 @@ public sealed class MobileAppContentResponse
     public string? Id { get; init; }
 }
 
-/// <summary>Request body for <c>POST .../contentVersions/{cv}/files</c>.</summary>
+/// <summary>Request body for <c>POST .../mobileApps/{id}/{appType}/contentVersions/{cv}/files</c>.</summary>
 public sealed class MobileAppContentFileCreateRequest
 {
     [JsonPropertyName("@odata.type")]
@@ -43,11 +43,27 @@ public sealed class MobileAppContentFileResponse
     [JsonPropertyName("id")]
     public string? Id { get; init; }
 
+    [JsonPropertyName("name")]
+    public string? Name { get; init; }
+
+    [JsonPropertyName("size")]
+    public long? Size { get; init; }
+
+    [JsonPropertyName("sizeEncrypted")]
+    public long? SizeEncrypted { get; init; }
+
     [JsonPropertyName("azureStorageUri")]
     public string? AzureStorageUri { get; init; }
 
     [JsonPropertyName("azureStorageUriExpirationDateTime")]
     public DateTimeOffset? AzureStorageUriExpirationDateTime { get; init; }
+
+    /// <summary>
+    /// Whether Intune has fully committed this file. Nullable so recovery fails safely when Graph omits
+    /// the field instead of treating an unknown state as an uncommitted file that may be reused.
+    /// </summary>
+    [JsonPropertyName("isCommitted")]
+    public bool? IsCommitted { get; init; }
 
     /// <summary>
     /// A <c>mobileAppContentFileUploadState</c> member name, e.g. <c>azureStorageUriRequestSuccess</c> or
@@ -122,10 +138,15 @@ public sealed class MobileAppMetadataPatchPayload
     public string? Notes { get; init; }
 }
 
-/// <summary>Read model for polling a <c>win32LobApp</c>'s <c>publishingState</c>.</summary>
-public sealed class Win32LobAppPublishingStateResponse
+/// <summary>Read model for a mobile LOB app's content publishing state.</summary>
+public sealed class MobileLobAppContentStateResponse
 {
     /// <summary>One of "notPublished", "processing", "published".</summary>
     [JsonPropertyName("publishingState")]
     public required string PublishingState { get; init; }
+
+    [JsonPropertyName("committedContentVersion")]
+    public string? CommittedContentVersion { get; init; }
 }
+
+public sealed record MobileAppContentState(string PublishingState, string? CommittedContentVersion);

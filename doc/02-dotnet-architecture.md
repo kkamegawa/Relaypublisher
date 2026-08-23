@@ -19,6 +19,7 @@ IntuneLobPublisher.slnx
       Packaging/
       Publishing/
         Assignments/
+        Categories/
         ManagementMetadata.cs
       Sources/
 
@@ -106,6 +107,7 @@ Responsibilities:
 - commit + `committedContentVersion` PATCH
 - upload state polling
 - publishing state polling
+- app category relationship sync(`$ref` add/remove、`Publishing/Categories`)
 - assignment apply
 - notes metadata update
 - 429 / 503 の `Retry-After` 尊重 retry(全 Graph 呼び出し共通)
@@ -322,6 +324,59 @@ public enum AssignmentSyncMode
 }
 ```
 
+### 9.8 Category service(GitHub #99)
+
+`Publishing/Categories` は Intune app category relationship の同期だけを担当する。tenant-wide な
+`mobileAppCategory` リソースの作成 / 改名 / 削除は行わない(00-overview.md §6.20)。
+
+```csharp
+public interface ICategoryGraphClient
+{
+    Task<IReadOnlyList<IntuneAppCategory>> ListTenantCategoriesAsync(bool useBeta, CancellationToken cancellationToken);
+    Task<IReadOnlyList<IntuneAppCategory>> ListAppCategoriesAsync(string appId, bool useBeta, CancellationToken cancellationToken);
+    Task<bool> AddCategoryAsync(string appId, string categoryId, bool useBeta, CancellationToken cancellationToken);
+    Task<bool> RemoveCategoryAsync(string appId, string categoryId, bool useBeta, CancellationToken cancellationToken);
+}
+
+public interface ICategoryService
+{
+    // existingAppId が null(新規 app)なら tenant 名前解決だけを行い、per-app GET は行わない。
+    Task<CategoryPlan> CreatePlanAsync(string? existingAppId, AppManifest app, CancellationToken cancellationToken);
+
+    Task ApplyAsync(CategoryPlan plan, AppManifest app, CancellationToken cancellationToken);
+}
+```
+
+```csharp
+public sealed record IntuneAppCategory(string Id, string DisplayName);
+
+public enum CategoryPlanAction { Add, Keep, Remove }
+
+public sealed record CategoryPlanEntry(CategoryPlanAction Action, string CategoryId, string DisplayName);
+
+// Requested = false は「manifest が Categories を省略した」= Graph read も write も行わない状態。
+// Categories: [] (desired set が空集合) とは区別する。
+public sealed record CategoryPlan(string AppId, bool Requested, IReadOnlyList<CategoryPlanEntry> Entries);
+```
+
+補助クラス:
+
+- `CategoryNameResolver`: `OrdinalIgnoreCase` の完全一致で displayName → ID を解決する pure logic。0 件 / 複数件は
+  `CategorySyncException`。
+- `CategoryPlanner`: desired と current の差分から Add / Keep / Remove を決める pure logic。remove は表示順が
+  Graph の応答順に依存しないよう displayName でソートする。
+- `CategoryPlanFormatter`: dry-run / publish 用の decisive な plan 表示。`Requested = false` の plan は空文字を返す。
+- `CategoryRefResponseClassifier`: POST `$ref` の「既に関連付け済み」応答と DELETE `$ref` の 404 だけを成功に倒す
+  判定を隔離する。
+
+`Win32LobAppPayload` / `MacOsAppPayload` には `categories` を追加しない。relationship 操作は app create/update
+payload から完全に分離する。
+
+`IPublishOrchestrator.PublishAsync` は plan callback をまとめた `PublishReport`(`ReportCategoryPlan` /
+`ReportAssignmentPlan`)を受け取り、`PublishResult` は `CategoryPlan?` を保持する。publish result JSON には
+additive optional field `categoryOutcome`(`applied` / `unchanged` / `not-requested` / null)だけを追加し、
+既存 field の名前・型・順序は変更しない。
+
 ---
 
 
@@ -370,6 +425,10 @@ public sealed class AppManifest
     public RequirementsManifest? Requirements { get; init; }
 
     public List<AssignmentManifest> Assignments { get; init; } = [];
+
+    // 省略(null)= 既存 relationship を維持、[] = 全解除、1 件以上 = 完全同期。
+    // 省略と空配列を区別するため nullable かつ初期値なし(00-overview.md §6.7 / §6.20)。
+    public List<string>? Categories { get; init; }
 }
 ```
 
@@ -489,15 +548,31 @@ Tasks:
 Tasks:
 
 - Map manifest to win32LobApp(`allowedArchitectures` / `minimumSupportedWindowsRelease` / `returnCodes` / detection script の base64 埋め込みを含む。詳細は issue-003)。
-- Create or update app.
-- Skip content upload when stored `inputHash` matches.
 - Guard downgrade(既定 skip、`--allow-downgrade` で許可)。
+- Create a new app when the resolver reports no match. For an existing app, defer the metadata PATCH
+  until its content is published.
+- Read `publishingState` before deciding whether stored `inputHash` permits a skip. Wait for
+  `processing` to become `published`; force content upload for `notPublished` even when the hash matches;
+  fail immediately for an unknown state.
+- For `notPublished`, list typed `contentVersions` before creating one. Create a version when none exists;
+  reuse a sole existing version. When that version has no files, create its first file. When it contains
+  uncommitted files, renew and reuse only when the total count is one, its terminal failure state is supported,
+  and its name and sizes match the current payload; reject non-matching or multiple files, multiple versions, or
+  mixed/ambiguous committed state without deleting the app or committed content. When the stored and current
+  `inputHash` values match and the sole file is already committed, resume at the
+  `committedContentVersion` PATCH instead of uploading again.
 - Extract `.intunewin` and build `fileEncryptionInfo` from `Detection.xml`.
 - Upload encrypted payload to Azure Storage SAS URI(renewUpload 対応)。
+- Build content URLs with the concrete OData type-cast segment after the app id
+  (`win32LobApp`, `macOSPkgApp`, or `macOSLobApp`); the uncast `/contentVersions` route is not reliable.
+  Interrupted-upload recovery uses `renewUpload` for a metadata-compatible file and does not depend on
+  content-version/file DELETE or PATCH routes. It fails instead of adding a sibling file when stale file metadata differs.
 - Commit file with `fileEncryptionInfo` and poll commit state.
 - PATCH `committedContentVersion`.
 - Poll publishing state.
 - Update notes metadata.
+- After content activation reaches `published`, update the existing app metadata, then apply categories
+  and assignments.
 - Honor `Retry-After` on 429/503.
 
 ### Phase 7: Assignment management

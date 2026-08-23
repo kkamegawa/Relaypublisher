@@ -20,7 +20,8 @@ The repository now contains the .NET CLI foundation for the normal workflow:
 - `plan` resolves the target manifest set once and writes `manifest-list.json` for later CI jobs.
 - `package` stages app files: Windows Win32 `.intunewin` packages (Windows runner required) or a
   staged, checksum-verified macOS `.pkg` (any OS).
-- `publish` creates or updates Intune apps, uploads packaged content, and reconciles assignments.
+- `publish` creates or updates Intune apps, uploads packaged content, reconciles app categories, and
+  reconciles assignments.
 
 The Japanese translation is available in [README_ja.md](README_ja.md).
 
@@ -97,6 +98,9 @@ For bash, use the same commands.
 - App identity is `PackageIdentifier + Platform + Architecture`.
 - Management metadata is stored in the Intune app `notes` field.
 - Changed manifest detection is resolved once by `plan` and passed through CI as `manifest-list.json`.
+- An app entry's optional `Categories` list is the exact desired set of Intune app categories; omitting it
+  preserves the app's current categories, and the tool never creates, renames, or deletes a tenant category
+  (see [doc/05-operation.md](doc/05-operation.md#4d-intune-app-categories)).
 - Publishing should always use `--expected-tenant` in production.
 
 ## APM Management

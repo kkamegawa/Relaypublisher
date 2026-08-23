@@ -241,6 +241,7 @@ Rollback 後は Intune で app を確認し、assignments が意図した manife
 |---|---|---|
 | 既存 app が更新されず、Intune に別 app が増えた | `DisplayName`・`PackageIdentifier`・`Platform`・`Architecture` をバージョンと一緒に変更してしまい、identity 解決(doc/00-overview.md §6.1)が既存 app と一致しなくなった | 元の identity フィールドに戻して正しい app が更新されるよう再 publish し、余分に増えた app は Intune 管理センターで手動削除する(doc/00-overview.md §6.11 — リタイアは本ツールのスコープ外) |
 | run が `skipped (downgrade)` と報告した | manifest の version が Intune 側 metadata に保存された version より低い | 上記 §3 を参照 |
+| `Invalid operation: app's PublishingState is not 'Published'` で失敗した | Intune が app を処理中だった、または committed content version がまだ activate されていない状態で metadata / category を更新しようとした | 現在の CLI で同じ publish を再実行する。`processing` は `published` になるまで待機し、`notPublished` は `inputHash` が一致していても content を upload する。polling が timeout した場合は Intune の処理完了後に再実行する。app は削除・再作成しない |
 | `publish` は成功したが content が変わらない | `inputHash` が保存値と一致し、content upload が skip された(doc/00-overview.md §6.7) | manifest または入力ファイルが実際に変わっているか確認する。`inputHash` が変わっていなければ再アップロードを skip するのは仕様どおり |
 | macOS: publish 後もデバイス側の検出バージョンが変わらない | `Detection.IncludedApps[].BundleVersion` を新リリースに合わせて更新していない | manifest を修正して再 publish する |
 | ログに旧バージョンの `superseded by version X` が出る | 解決された set に同一 identity の複数バージョンが含まれる場合の仕様(doc/00-overview.md §6.8) | 対処不要 — 最高バージョンのみが publish される |
@@ -295,6 +296,12 @@ Publish が package metadata missing を報告した場合:
   `Requirements.MinimumOSVersion` が `MacOsMinimumOperatingSystemTable` の認識する値(`10.13`〜`13.0`、または
   `AppType: pkg` のみ有効な `14`/`14.0`/`15`/`15.0`/`26`/`26.0`)のいずれでもない。この mapping は `publish`(および
   `--dry-run`)時にのみ実行され `package` では行われないため、publish 前に manifest のバージョン文字列を修正する。
+- **`Resource not found for the segment 'contentVersions'` (HTTP 400)**: 古い CLI が app ID 直後の
+  OData 型キャストを付けずに content endpoint を呼び出している。Release 構成で CLI を再ビルドし、同じ
+  package artifact を使って publish を再実行する。修正版は `microsoft.graph.macOSPkgApp`（pkg）、
+  `microsoft.graph.macOSLobApp`（lob）、`microsoft.graph.win32LobApp`（Windows）の型付き URLを
+  content version 作成から files/commit まで一貫して使用する。このエラーが content version 作成時に
+  発生した場合、app を削除・再作成する必要はない。
 - **`UnsupportedMacOsVersionException`("AppType 'pkg'" に言及)**: manifest が `AppType: lob` かつ
   `Requirements.MinimumOSVersion` に macOS 14 以降を指定している。`macOSLobApp` は Graph v1.0 のままで、
   macOS 13 より先の minimum-OS フラグが無い。`MinimumOSVersion` を下げるか、`AppType: pkg`(Graph beta、
@@ -304,16 +311,22 @@ Publish が package metadata missing を報告した場合:
   のみ表面化する。
 - **`Detection.IncludedApps` が欠落または空**: macOS のすべての app entry は `IncludedApps` を 1 件以上
   (`BundleId` + `BundleVersion`)必要とする。これは `publish` ではなく `validate` で fail する。
-- **PKG の content upload が `commitFileSuccess` に到達しない、または SAS URI へのアップロード自体が
-  HTTP 400 になる(修正済み)**: 旧バージョンの `PkgContentPreparer` は AES-256-CBC の ciphertext のみを
-  アップロードしていたが、Intune はアップロードするバイト列の先頭に 48 バイトの
-  `[mac (32 バイト)][iv (16 バイト)]` ヘッダを要求する。これは `.intunewin` の content entry がすでに
-  持っている形式と同一であり、だからこそ `IntuneWinContentExtractor` は無加工でストリームできていた。この点は
-  推測ではなく、Microsoft 公式のリファレンス実装(`microsoftgraph/powershell-intune-samples` の
-  `LOB_Application/Application_LOB_Add.ps1`、`EncryptFileWithIV` 関数)で確認済み。現在の
-  `PkgContentPreparer` はこのヘッダを書き込む(doc/00-overview.md §6.13 参照)。アップグレード後も macOS
-  entry でのみ(Windows entry は影響を受けない)commit が繰り返し失敗する場合は、闇雲に retry せず、ログの
-  Graph エラーと `client-request-id`/`request-id` を添えて issue を起票する。
+- **PKG で `commitFileFailed` になる(または content upload が `commitFileSuccess` に到達しない)**:
+  旧 `PkgContentPreparer` は AES-256-CBC の ciphertext だけを upload していた。Intune が要求する upload
+  stream は `[MAC (32 バイト)][IV (16 バイト)][ciphertext]` で、`MAC = HMAC-SHA256(macKey, IV || ciphertext)`
+  とする。`sizeEncrypted` にも 48 バイトの header と ciphertext の両方を含める(doc/00-overview.md §6.13 参照)。
+  そのため SAS URI への upload は成功しても、commit 中に Graph が content を拒否することがある。現在の source
+  から Release 構成の CLI を再ビルドし、既存の package artifact を使って同じ `publish` を再実行する。PKG の
+  暗号化は `publish` 中に行われるため `package` の再実行は不要である。commit 失敗では app の有効な content は
+  変更されないので、app を削除・再作成しない。アップグレード後も `commitFileFailed` が続く場合は、ログの
+  Graph error と `client-request-id`/`request-id` を添えて issue を起票する。
+- **`The mobile app content cannot be updated before the first content version is committed` (HTTP 400)**:
+  以前の初回 upload が app を `notPublished`、content version を未 commit のまま残し、古い CLI が 2 件目の version を
+  作成しようとしている。Release CLI を再ビルドして同じ publish を再実行する。修正版は既存 version と file を列挙し、
+  file が 0 件なら最初の file を作成する。stale file がある場合は、対応する終端失敗 state で現在の package と
+  名前・サイズが一致する未 commit file が総数 1 件のときだけ renew して再利用する。一致する file が無い、または複数なら、
+  stale な失敗 file が残る version を Intune が activate できないため、追加 file を作成せず停止する。app、content version、
+  file は自動削除しない。複数 version、複数の一致 file、または曖昧な commit state も明確なエラーで停止する。
 - **`v14_0`/`v15_0` が `'microsoft.graph.macOSMinimumOperatingSystem'` に存在しないという 400
   (`GraphRequestException`、修正済み)**: 旧バージョンはすべての macOS app payload に `v14_0`/`v15_0` を
   (`false` であっても)常に含めていたが、Graph v1.0 の `macOSMinimumOperatingSystem` にはこれらのプロパティ
@@ -338,9 +351,37 @@ Publish が package metadata missing を報告した場合:
   これを検出するため、`publish` でのみ表面化する場合は 2 つのコマンド間で repository root や作業ディレクトリが
   異なっている可能性が高い。
 
+## 6b. Intune app category の失敗
+
+- **`CategorySyncException`("does not exist in the tenant")**: `Categories` の名前に一致する
+  `mobileAppCategory` が tenant にない。`validate` は tenant に接続しないため、これは `publish`
+  (`--dry-run` を含む)の preflight でのみ検出される。category は Intune 管理センターで作成する
+  (本 tool は意図的に category を作らない)か、manifest の綴りを直す。照合は大小文字のみ無視するため、
+  前後の空白がある名前は別名になる(そもそも `validate` が空白付きの名前を拒否する)。preflight はその app の
+  最初の write より前に走るので、この失敗時点で app は作成も更新もされていない。失敗するのはその manifest entry
+  だけで、batch の残りは継続し、再実行で収束する。
+- **`CategorySyncException`("matches N tenant categories")**: 大小文字だけが異なる category が tenant に複数
+  存在する。manifest の名前ではどれか 1 つを一意に指せない。Intune 管理センターで重複を改名または削除する。
+- **`$ref` 失敗を包んだ `CategorySyncException`**: add(`POST .../categories/$ref`)または remove
+  (`DELETE .../categories/{id}/$ref`)が失敗した。重複 add と不在 remove は既に成功として扱われるため、これは
+  実際の失敗である。log の Graph error と `client-request-id` / `request-id` を確認する。次回実行は app の現在の
+  relationship から plan を再計算するため、途中まで適用された状態からでも収束する。
+- **tenant category 一覧取得での 403**: `Categories` を宣言したすべての entry が同じ一覧を通るため identity-wide
+  として扱い、`GraphAccessDeniedException` で batch 全体を停止する(app 一覧の 403 と同じ)。2a に従って対処する。
+  category relationship に `DeviceManagementApps.ReadWrite.All` を超える権限は不要。
+- **category だけを変更したのに content が再 upload された**: 仕様どおり。`inputHash` は manifest 全体を対象と
+  する(doc/00-overview.md §6.7)ため、`Categories` の変更で hash が変わり、再package と再 upload が発生する。
+- **`Categories` を使い始めてから毎回 content が再 upload される**: 同じ repository に対して異なるバージョンの
+  CLI を使っている。古い CLI は未知の `Categories` field を無視して古い `manifestHash` を計算するため、新旧を
+  交互に実行すると `inputHash` が振動する。CI とローカルの CLI をバージョンで揃える。
+- **result file の `categoryOutcome` が null**: その entry では category 処理に到達しなかった(skip、dry-run、
+  preflight 前の失敗)。category が解除されたという意味ではない。app 解決後に失敗した場合でも `appId` は null の
+  ままになるが、これは許容された result file の形。
+
 ## 7. Safe rerun rules
 
 - `validate`、`plan`、`package --stage-only` は rerun して安全です。
 - `package` は rerun して安全で、同じ input なら同じ deterministic `inputHash` を再現するべきです。
 - `publish --dry-run` は rerun して安全です。
 - 実 publish は収束するよう設計されていますが、content activation step は tool では undo できません。Rollback は以前の manifest version を `--allow-downgrade` 付きで publish して行います。
+- category の `$ref` add/remove は冪等です。重複 add と不在 remove はどちらも成功として扱われるため、途中で中断した category 同期は次回実行で収束します。

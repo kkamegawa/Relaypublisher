@@ -52,3 +52,12 @@ Apps:
       - Target: group
         GroupId: "00000000-0000-0000-0000-000000000001"
         Intent: required
+
+    # Optional. The exact set of Intune app categories this app should belong to. The categories must
+    # already exist in the tenant (matched on displayName, case-insensitively); Relaypublisher never
+    # creates, renames or deletes a category. Omitting the key preserves whatever the app is related to
+    # today and makes no category Graph call; `Categories: []` removes every relationship.
+    # See doc/01-manifest-schema.md section 5.8.
+    # Categories:
+    #   - Business Apps
+    #   - Productivity

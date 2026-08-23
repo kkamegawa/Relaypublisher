@@ -1,4 +1,6 @@
+using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json.Serialization;
 using IntuneLobPublisher.Core.Exceptions;
 
 namespace IntuneLobPublisher.Core.Publishing;
@@ -8,15 +10,23 @@ namespace IntuneLobPublisher.Core.Publishing;
 /// file's upload state, commit it, patch the app's committed content version and notes, and poll the
 /// app's publishing state. See doc/issues/issue-003-intune-graph-win32.md "Content upload flow".
 /// <c>useBeta</c> routes the whole call through <c>/beta/</c> instead of <c>/v1.0/</c>: content
-/// sub-resources (contentVersions/files) are inherited from <c>mobileLobApp</c> and exist in both API
-/// versions, but a <c>macOSPkgApp</c> parent id is itself beta-only
+/// sub-resources (contentVersions/files) are inherited from <c>mobileLobApp</c> and generally require an
+/// OData type-cast segment after the app id. A <c>macOSPkgApp</c> parent id is itself beta-only
 /// (https://learn.microsoft.com/graph/api/resources/intune-apps-macospkgapp), so every call touching
 /// that app - including its content sub-resources - stays on <c>/beta/</c> for consistency.
 /// </summary>
 public interface IMobileAppContentClient
 {
+    /// <summary>Lists all content versions, following <c>@odata.nextLink</c>.</summary>
+    Task<IReadOnlyList<MobileAppContentResponse>> ListContentVersionsAsync(
+        string appId, string oDataType, bool useBeta, CancellationToken cancellationToken);
+
     /// <summary>Creates a new content version and returns its id.</summary>
     Task<string> CreateContentVersionAsync(string appId, string oDataType, bool useBeta, CancellationToken cancellationToken);
+
+    /// <summary>Lists all files in one content version, following <c>@odata.nextLink</c>.</summary>
+    Task<IReadOnlyList<MobileAppContentFileResponse>> ListContentFilesAsync(
+        string appId, string contentVersionId, string oDataType, bool useBeta, CancellationToken cancellationToken);
 
     /// <summary>Creates a content file record and returns its id.</summary>
     Task<string> CreateContentFileAsync(
@@ -41,6 +51,10 @@ public interface IMobileAppContentClient
 
     /// <summary>Reads the app's current <c>publishingState</c> ("notPublished", "processing" or "published").</summary>
     Task<string> GetPublishingStateAsync(string appId, bool useBeta, CancellationToken cancellationToken);
+
+    /// <summary>Reads the state needed before deciding whether an interrupted content version can be recovered.</summary>
+    Task<MobileAppContentState> GetContentStateAsync(
+        string appId, string oDataType, bool useBeta, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -58,6 +72,36 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         _httpClient = httpClient;
     }
 
+    public async Task<IReadOnlyList<MobileAppContentResponse>> ListContentVersionsAsync(
+        string appId, string oDataType, bool useBeta, CancellationToken cancellationToken)
+    {
+        var results = new List<MobileAppContentResponse>();
+        string? requestUri = ContentRootPath(appId, oDataType, useBeta) + "/contentVersions?$select=id";
+
+        while (requestUri is not null)
+        {
+            using var response = await _httpClient.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
+            var page = await GraphResponseReader
+                .ReadJsonAsync<GraphListPage<MobileAppContentResponse>>(response, requestUri, cancellationToken)
+                .ConfigureAwait(false);
+
+            foreach (var contentVersion in page.Value)
+            {
+                if (string.IsNullOrWhiteSpace(contentVersion.Id))
+                {
+                    throw GraphResponseReader.BodyFailure(
+                        response, $"Graph returned a content version without an id for '{requestUri}'.");
+                }
+
+                results.Add(contentVersion);
+            }
+
+            requestUri = page.NextLink;
+        }
+
+        return results;
+    }
+
     public async Task<string> CreateContentVersionAsync(string appId, string oDataType, bool useBeta, CancellationToken cancellationToken)
     {
         var requestUri = ContentRootPath(appId, oDataType, useBeta) + "/contentVersions";
@@ -66,6 +110,37 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
         var body = await GraphResponseReader.ReadJsonAsync<MobileAppContentResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
         return body.Id ?? throw GraphResponseReader.BodyFailure(
             response, $"Graph returned a content version without an id for '{requestUri}'.");
+    }
+
+    public async Task<IReadOnlyList<MobileAppContentFileResponse>> ListContentFilesAsync(
+        string appId, string contentVersionId, string oDataType, bool useBeta, CancellationToken cancellationToken)
+    {
+        var results = new List<MobileAppContentFileResponse>();
+        string? requestUri = ContentVersionPath(appId, contentVersionId, oDataType, useBeta)
+            + "/files?$select=id,isCommitted,uploadState,name,size,sizeEncrypted";
+
+        while (requestUri is not null)
+        {
+            using var response = await _httpClient.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
+            var page = await GraphResponseReader
+                .ReadJsonAsync<GraphListPage<MobileAppContentFileResponse>>(response, requestUri, cancellationToken)
+                .ConfigureAwait(false);
+
+            foreach (var file in page.Value)
+            {
+                if (string.IsNullOrWhiteSpace(file.Id))
+                {
+                    throw GraphResponseReader.BodyFailure(
+                        response, $"Graph returned a content file without an id for '{requestUri}'.");
+                }
+
+                results.Add(file);
+            }
+
+            requestUri = page.NextLink;
+        }
+
+        return results;
     }
 
     public async Task<string> CreateContentFileAsync(
@@ -123,8 +198,40 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
     {
         var requestUri = AppPath(appId, useBeta) + "?$select=publishingState";
         using var response = await _httpClient.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
-        var body = await GraphResponseReader.ReadJsonAsync<Win32LobAppPublishingStateResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
+        var body = await GraphResponseReader.ReadJsonAsync<MobileLobAppContentStateResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
         return body.PublishingState;
+    }
+
+    public async Task<MobileAppContentState> GetContentStateAsync(
+        string appId, string oDataType, bool useBeta, CancellationToken cancellationToken)
+    {
+        _ = ToGraphTypeSegment(oDataType);
+        var publishingState = await GetPublishingStateAsync(appId, useBeta, cancellationToken).ConfigureAwait(false);
+        if (!string.Equals(publishingState, "notPublished", StringComparison.Ordinal))
+        {
+            return new MobileAppContentState(publishingState, null);
+        }
+
+        // Intune's untyped singleton is the only route that exposes the derived
+        // committedContentVersion property for macOSPkgApp, but the backend can intermittently return
+        // a generic 400 for this read. Retry only this idempotent GET; malformed OData requests still
+        // fail after the bounded attempts and mutation requests are never retried on 400.
+        var requestUri = AppPath(appId, useBeta);
+        for (var attempt = 0; ; attempt++)
+        {
+            using var response = await _httpClient.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var body = await GraphResponseReader
+                    .ReadJsonAsync<MobileLobAppContentStateResponse>(response, requestUri, cancellationToken)
+                    .ConfigureAwait(false);
+                return new MobileAppContentState(body.PublishingState, body.CommittedContentVersion);
+            }
+            catch (GraphRequestException ex) when (ex.StatusCode == (int)HttpStatusCode.BadRequest && attempt < 3)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(200 * (1 << attempt)), cancellationToken).ConfigureAwait(false);
+            }
+        }
     }
 
     private static string AppPath(string appId, bool useBeta)
@@ -172,4 +279,13 @@ public sealed class GraphMobileAppContentClient : IMobileAppContentClient
     }
 
     private static string VersionSegment(bool useBeta) => useBeta ? "/beta" : "/v1.0";
+
+    private sealed class GraphListPage<T>
+    {
+        [JsonPropertyName("value")]
+        public List<T> Value { get; init; } = [];
+
+        [JsonPropertyName("@odata.nextLink")]
+        public string? NextLink { get; init; }
+    }
 }

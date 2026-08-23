@@ -388,14 +388,69 @@ relaypublisher publish --manifest-list manifest-list.json --package-dir ./out \
 ```
 
 8. `--dry-run` の出力を確認してから、`--dry-run` なしで `publish` を実行する。内部では、`publish` は notes
-   metadata から既存 app を解決し、downgrade guard(§6.8)を適用し、`inputHash` を比較して変化がなければ
-   content upload を skip し(§6.7)、そうでなければ新しい content version をアップロード・commit する。
-   `committedContentVersion` が patch された時点で新しい content が有効になり、この tool では戻せない
-   (§6.10) — rollback するには、以前のバージョンの manifest を `--allow-downgrade` 付きで再度 publish する。
+   metadata から既存 app を解決し、downgrade guard(§6.8)を適用する。`inputHash` の skip 判定の前に app の
+   `publishingState` を読み取り、`processing` なら `published` になるまで待機する。`notPublished` では 2 件目を
+   作成せず、中断した単一 content version を再利用する。file が 0 件なら最初の file を作成する。stale file が
+   ある場合は、対応する終端失敗 state の互換な未 commit file が総数 1 件のときだけ renew して再利用し、
+   一致する file が無い場合や複数 file は追加 file を作成せず失敗する。同じ hash の単一 commit 済み
+   file は activation から再開する。未知または曖昧な state は app / committed content を削除せず失敗する。
+   `published` で hash が一致する場合だけ
+   content upload を skip し(§6.7)、それ以外は新しい content version をアップロード・commit する。content の
+   activation が完了してから既存 app の metadata、category、assignment を更新する — Graph は app が Published
+   でない間これらの write を拒否する。state polling が timeout した場合は Intune の処理完了後に同じ publish を
+   再実行し、app を削除・再作成しない。`committedContentVersion` が patch された時点で新しい content が有効になり、
+   この tool では戻せない(§6.10) — rollback するには、以前のバージョンの manifest を `--allow-downgrade` 付きで
+   再度 publish する。
 
 新しいバージョンフォルダを既存のものと並べて追加する実行可能な例は
 [samples/manifests/README_ja.md](../samples/manifests/README_ja.md#powershell-サンプルを新しいバージョンに更新する)
 を参照。
+
+## 4d. Intune app category
+
+app entry には、その app が属する Intune app category を宣言できる。category は tenant 全体で共有される
+`mobileAppCategory` リソースであり、Relaypublisher は app と既存 category の *relationship* だけを同期する。
+category 自体の作成・改名・削除は行わないため、category は事前に Intune 管理センターで作成しておく。
+
+```yaml
+Apps:
+  - Platform: windows
+    Architecture: x64
+    Categories:
+      - Business Apps
+      - Productivity
+```
+
+| Manifest | 動作 |
+|---|---|
+| `Categories` 省略 | app の現在の category を変更しない。category 関連の Graph 呼び出しを一切行わない |
+| `Categories: []` | app のすべての category relationship を解除する |
+| 1 件以上 | 列挙した集合を app の category 集合そのものとする(それ以外は解除) |
+
+運用上の注意:
+
+- 名前は `mobileAppCategory.displayName` と照合する。大小文字は無視するが、それ以外は verbatim(trim も Unicode
+  正規化もしない)。`validate` は tenant に接続しないため、**tenant に存在しない名前は `publish` または
+  `publish --dry-run` でしか検出できない**。検出はその app の最初の write より前の preflight で行われる。
+  名前の不存在・曖昧一致はその manifest entry だけを失敗させ、batch の残りは継続し、再実行で収束する。
+- `publish --dry-run` は tenant catalog と app の現在の category を read し、add/keep/remove の plan を表示する
+  だけで write は行わない。新規 app では placeholder ID `(new app)` を表示する。
+- content を Published 化してから既存 app の metadata と category relationship を更新する。Graph は
+  `publishingState` が `published` でない app へのこれらの write を拒否する。`processing` の app は設定済みの
+  polling interval / timeout で待機する。`notPublished` の app は中断した単一 content version を再利用し、未 commit
+  file だけを置換するか、同じ `inputHash` の commit 済み file の activation を再開するため、同じ publish の再実行で
+  復旧できる。
+- result file(`--result-file`)には entry ごとに additive field `categoryOutcome` が 1 つ増える。値は `applied` /
+  `unchanged` / `not-requested`、および category 処理に到達しなかった場合の null。category 単位の詳細は console
+  出力と log に出る。
+- `inputHash` は manifest 全体を対象とするため、**`Categories` だけを変更しても再package と content の再 upload が
+  発生し得る**。`Categories` を宣言していない manifest の hash は従来どおり変わらない。
+- いずれかの manifest が `Categories` を宣言したら、**その repository を扱うすべての CLI をバージョンで揃える**。
+  古い CLI は未知の manifest field を無視して古い hash を計算するため、新旧を交互に実行すると `inputHash` が振動
+  して毎回 content が再 upload される。
+- 追加の Graph permission は不要。`DeviceManagementApps.ReadWrite.All` で category relationship も操作できる。
+  tenant catalog 一覧取得での 403 は identity-wide であり、app 一覧での 403 と同じく batch 全体を停止する
+  ([06-troubleshooting_ja.md](06-troubleshooting_ja.md) の 2a を参照)。
 
 ## 5. Exit codes
 

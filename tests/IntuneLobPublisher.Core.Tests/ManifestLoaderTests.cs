@@ -218,6 +218,56 @@ public sealed class ManifestLoaderTests
     }
 
     [TestMethod]
+    public async Task LoadAsync_CategoriesOmitted_IsNull()
+    {
+        var manifest = await LoadFromTextAsync(
+            """
+            SchemaVersion: "1.0"
+            PackageIdentifier: Contoso.Tool
+            Apps:
+              - Platform: windows
+                Architecture: x64
+            """);
+
+        Assert.IsNull(manifest.Apps[0].Categories, "Omitted Categories must stay distinguishable from an empty list.");
+    }
+
+    [TestMethod]
+    public async Task LoadAsync_CategoriesEmptyList_IsEmptyNotNull()
+    {
+        var manifest = await LoadFromTextAsync(
+            """
+            SchemaVersion: "1.0"
+            PackageIdentifier: Contoso.Tool
+            Apps:
+              - Platform: windows
+                Architecture: x64
+                Categories: []
+            """);
+
+        Assert.IsNotNull(manifest.Apps[0].Categories);
+        Assert.IsEmpty(manifest.Apps[0].Categories!);
+    }
+
+    [TestMethod]
+    public async Task LoadAsync_CategoriesWithValues_PreservesOrderAndSpelling()
+    {
+        var manifest = await LoadFromTextAsync(
+            """
+            SchemaVersion: "1.0"
+            PackageIdentifier: Contoso.Tool
+            Apps:
+              - Platform: windows
+                Architecture: x64
+                Categories:
+                  - Business Apps
+                  - Productivity
+            """);
+
+        CollectionAssert.AreEqual(new[] { "Business Apps", "Productivity" }, manifest.Apps[0].Categories);
+    }
+
+    [TestMethod]
     public async Task LoadAsync_UnknownKeys_AreIgnored()
     {
         var manifest = await LoadFromTextAsync(

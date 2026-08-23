@@ -20,7 +20,7 @@ dotnet tool install --global relaypublisher
 - `plan` は対象 manifest set を一度だけ確定し、後続 CI job 用の `manifest-list.json` を書き出します。
 - `package` は app ファイルを staging します。Windows Win32 は `.intunewin` package を Windows 上で生成し、
   macOS は checksum 検証済みの `.pkg` を staging します(OS 不問)。
-- `publish` は Intune app の作成・更新、package content upload、assignment 同期を行います。
+- `publish` は Intune app の作成・更新、package content upload、app category 同期、assignment 同期を行います。
 
 正式ドキュメントは英語版の [README.md](README.md) です。
 
@@ -86,6 +86,9 @@ bash の場合も同じコマンドを使えます。
 - App identity は `PackageIdentifier + Platform + Architecture` です。
 - Management metadata は Intune app の `notes` field に保存します。
 - Changed manifest detection は `plan` で一度だけ確定し、CI では `manifest-list.json` を引き回します。
+- app entry の任意フィールド `Categories` は Intune app category の desired set そのものです。省略時は app の
+  現在の category を維持し、tenant の category 自体の作成・改名・削除は行いません
+  ([doc/05-operation_ja.md](doc/05-operation_ja.md#4d-intune-app-category) を参照)。
 - 本番 publish では常に `--expected-tenant` を使います。
 
 ## APM 管理

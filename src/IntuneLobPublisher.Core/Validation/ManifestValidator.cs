@@ -160,7 +160,27 @@ internal sealed class AppManifestValidator : AbstractValidator<AppManifest>
         RuleFor(a => a.Assignments)
             .Must((app, assignments) => !IsMacOsPkg(app) || assignments.TrueForAll(x => x.Intent != "uninstall"))
             .WithMessage("Intent 'uninstall' is not supported for macOS AppType 'pkg' apps.");
+
+        // Categories are resolved against the tenant catalog at publish/dry-run time; validate only
+        // checks the shape locally and never contacts Graph, so a name that does not exist in the
+        // tenant is reported by the publish preflight instead (doc/01-manifest-schema.md §5.8).
+        // Names are matched verbatim (no trimming, no Unicode normalization) and no count or length
+        // limit is imposed here.
+        RuleFor(a => a.Categories)
+            .Must(categories => categories is null || categories.TrueForAll(c => !string.IsNullOrWhiteSpace(c)))
+            .WithMessage("Categories must not contain empty or whitespace-only entries.")
+            .Must(categories => categories is null || categories.TrueForAll(HasNoOuterWhitespace))
+            .WithMessage("Categories entries must not have leading or trailing whitespace.")
+            .Must(HaveUniqueCategoryNames)
+            .WithMessage("Categories contains duplicate names. Category names are compared case-insensitively.");
     }
+
+    private static bool HasNoOuterWhitespace(string? value)
+        => value is not null && string.Equals(value, value.Trim(), StringComparison.Ordinal);
+
+    private static bool HaveUniqueCategoryNames(List<string>? categories)
+        => categories is null
+            || categories.Distinct(StringComparer.OrdinalIgnoreCase).Count() == categories.Count;
 
     private static bool IsSupportedInstallerType(AppManifest app, string? installerType) => app.Platform switch
     {

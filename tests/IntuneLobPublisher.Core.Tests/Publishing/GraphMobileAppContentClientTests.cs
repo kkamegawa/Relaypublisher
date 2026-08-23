@@ -72,6 +72,54 @@ public sealed class GraphMobileAppContentClientTests
     }
 
     [TestMethod]
+    public async Task ListContentVersionsAsync_FollowsNextLinkAndUsesTypedRoute()
+    {
+        const string nextLink = "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions?$skiptoken=next";
+        var (client, handler) = CreateClient(
+            _ => JsonResponse(HttpStatusCode.OK, $$"""
+                {"value":[{"id":"cv-1"}],"@odata.nextLink":"{{nextLink}}"}
+                """),
+            _ => JsonResponse(HttpStatusCode.OK, """{"value":[{"id":"cv-2"}]}"""));
+
+        var versions = await client.ListContentVersionsAsync("app-1", WindowsODataType, useBeta: false, CancellationToken.None);
+
+        Assert.HasCount(2, versions);
+        Assert.AreEqual("cv-1", versions[0].Id);
+        Assert.AreEqual("cv-2", versions[1].Id);
+        Assert.AreEqual(
+            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions?$select=id",
+            handler.Requests[0].Uri);
+        Assert.AreEqual(nextLink, handler.Requests[1].Uri);
+    }
+
+    [TestMethod]
+    public async Task ListContentFilesAsync_FollowsNextLinkUsesBetaTypedRouteAndParsesIsCommitted()
+    {
+        const string nextLink = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.macOSPkgApp/contentVersions/cv-1/files?$skiptoken=next";
+        var (client, handler) = CreateClient(
+            _ => JsonResponse(HttpStatusCode.OK, $$"""
+                {"value":[{"id":"file-1","uploadState":"commitFileFailed","isCommitted":false,"name":"app.pkg","size":123,"sizeEncrypted":171}],"@odata.nextLink":"{{nextLink}}"}
+                """),
+            _ => JsonResponse(HttpStatusCode.OK, """{"value":[{"id":"file-2","uploadState":"commitFileSuccess","isCommitted":true}]}"""));
+
+        var files = await client.ListContentFilesAsync("app-1", "cv-1", MacPkgODataType, useBeta: true, CancellationToken.None);
+
+        Assert.HasCount(2, files);
+        Assert.AreEqual("file-1", files[0].Id);
+        Assert.IsTrue(files[0].IsCommitted == false);
+        Assert.AreEqual("commitFileFailed", files[0].UploadState);
+        Assert.AreEqual("app.pkg", files[0].Name);
+        Assert.AreEqual(123, files[0].Size);
+        Assert.AreEqual(171, files[0].SizeEncrypted);
+        Assert.AreEqual("file-2", files[1].Id);
+        Assert.IsTrue(files[1].IsCommitted == true);
+        Assert.AreEqual(
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.macOSPkgApp/contentVersions/cv-1/files?$select=id,isCommitted,uploadState,name,size,sizeEncrypted",
+            handler.Requests[0].Uri);
+        Assert.AreEqual(nextLink, handler.Requests[1].Uri);
+    }
+
+    [TestMethod]
     public async Task CreateContentFileAsync_PostsNameSizeAndSizeEncrypted_ReturnsId()
     {
         var (client, handler) = CreateClient(
@@ -93,7 +141,7 @@ public sealed class GraphMobileAppContentClientTests
     [TestMethod]
     public async Task GetContentFileAsync_ParsesUploadStateAndAzureStorageUri()
     {
-        var (client, _) = CreateClient(_ => JsonResponse(HttpStatusCode.OK, """
+        var (client, handler) = CreateClient(_ => JsonResponse(HttpStatusCode.OK, """
             {"id":"file-1","uploadState":"azureStorageUriRequestSuccess","azureStorageUri":"https://sas.example/blob",
              "azureStorageUriExpirationDateTime":"2026-07-05T12:00:00Z"}
             """));
@@ -103,6 +151,9 @@ public sealed class GraphMobileAppContentClientTests
         Assert.AreEqual("azureStorageUriRequestSuccess", file.UploadState);
         Assert.AreEqual("https://sas.example/blob", file.AzureStorageUri);
         Assert.AreEqual(DateTimeOffset.Parse("2026-07-05T12:00:00Z"), file.AzureStorageUriExpirationDateTime);
+        Assert.AreEqual(
+            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions/cv-1/files/file-1",
+            handler.Requests[0].Uri);
     }
 
     [TestMethod]
@@ -135,6 +186,9 @@ public sealed class GraphMobileAppContentClientTests
 
         await client.CommitFileAsync("app-1", "cv-1", "file-1", encryptionInfo, WindowsODataType, useBeta: false, CancellationToken.None);
 
+        Assert.AreEqual(
+            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions/cv-1/files/file-1/commit",
+            handler.Requests[0].Uri);
         var body = handler.Requests[0].Body!;
         StringAssert.Contains(body, "\"fileEncryptionInfo\"");
         StringAssert.Contains(body, $"\"encryptionKey\":\"{Convert.ToBase64String([1, 2, 3])}\"");
@@ -188,6 +242,57 @@ public sealed class GraphMobileAppContentClientTests
 
         Assert.AreEqual("published", state);
         StringAssert.Contains(handler.Requests[0].Uri, "$select=publishingState");
+    }
+
+    [TestMethod]
+    public async Task GetContentStateAsync_ReadsFullAppWithoutDerivedPropertySelect()
+    {
+        var (client, handler) = CreateClient(
+            _ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"notPublished"}"""),
+            _ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"notPublished","committedContentVersion":"cv-1"}"""));
+
+        var state = await client.GetContentStateAsync("app-1", MacPkgODataType, useBeta: true, CancellationToken.None);
+
+        Assert.AreEqual("notPublished", state.PublishingState);
+        Assert.AreEqual("cv-1", state.CommittedContentVersion);
+        Assert.AreEqual(
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1?$select=publishingState",
+            handler.Requests[0].Uri);
+        Assert.AreEqual(
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1",
+            handler.Requests[1].Uri);
+    }
+
+    [TestMethod]
+    public async Task GetContentStateAsync_Published_DoesNotRequestFullApp()
+    {
+        var (client, handler) = CreateClient(
+            _ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"published"}"""));
+
+        var state = await client.GetContentStateAsync("app-1", MacPkgODataType, useBeta: true, CancellationToken.None);
+
+        Assert.AreEqual("published", state.PublishingState);
+        Assert.IsNull(state.CommittedContentVersion);
+        Assert.HasCount(1, handler.Requests);
+        Assert.AreEqual(
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1?$select=publishingState",
+            handler.Requests[0].Uri);
+    }
+
+    [TestMethod]
+    public async Task GetContentStateAsync_GenericBadRequestOnFullApp_RetriesRead()
+    {
+        var (client, handler) = CreateClient(
+            _ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"notPublished"}"""),
+            _ => JsonResponse(HttpStatusCode.BadRequest, """{"error":{"code":"BadRequest","message":"An error has occurred"}}"""),
+            _ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"notPublished","committedContentVersion":null}"""));
+
+        var state = await client.GetContentStateAsync("app-1", MacPkgODataType, useBeta: true, CancellationToken.None);
+
+        Assert.AreEqual("notPublished", state.PublishingState);
+        Assert.IsNull(state.CommittedContentVersion);
+        Assert.HasCount(3, handler.Requests);
+        Assert.AreEqual(handler.Requests[1].Uri, handler.Requests[2].Uri);
     }
 
     [TestMethod]

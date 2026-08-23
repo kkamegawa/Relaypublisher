@@ -32,9 +32,19 @@ public sealed class MobileAppContentUploadOrchestratorTests
 
         public Queue<string> PublishingStates { get; } = new();
 
+        public string? CommittedContentVersion { get; set; }
+
+        public List<MobileAppContentResponse> ContentVersions { get; } = [];
+
+        public Dictionary<string, List<MobileAppContentFileResponse>> ContentFiles { get; } = [];
+
         public List<(string Name, long Size, long SizeEncrypted)> CreateContentFileCalls { get; } = [];
 
+        public List<string> CreateContentFileContentVersionIds { get; } = [];
+
         public List<FileEncryptionInfoPayload> CommitFileCalls { get; } = [];
+
+        public int CreateContentVersionCallCount { get; private set; }
 
         public int RenewUploadCallCount { get; private set; }
 
@@ -48,15 +58,34 @@ public sealed class MobileAppContentUploadOrchestratorTests
 
         public Task<string> CreateContentVersionAsync(string appId, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
+            CreateContentVersionCallCount++;
             UseBetaCalls.Add(useBeta);
             ODataTypeCalls.Add(oDataType);
             return Task.FromResult("cv-1");
+        }
+
+        public Task<IReadOnlyList<MobileAppContentResponse>> ListContentVersionsAsync(
+            string appId, string oDataType, bool useBeta, CancellationToken cancellationToken)
+        {
+            UseBetaCalls.Add(useBeta);
+            ODataTypeCalls.Add(oDataType);
+            return Task.FromResult<IReadOnlyList<MobileAppContentResponse>>(ContentVersions.ToArray());
+        }
+
+        public Task<IReadOnlyList<MobileAppContentFileResponse>> ListContentFilesAsync(
+            string appId, string contentVersionId, string oDataType, bool useBeta, CancellationToken cancellationToken)
+        {
+            UseBetaCalls.Add(useBeta);
+            ODataTypeCalls.Add(oDataType);
+            return Task.FromResult<IReadOnlyList<MobileAppContentFileResponse>>(
+                ContentFiles.TryGetValue(contentVersionId, out var files) ? files.ToArray() : []);
         }
 
         public Task<string> CreateContentFileAsync(
             string appId, string contentVersionId, string name, long size, long sizeEncrypted, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
             CreateContentFileCalls.Add((name, size, sizeEncrypted));
+            CreateContentFileContentVersionIds.Add(contentVersionId);
             UseBetaCalls.Add(useBeta);
             ODataTypeCalls.Add(oDataType);
             return Task.FromResult("file-1");
@@ -65,6 +94,7 @@ public sealed class MobileAppContentUploadOrchestratorTests
         public Task<MobileAppContentFileResponse> GetContentFileAsync(
             string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
+            UseBetaCalls.Add(useBeta);
             ODataTypeCalls.Add(oDataType);
             if (FileResponses.Count == 0)
             {
@@ -77,6 +107,7 @@ public sealed class MobileAppContentUploadOrchestratorTests
         public Task RenewUploadAsync(string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
             RenewUploadCallCount++;
+            UseBetaCalls.Add(useBeta);
             ODataTypeCalls.Add(oDataType);
             return Task.CompletedTask;
         }
@@ -85,6 +116,7 @@ public sealed class MobileAppContentUploadOrchestratorTests
             string appId, string contentVersionId, string fileId, FileEncryptionInfoPayload fileEncryptionInfo, string oDataType, bool useBeta, CancellationToken cancellationToken)
         {
             CommitFileCalls.Add(fileEncryptionInfo);
+            UseBetaCalls.Add(useBeta);
             ODataTypeCalls.Add(oDataType);
             return Task.CompletedTask;
         }
@@ -107,12 +139,26 @@ public sealed class MobileAppContentUploadOrchestratorTests
 
         public Task<string> GetPublishingStateAsync(string appId, bool useBeta, CancellationToken cancellationToken)
         {
+            UseBetaCalls.Add(useBeta);
             if (PublishingStates.Count == 0)
             {
                 throw new InvalidOperationException("No more queued publishing states.");
             }
 
             return Task.FromResult(PublishingStates.Dequeue());
+        }
+
+        public Task<MobileAppContentState> GetContentStateAsync(
+            string appId, string oDataType, bool useBeta, CancellationToken cancellationToken)
+        {
+            UseBetaCalls.Add(useBeta);
+            ODataTypeCalls.Add(oDataType);
+            if (PublishingStates.Count == 0)
+            {
+                throw new InvalidOperationException("No more queued publishing states.");
+            }
+
+            return Task.FromResult(new MobileAppContentState(PublishingStates.Dequeue(), CommittedContentVersion));
         }
     }
 
@@ -148,11 +194,23 @@ public sealed class MobileAppContentUploadOrchestratorTests
         SourceCommit = "abc123",
     };
 
-    private static MobileAppContentFileResponse FileState(string uploadState, string? azureStorageUri = null, bool includeExpiration = true)
+    private static MobileAppContentFileResponse FileState(
+        string uploadState,
+        string? azureStorageUri = null,
+        bool includeExpiration = true,
+        bool isCommitted = false,
+        string id = "file-1",
+        string? name = null,
+        long? size = null,
+        long? sizeEncrypted = null)
         => new()
         {
-            Id = "file-1",
+            Id = id,
+            Name = name,
+            Size = size,
+            SizeEncrypted = sizeEncrypted,
             UploadState = uploadState,
+            IsCommitted = isCommitted,
             AzureStorageUri = azureStorageUri,
             AzureStorageUriExpirationDateTime = azureStorageUri is not null && includeExpiration ? DateTimeOffset.UtcNow.AddHours(1) : null,
         };
@@ -239,26 +297,394 @@ public sealed class MobileAppContentUploadOrchestratorTests
     }
 
     [TestMethod]
-    public async Task PublishContentAsync_MatchingInputHash_WaitsForProcessingToClearBeforePatchingNotes()
+    public async Task PublishContentAsync_ProcessingWaitsUntilPublishedBeforeEvaluatingHash()
     {
-        // Regression test for the fixed bug: the skip path used to retry the notes PATCH *after* it
-        // failed with a 400, catching the exception and then polling for publishingState == "published"
-        // - which cannot work when the app has never had content committed (see
-        // WaitWhilePublishingStateProcessingAsync's doc comment). The fix guards *before* the PATCH and
-        // accepts any non-"processing" state, so this never issues a doomed PATCH in the first place.
         var client = new FakeMobileAppContentClient();
         client.PublishingStates.Enqueue("processing");
-        client.PublishingStates.Enqueue("processing");
-        client.PublishingStates.Enqueue("notPublished");
+        client.PublishingStates.Enqueue("published");
         var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
-        var metadata = CreateMetadata();
 
         var result = await PublishAsync(
-            orchestrator, "app-1", CreateContent(inputHash: "same-hash"), storedInputHash: "same-hash", metadata, FastOptions());
+            orchestrator, "app-1", CreateContent(inputHash: "same-hash"), storedInputHash: "same-hash", CreateMetadata(), FastOptions());
 
         Assert.AreEqual(ContentUploadOutcome.SkippedUnchanged, result.Outcome);
+        Assert.IsEmpty(client.CreateContentFileCalls);
         Assert.HasCount(1, client.PatchedNotes);
-        Assert.AreEqual(metadata.Serialize(), client.PatchedNotes[0]);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_NotPublishedForcesUploadEvenWhenInputHashMatches()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("notPublished");
+        client.FileResponses.Enqueue(FileState("azureStorageUriRequestSuccess", "https://sas.example/blob"));
+        client.FileResponses.Enqueue(FileState("commitFileSuccess"));
+        client.PublishingStates.Enqueue("published");
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+
+        var result = await PublishAsync(
+            orchestrator, "app-1", CreateContent(inputHash: "same-hash"), storedInputHash: "same-hash", CreateMetadata(), FastOptions());
+
+        Assert.AreEqual(ContentUploadOutcome.Uploaded, result.Outcome);
+        Assert.AreEqual(1, client.CreateContentVersionCallCount);
+        Assert.HasCount(1, client.CreateContentFileCalls);
+        Assert.AreEqual("cv-1", client.CreateContentFileContentVersionIds[0]);
+        Assert.AreEqual("cv-1", client.PatchedCommittedContentVersion);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_NotPublished_IncompatibleUncommittedFile_FailsWithoutMutation()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("notPublished");
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-1" });
+        client.ContentFiles["cv-1"] =
+        [
+            FileState("commitFileFailed", isCommitted: false, id: "failed-file"),
+        ];
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(() => PublishAsync(
+            orchestrator, "app-1", CreateContent(inputHash: "same-hash"), storedInputHash: "same-hash", CreateMetadata(), FastOptions()));
+
+        StringAssert.Contains(ex.Message, "must be explicitly recreated");
+        Assert.AreEqual(0, client.CreateContentVersionCallCount);
+        Assert.IsEmpty(client.CreateContentFileCalls);
+        Assert.AreEqual(0, client.RenewUploadCallCount);
+        Assert.IsEmpty(client.CommitFileCalls);
+        Assert.IsNull(client.PatchedCommittedContentVersion);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_NotPublished_CompatibleUncommittedFile_RenewsAndReusesFile()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("notPublished");
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-1" });
+        var content = CreateContent();
+        using var extracted = new IntuneWinContentExtractor().Extract(content.ContentPath);
+        client.ContentFiles["cv-1"] =
+        [
+            FileState(
+                "commitFileFailed",
+                isCommitted: false,
+                id: "reusable-file",
+                name: extracted.ContentFileName,
+                size: extracted.UnencryptedContentSize,
+                sizeEncrypted: extracted.EncryptedContentSize),
+        ];
+        client.FileResponses.Enqueue(FileState("azureStorageUriRenewalSuccess", "https://sas.example/renewed"));
+        client.FileResponses.Enqueue(FileState("commitFileSuccess"));
+        client.PublishingStates.Enqueue("published");
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+
+        var result = await PublishAsync(
+            orchestrator, "app-1", content, storedInputHash: null, CreateMetadata(), FastOptions());
+
+        Assert.AreEqual(ContentUploadOutcome.Uploaded, result.Outcome);
+        Assert.AreEqual(0, client.CreateContentVersionCallCount);
+        Assert.IsEmpty(client.CreateContentFileCalls);
+        Assert.AreEqual(1, client.RenewUploadCallCount);
+        Assert.HasCount(1, client.CommitFileCalls);
+        Assert.AreEqual("cv-1", client.PatchedCommittedContentVersion);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_NotPublished_MultipleCompatibleUncommittedFiles_FailsWithoutMutation()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("notPublished");
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-1" });
+        var content = CreateContent();
+        using var extracted = new IntuneWinContentExtractor().Extract(content.ContentPath);
+        client.ContentFiles["cv-1"] =
+        [
+            FileState(
+                "commitFileFailed",
+                isCommitted: false,
+                id: "matching-file-1",
+                name: extracted.ContentFileName,
+                size: extracted.UnencryptedContentSize,
+                sizeEncrypted: extracted.EncryptedContentSize),
+            FileState(
+                "commitFileFailed",
+                isCommitted: false,
+                id: "matching-file-2",
+                name: extracted.ContentFileName,
+                size: extracted.UnencryptedContentSize,
+                sizeEncrypted: extracted.EncryptedContentSize),
+        ];
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(() => PublishAsync(
+            orchestrator, "app-1", content, storedInputHash: null, CreateMetadata(), FastOptions()));
+
+        StringAssert.Contains(ex.Message, "contains 2 uncommitted files");
+        Assert.AreEqual(0, client.CreateContentVersionCallCount);
+        Assert.IsEmpty(client.CreateContentFileCalls);
+        Assert.AreEqual(0, client.RenewUploadCallCount);
+        Assert.IsEmpty(client.CommitFileCalls);
+        Assert.IsNull(client.PatchedCommittedContentVersion);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_NotPublished_CompatibleAndIncompatibleUncommittedFiles_FailsWithoutMutation()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("notPublished");
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-1" });
+        var content = CreateContent();
+        using var extracted = new IntuneWinContentExtractor().Extract(content.ContentPath);
+        client.ContentFiles["cv-1"] =
+        [
+            FileState(
+                "commitFileFailed",
+                isCommitted: false,
+                id: "compatible-file",
+                name: extracted.ContentFileName,
+                size: extracted.UnencryptedContentSize,
+                sizeEncrypted: extracted.EncryptedContentSize),
+            FileState(
+                "commitFileFailed",
+                isCommitted: false,
+                id: "incompatible-file",
+                name: "different.intunewin",
+                size: 1,
+                sizeEncrypted: 2),
+        ];
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(() => PublishAsync(
+            orchestrator, "app-1", content, storedInputHash: null, CreateMetadata(), FastOptions()));
+
+        StringAssert.Contains(ex.Message, "contains 2 uncommitted files");
+        Assert.IsEmpty(client.CreateContentFileCalls);
+        Assert.AreEqual(0, client.RenewUploadCallCount);
+        Assert.IsEmpty(client.CommitFileCalls);
+        Assert.IsNull(client.PatchedCommittedContentVersion);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_NotPublished_UncommittedVersionReferencedAsCommitted_FailsWithoutMutation()
+    {
+        var client = new FakeMobileAppContentClient { CommittedContentVersion = "cv-1" };
+        client.PublishingStates.Enqueue("notPublished");
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-1" });
+        client.ContentFiles["cv-1"] =
+        [
+            FileState("commitFileFailed", isCommitted: false, id: "failed-file"),
+        ];
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+        var missingContent = new PublishableContent(Path.Combine(_workspace.FullName, "not-created.intunewin"), "same-hash");
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(() => PublishAsync(
+            orchestrator, "app-1", missingContent, storedInputHash: "same-hash", CreateMetadata(), FastOptions()));
+
+        StringAssert.Contains(ex.Message, "referenced by committedContentVersion");
+        Assert.AreEqual(0, client.CreateContentVersionCallCount);
+        Assert.IsEmpty(client.CreateContentFileCalls);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_NotPublished_ExistingVersionWithoutFiles_ReusesContentVersion()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("notPublished");
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-1" });
+        client.ContentFiles["cv-1"] = [];
+        client.FileResponses.Enqueue(FileState("azureStorageUriRequestSuccess", "https://sas.example/blob"));
+        client.FileResponses.Enqueue(FileState("commitFileSuccess"));
+        client.PublishingStates.Enqueue("published");
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+
+        var result = await PublishAsync(
+            orchestrator, "app-1", CreateContent(), storedInputHash: null, CreateMetadata(), FastOptions());
+
+        Assert.AreEqual(ContentUploadOutcome.Uploaded, result.Outcome);
+        Assert.AreEqual(0, client.CreateContentVersionCallCount);
+        Assert.AreEqual("cv-1", client.CreateContentFileContentVersionIds[0]);
+        Assert.AreEqual("cv-1", client.PatchedCommittedContentVersion);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_NotPublished_CommittedFileWithMatchingHash_ResumesActivationWithoutUpload()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("notPublished");
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-1" });
+        client.ContentFiles["cv-1"] =
+        [
+            FileState("commitFileSuccess", isCommitted: true, id: "committed-file"),
+        ];
+        client.PublishingStates.Enqueue("published");
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+        var missingContent = new PublishableContent(Path.Combine(_workspace.FullName, "not-created.intunewin"), "same-hash");
+
+        await PublishAsync(orchestrator, "app-1", missingContent, storedInputHash: "same-hash", CreateMetadata(), FastOptions());
+
+        Assert.AreEqual(0, client.CreateContentVersionCallCount);
+        Assert.IsEmpty(client.CreateContentFileCalls);
+        Assert.IsEmpty(client.CommitFileCalls);
+        Assert.AreEqual("cv-1", client.PatchedCommittedContentVersion);
+        Assert.HasCount(1, client.PatchedNotes);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_NotPublished_CommittedFileWithMismatchedHash_FailsWithoutMutation()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("notPublished");
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-1" });
+        client.ContentFiles["cv-1"] =
+        [
+            FileState("commitFileSuccess", isCommitted: true, id: "committed-file"),
+        ];
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+        var missingContent = new PublishableContent(Path.Combine(_workspace.FullName, "not-created.intunewin"), "new-hash");
+
+        await Assert.ThrowsExactlyAsync<GraphRequestException>(() =>
+            PublishAsync(orchestrator, "app-1", missingContent, storedInputHash: "old-hash", CreateMetadata(), FastOptions()));
+
+        Assert.AreEqual(0, client.CreateContentVersionCallCount);
+        Assert.IsEmpty(client.CreateContentFileCalls);
+        Assert.IsNull(client.PatchedCommittedContentVersion);
+        Assert.IsEmpty(client.PatchedNotes);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_NotPublished_CommittedFileWithFailedSibling_FailsWithoutMutation()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("notPublished");
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-1" });
+        client.ContentFiles["cv-1"] =
+        [
+            FileState("commitFileSuccess", isCommitted: true, id: "committed-file"),
+            FileState("commitFileFailed", isCommitted: false, id: "failed-file"),
+        ];
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+        var missingContent = new PublishableContent(Path.Combine(_workspace.FullName, "not-created.intunewin"), "same-hash");
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(() => PublishAsync(
+            orchestrator, "app-1", missingContent, storedInputHash: "same-hash", CreateMetadata(), FastOptions()));
+
+        StringAssert.Contains(ex.Message, "ambiguous mix or count");
+        Assert.AreEqual(0, client.CreateContentVersionCallCount);
+        Assert.IsEmpty(client.CreateContentFileCalls);
+        Assert.AreEqual(0, client.RenewUploadCallCount);
+        Assert.IsEmpty(client.CommitFileCalls);
+        Assert.IsNull(client.PatchedCommittedContentVersion);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_NotPublished_MultipleCommittedFiles_FailsWithoutMutation()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("notPublished");
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-1" });
+        client.ContentFiles["cv-1"] =
+        [
+            FileState("commitFileSuccess", isCommitted: true, id: "committed-file-1"),
+            FileState("commitFileSuccess", isCommitted: true, id: "committed-file-2"),
+        ];
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+        var missingContent = new PublishableContent(Path.Combine(_workspace.FullName, "not-created.intunewin"), "same-hash");
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(() => PublishAsync(
+            orchestrator, "app-1", missingContent, storedInputHash: "same-hash", CreateMetadata(), FastOptions()));
+
+        StringAssert.Contains(ex.Message, "ambiguous mix or count");
+        Assert.IsEmpty(client.CreateContentFileCalls);
+        Assert.AreEqual(0, client.RenewUploadCallCount);
+        Assert.IsEmpty(client.CommitFileCalls);
+        Assert.IsNull(client.PatchedCommittedContentVersion);
+    }
+
+    [TestMethod]
+    [DataRow("commitFilePending")]
+    [DataRow("commitFileTimedOut")]
+    [DataRow("azureStorageUriRequestTimedOut")]
+    [DataRow("azureStorageUriRenewalTimedOut")]
+    [DataRow("transientError")]
+    public async Task PublishContentAsync_NotPublished_PendingOrUnsupportedUncommittedFile_FailsWithoutMutation(string uploadState)
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("notPublished");
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-1" });
+        client.ContentFiles["cv-1"] =
+        [
+            FileState(uploadState, isCommitted: false, id: "pending-file"),
+        ];
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+        var missingContent = new PublishableContent(Path.Combine(_workspace.FullName, "not-created.intunewin"), "same-hash");
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(() => PublishAsync(
+            orchestrator, "app-1", missingContent, storedInputHash: "same-hash", CreateMetadata(), FastOptions()));
+
+        StringAssert.Contains(ex.Message, "uploadState is still pending or unsupported");
+        Assert.IsEmpty(client.CreateContentFileCalls);
+        Assert.AreEqual(0, client.RenewUploadCallCount);
+        Assert.IsEmpty(client.CommitFileCalls);
+        Assert.IsNull(client.PatchedCommittedContentVersion);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_NotPublished_FileWithoutIsCommitted_FailsWithoutMutation()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("notPublished");
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-1" });
+        client.ContentFiles["cv-1"] =
+        [
+            new MobileAppContentFileResponse
+            {
+                Id = "unknown-file",
+                UploadState = "commitFileFailed",
+                IsCommitted = null,
+            },
+        ];
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+        var missingContent = new PublishableContent(Path.Combine(_workspace.FullName, "not-created.intunewin"), "same-hash");
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(() =>
+            PublishAsync(orchestrator, "app-1", missingContent, storedInputHash: "same-hash", CreateMetadata(), FastOptions()));
+
+        StringAssert.Contains(ex.Message, "omitted isCommitted");
+        Assert.AreEqual(0, client.CreateContentVersionCallCount);
+        Assert.IsEmpty(client.CreateContentFileCalls);
+        Assert.IsNull(client.PatchedCommittedContentVersion);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_NotPublished_MultipleContentVersions_FailsBeforeUpload()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("notPublished");
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-1" });
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-2" });
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+        var missingContent = new PublishableContent(Path.Combine(_workspace.FullName, "not-created.intunewin"), "new-hash");
+
+        await Assert.ThrowsExactlyAsync<GraphRequestException>(() =>
+            PublishAsync(orchestrator, "app-1", missingContent, storedInputHash: null, CreateMetadata(), FastOptions()));
+
+        Assert.AreEqual(0, client.CreateContentVersionCallCount);
+        Assert.IsEmpty(client.CreateContentFileCalls);
+    }
+
+    [TestMethod]
+    public async Task PublishContentAsync_UnknownPublishingState_FailsImmediately()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("failed");
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(() =>
+            PublishAsync(orchestrator, "app-1", CreateContent(), storedInputHash: null, CreateMetadata(), FastOptions()));
+
+        StringAssert.Contains(ex.Message, "unsupported publishingState 'failed'");
+        Assert.IsEmpty(client.CreateContentFileCalls);
+        Assert.IsEmpty(client.PatchedNotes);
     }
 
     [TestMethod]
@@ -278,13 +704,13 @@ public sealed class MobileAppContentUploadOrchestratorTests
         Assert.AreEqual("publishingState", ex.Stage);
         Assert.IsEmpty(client.PatchedNotes);
     }
-
     [TestMethod]
     public async Task PublishContentAsync_HappyPath_RunsAllStepsAndReturnsUploaded()
     {
         var client = new FakeMobileAppContentClient();
         client.FileResponses.Enqueue(FileState("azureStorageUriRequestSuccess", "https://sas.example/blob"));
         client.FileResponses.Enqueue(FileState("commitFileSuccess"));
+        client.PublishingStates.Enqueue("published");
         client.PublishingStates.Enqueue("processing");
         client.PublishingStates.Enqueue("published");
         var uploader = new FakeAzureStorageBlockBlobUploader();
@@ -314,6 +740,7 @@ public sealed class MobileAppContentUploadOrchestratorTests
         client.FileResponses.Enqueue(FileState("azureStorageUriRequestSuccess", "https://sas.example/blob"));
         client.FileResponses.Enqueue(FileState("commitFileSuccess"));
         client.PublishingStates.Enqueue("published");
+        client.PublishingStates.Enqueue("published");
         var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
 
         await orchestrator.PublishContentAsync(
@@ -329,6 +756,7 @@ public sealed class MobileAppContentUploadOrchestratorTests
     public async Task PublishContentAsync_AzureStorageUriRequestFailed_ThrowsContentUploadFailedException()
     {
         var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("published");
         client.FileResponses.Enqueue(FileState("azureStorageUriRequestFailed"));
         var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
 
@@ -343,6 +771,7 @@ public sealed class MobileAppContentUploadOrchestratorTests
     public async Task PublishContentAsync_SuccessWithoutExpiration_ThrowsGraphRequestExceptionInsteadOfDefaultingToNow()
     {
         var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("published");
         client.FileResponses.Enqueue(FileState("azureStorageUriRequestSuccess", "https://sas.example/blob", includeExpiration: false));
         var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
 
@@ -354,6 +783,7 @@ public sealed class MobileAppContentUploadOrchestratorTests
     public async Task PublishContentAsync_AzureStorageUriRequestNeverSucceeds_ThrowsContentUploadTimedOutException()
     {
         var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("published");
         for (var i = 0; i < 10; i++)
         {
             client.FileResponses.Enqueue(FileState("azureStorageUriRequestPending"));
@@ -371,6 +801,7 @@ public sealed class MobileAppContentUploadOrchestratorTests
     public async Task PublishContentAsync_CommitFails_ThrowsContentUploadFailedExceptionAndDoesNotPatchApp()
     {
         var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("published");
         client.FileResponses.Enqueue(FileState("azureStorageUriRequestSuccess", "https://sas.example/blob"));
         client.FileResponses.Enqueue(FileState("commitFileFailed"));
         var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
@@ -386,6 +817,7 @@ public sealed class MobileAppContentUploadOrchestratorTests
     public async Task PublishContentAsync_PublishingStateNeverPublished_ThrowsContentUploadTimedOutException()
     {
         var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("published");
         client.FileResponses.Enqueue(FileState("azureStorageUriRequestSuccess", "https://sas.example/blob"));
         client.FileResponses.Enqueue(FileState("commitFileSuccess"));
         for (var i = 0; i < 10; i++)
@@ -404,9 +836,28 @@ public sealed class MobileAppContentUploadOrchestratorTests
     }
 
     [TestMethod]
+    public async Task PublishContentAsync_UnknownPostCommitPublishingState_FailsImmediately()
+    {
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("published");
+        client.FileResponses.Enqueue(FileState("azureStorageUriRequestSuccess", "https://sas.example/blob"));
+        client.FileResponses.Enqueue(FileState("commitFileSuccess"));
+        client.PublishingStates.Enqueue("unexpected");
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+
+        var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(() =>
+            PublishAsync(orchestrator, "app-1", CreateContent(), storedInputHash: null, CreateMetadata(), FastOptions()));
+
+        StringAssert.Contains(ex.Message, "unsupported publishingState 'unexpected'");
+        Assert.AreEqual("cv-1", client.PatchedCommittedContentVersion);
+        Assert.IsEmpty(client.PatchedNotes);
+    }
+
+    [TestMethod]
     public async Task PublishContentAsync_UploaderRequestsRenewal_CallsRenewUploadAndPollsRenewalState()
     {
         var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("published");
         client.FileResponses.Enqueue(FileState("azureStorageUriRequestSuccess", "https://sas.example/blob"));
         client.FileResponses.Enqueue(FileState("azureStorageUriRenewalSuccess", "https://sas.example/blob-renewed"));
         client.FileResponses.Enqueue(FileState("commitFileSuccess"));
