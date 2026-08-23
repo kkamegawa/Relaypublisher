@@ -1,11 +1,11 @@
 lockfile_version: '1'
-generated_at: '2026-08-15T04:42:10.221161+00:00'
+generated_at: '2026-08-23T20:56:00.482466+00:00'
 apm_version: 0.28.0
 dependencies:
 - repo_url: dotnet/skills
   name: dotnet
   host: github.com
-  resolved_commit: 7c1ae3fdf2eb64b758bb3a7b7f92cad3fbd95868
+  resolved_commit: 98f848512e9ee4877e399a0ae367bb5e4a193144
   version: 0.2.3
   virtual_path: plugins/dotnet
   is_virtual: true
@@ -22,8 +22,8 @@ dependencies:
 - repo_url: dotnet/skills
   name: dotnet-test
   host: github.com
-  resolved_commit: 7c1ae3fdf2eb64b758bb3a7b7f92cad3fbd95868
-  version: 0.2.14
+  resolved_commit: 98f848512e9ee4877e399a0ae367bb5e4a193144
+  version: 0.2.18
   virtual_path: plugins/dotnet-test
   is_virtual: true
   package_type: marketplace_plugin
@@ -393,11 +393,11 @@ dependencies:
     .github/agents/code-testing-tester.agent.md: sha256:9e4f7018af351b554c19b3f7255b71850df84672558d6eba694c4a96df15e8ad
     .github/agents/test-quality-auditor.agent.md: sha256:13995d87d129fe11da728a60e18df7b3f91a71909eb8e4b91cc79c2ab2c7b61a
     .github/agents/testability-migration.agent.md: sha256:d1a5d3686e3cef639f23aae16ede518c968042e200cc70d6d96a84d2dc45999c
-  content_hash: sha256:6399229f07df0f6e7d5af39ea2bd07e8006e7765a8b728cd49d0cbf3150379bf
+  content_hash: sha256:f4692d1d53f623a1b2b46c90b5be642774327d71000cfb27c7c83d7c1f85877f
 - repo_url: github/awesome-copilot
   name: csharp-dotnet-development
   host: github.com
-  resolved_commit: a80885b76044550770f60f360f8a0e5ae3524a31
+  resolved_commit: 83561bd7d8a46fcda0581aedabdf8eac7cb196b6
   version: 1.1.0
   virtual_path: plugins/csharp-dotnet-development
   is_virtual: true
@@ -407,7 +407,7 @@ dependencies:
 - repo_url: github/awesome-copilot
   name: security-best-practices
   host: github.com
-  resolved_commit: a80885b76044550770f60f360f8a0e5ae3524a31
+  resolved_commit: 83561bd7d8a46fcda0581aedabdf8eac7cb196b6
   version: 1.0.0
   virtual_path: plugins/security-best-practices
   is_virtual: true
@@ -417,7 +417,7 @@ dependencies:
 - repo_url: github/awesome-copilot
   name: software-engineering-team
   host: github.com
-  resolved_commit: a80885b76044550770f60f360f8a0e5ae3524a31
+  resolved_commit: 83561bd7d8a46fcda0581aedabdf8eac7cb196b6
   version: 1.0.0
   virtual_path: plugins/software-engineering-team
   is_virtual: true
@@ -427,8 +427,8 @@ dependencies:
 - repo_url: microsoft/azure-skills
   name: azure
   host: github.com
-  resolved_commit: 16dc8c51ba7fda44c18781b5e4c0ca40a7a06a55
-  version: 1.2.29
+  resolved_commit: 1a03acfb9ac1a1a05518bf7420d4618cc41847be
+  version: 1.2.32
   virtual_path: .github/plugins/azure-skills
   is_virtual: true
   package_type: marketplace_plugin
@@ -751,6 +751,8 @@ dependencies:
   - .agents/skills/azure-diagnostics/scripts/appservice-diagnostics.sh
   - .agents/skills/azure-diagnostics/scripts/containerapp-diagnostics.ps1
   - .agents/skills/azure-diagnostics/scripts/containerapp-diagnostics.sh
+  - .agents/skills/azure-diagnostics/scripts/pod-evidence.ps1
+  - .agents/skills/azure-diagnostics/scripts/pod-evidence.sh
   - .agents/skills/azure-diagnostics/scripts/run-ig.ps1
   - .agents/skills/azure-diagnostics/scripts/run-ig.sh
   - .agents/skills/azure-diagnostics/scripts/test-messaging-connectivity.ps1
@@ -1722,6 +1724,8 @@ dependencies:
   - .claude/skills/azure-diagnostics/scripts/appservice-diagnostics.sh
   - .claude/skills/azure-diagnostics/scripts/containerapp-diagnostics.ps1
   - .claude/skills/azure-diagnostics/scripts/containerapp-diagnostics.sh
+  - .claude/skills/azure-diagnostics/scripts/pod-evidence.ps1
+  - .claude/skills/azure-diagnostics/scripts/pod-evidence.sh
   - .claude/skills/azure-diagnostics/scripts/run-ig.ps1
   - .claude/skills/azure-diagnostics/scripts/run-ig.sh
   - .claude/skills/azure-diagnostics/scripts/test-messaging-connectivity.ps1
@@ -2409,7 +2413,7 @@ dependencies:
     .agents/skills/azure-aigateway/references/sdk/azure-mgmt-apimanagement-dotnet.md: sha256:156cd0f2ad7fc73d1f07c13ead5a46f759746c08d9f9f6612d48a73615c0f258
     .agents/skills/azure-aigateway/references/sdk/azure-mgmt-apimanagement-py.md: sha256:2096c2199a2861d4e6fad37b7850d32fabfd3e75c323436d51746565ef349949
     .agents/skills/azure-aigateway/references/troubleshooting.md: sha256:ebe564f5b4a5628887d49aa11699ccc967eba0c96e336c989c8ce28028e842e8
-    .agents/skills/azure-app-onboard-prereq/SKILL.md: sha256:524cd94fbd67446fd6a78ac63f0975bd5f9889f9bdaf929b62b8ab976a71d510
+    .agents/skills/azure-app-onboard-prereq/SKILL.md: sha256:a150e1100779a26ba72a4c0b3ba5329bfd2c72bb9a3a65f4164c6dccef60abda
     .agents/skills/azure-app-onboard-prereq/references/build-check.md: sha256:cd9f1ad5c09ed043a06d37d9eac48c6f1fbfb0307f07dbab2f1bd1aefd60bd29
     .agents/skills/azure-app-onboard-prereq/references/cloud-sdk-migration.md: sha256:f9bf62edbd0fe9a0b3cf3836c3a646af5b43522b53a3fc3bfea361e729dfc4da
     .agents/skills/azure-app-onboard-prereq/references/completeness-check.md: sha256:38c650084cc75b3ef16fdda6355e57d0dbd80835d20c05606d8f3db2c5304d60
@@ -2422,10 +2426,10 @@ dependencies:
     .agents/skills/azure-app-onboard-prereq/references/remediation-protocol.md: sha256:f214373fcb01eda159ebf60e92f83b200e88c8240d66e529637796d7fe418ad5
     .agents/skills/azure-app-onboard-prereq/references/session-protocol.md: sha256:2ce773528f34ee3027135e8ba3b9af1f408dd66b3d471523e1ba31350de77199
     .agents/skills/azure-app-onboard-prereq/references/session-schemas.ts: sha256:490334a85094a57c479c5667411ee05c35e5a873401326ce75626140068bdd0a
-    .agents/skills/azure-app-onboard-prereq/references/subagent-starter-scaffold.md: sha256:03191dbd737a6a228bddd0dcbf44025f3e1e274e7a6713ab095c3ee669eb997b
+    .agents/skills/azure-app-onboard-prereq/references/subagent-starter-scaffold.md: sha256:d943a7b3e4d04deaaa22637f5f7c911fa4a8bbf001ba54ee59035445e7f299a4
     .agents/skills/azure-app-onboard-prereq/references/subscription-resolution.md: sha256:3430f1ddf59a0c124e97e8e1841d67fb4961a40073ccf01260e688f0c06fa78b
     .agents/skills/azure-app-onboard-prereq/references/zero-code-path.md: sha256:5979cfd1a7a76d36b290621cebfb13cb6815a8cc5996edbe72f22c5edffbf443
-    .agents/skills/azure-app-onboard/SKILL.md: sha256:16c378c05c61d78be2e99c45085acfaf7e00b39f607b53f1e2e1f5a27f6d4f9b
+    .agents/skills/azure-app-onboard/SKILL.md: sha256:fbfac0fb1c9498081369aa3d90ab3012b6406e3571bb81c6371b6c7c2c157ecf
     .agents/skills/azure-app-onboard/deploy/SKILL.md: sha256:9b0ec210a5116fc6266970646c456aa30828f4fbd8c4d2eb203734f18da3f2a0
     .agents/skills/azure-app-onboard/deploy/references/approval-gate-template.md: sha256:ca0b2b5b86c0463f8bbb5972438013fe9a5237dd225953fb89e627769898e049
     .agents/skills/azure-app-onboard/deploy/references/blocked-patterns.md: sha256:e6b1604901a625d6784d8ef5f800ef9591e67eeae61dbdeb88d9c0a3d3ba73ea
@@ -2471,7 +2475,7 @@ dependencies:
     .agents/skills/azure-app-onboard/scaffold/references/bicep-container-apps.md: sha256:490c716d5fbbcd7c334fcd4d96d2448fbf0cfd3c35d786bf8400837dc551895b
     .agents/skills/azure-app-onboard/scaffold/references/bicep-patterns-data.md: sha256:ad66fbe650a41b91bfa2b7b7bcc93c2a97fd8d12d358da687772f2031a63ebfd
     .agents/skills/azure-app-onboard/scaffold/references/bicep-patterns-security.md: sha256:28a9a99ed93b59841d28e962510c12a134c304150fa8ccb8f64f1bd985e88367
-    .agents/skills/azure-app-onboard/scaffold/references/bicep-patterns.md: sha256:ee9e545d6b3bcf1878d701596152094da8a924f4b46a91247c79ddb999d76acd
+    .agents/skills/azure-app-onboard/scaffold/references/bicep-patterns.md: sha256:55b4b915647cb6c68f197fa76abaf861b42d90e7e7dd87851dfd9eae6a3a61f2
     .agents/skills/azure-app-onboard/scaffold/references/bicep-swa.md: sha256:31c03f23799c8111e9fcfe13c087483d3b30b9f4a6e4738c1b98d25329440475
     .agents/skills/azure-app-onboard/scaffold/references/cicd-pipelines.md: sha256:89a3efa48c3084deab93955a052a879de7c2021a69c3874432e8babcc7b5cb81
     .agents/skills/azure-app-onboard/scaffold/references/dockerfile-generation.md: sha256:e4830c9fc2daa21df834d03525de654e3ddcbe86bfde03cc4bd625b14adb26ec
@@ -2493,10 +2497,10 @@ dependencies:
     .agents/skills/azure-app-onboard/scaffold/references/waf-checklist.md: sha256:3ad06a9ce5a1a5d688dedc18e3f1231ae7b01d4ec3d1418d527aabd1893fdf09
     .agents/skills/azure-app-onboard/scaffold/scripts/scaffold-conformance.ps1: sha256:82492a9917c2db76cff9ef9be843be8c86f29a2457da66212cd8b6a9a80183f1
     .agents/skills/azure-app-onboard/scaffold/scripts/scaffold-conformance.sh: sha256:18b1ce6ba2e13e52f07da1d7c703d04552094f96119b869efbf65b5742b9cfbd
-    .agents/skills/azure-cloud-migrate/SKILL.md: sha256:5f1052c60a4312212055a9659f7dec7ef1f1cd9b1a16bbc61108440dd09921bc
-    .agents/skills/azure-cloud-migrate/references/services/app-service/app-engine-to-app-service.md: sha256:01f4270a14b2af97adc14d355456917d1f603bbdb326ba94ff46156a5d8f38d3
+    .agents/skills/azure-cloud-migrate/SKILL.md: sha256:92766b8047f8f31eae9e4168d2bb903515d211146a97d00c795b535f77677ca7
+    .agents/skills/azure-cloud-migrate/references/services/app-service/app-engine-to-app-service.md: sha256:058778007848861540b37896041542c579686f0935575b0bc08d7f1baa205164
     .agents/skills/azure-cloud-migrate/references/services/app-service/assessment.md: sha256:cf98667abca7ef539134002414921971a176dc5de425e513af8febe6f625a6a1
-    .agents/skills/azure-cloud-migrate/references/services/app-service/beanstalk-to-app-service.md: sha256:0fa1380a393293bda0883eebb792e0f11efb783842e84f712fd24246c038f3d3
+    .agents/skills/azure-cloud-migrate/references/services/app-service/beanstalk-to-app-service.md: sha256:2609a01dfe1a015ea3a8135c44eef996cd6dadad8f18fd59d0b4192197d96565
     .agents/skills/azure-cloud-migrate/references/services/app-service/code-migration.md: sha256:ee9eca0e706b305b0966a81d90ac8d41ca71a33c7fac43445a2d3c9125e33eea
     .agents/skills/azure-cloud-migrate/references/services/app-service/global-rules.md: sha256:8b078ab6f5c6f119a09866955edee501ae87f150cd52561002dd9e906b355170
     .agents/skills/azure-cloud-migrate/references/services/app-service/heroku-to-app-service.md: sha256:f76c8684acbe605e7706e6bae3816eb93c60ef67101ac055a3e042e9a3284715
@@ -2654,7 +2658,7 @@ dependencies:
     .agents/skills/azure-deploy/references/sdk/azure-identity-py.md: sha256:87730a9669cfa561efd23cf98da106a90b12a94872c8fe9f27a7a5b582af3ce0
     .agents/skills/azure-deploy/references/sdk/azure-identity-ts.md: sha256:7cf5556fb9e06f4a3e9327dab8ce4aae5de09a9225fe5df6c95b3e7f4dc5e5bd
     .agents/skills/azure-deploy/references/troubleshooting.md: sha256:c5116670186964d0c44e6c8b9d235408eaf3aa77e90fd71dddc34d1c08d4ede4
-    .agents/skills/azure-diagnostics/SKILL.md: sha256:1757ca855de159303deb036ab06ccca4016b32fec7223d9675efea9a2d621acf
+    .agents/skills/azure-diagnostics/SKILL.md: sha256:513f4aae9d13460a83edee10c03e56b099532fd905bf7ec0bf825a02ce10fb45
     .agents/skills/azure-diagnostics/references/app-service/README.md: sha256:0b9d3cf3c3413d0279d2636c24be20d2dff84ae920a3cc3aa9f97fa5202edcb1
     .agents/skills/azure-diagnostics/references/azure-resource-graph.md: sha256:cd7cf01f8f74983a38e24f8bb20cb8f492f682319a56ac73cdc8647ddf550491
     .agents/skills/azure-diagnostics/references/container-apps/README.md: sha256:0ecf9c4f923e0ce7aca9c493b2391c2c339c2ff3b8659e6a778dedbedf465ad4
@@ -2666,19 +2670,21 @@ dependencies:
     .agents/skills/azure-diagnostics/scripts/appservice-diagnostics.sh: sha256:503a3a6d83a2b555ea404f467ff6aff7495c7d8e519bfbe70bd2a53e863de362
     .agents/skills/azure-diagnostics/scripts/containerapp-diagnostics.ps1: sha256:ba33255d6deb9051cbd0aebf1da5bccaf88e4bf82bcb557ced7221563d55c53b
     .agents/skills/azure-diagnostics/scripts/containerapp-diagnostics.sh: sha256:bb9bb8f2bbf92aa9c0ac5390966028e46e038b1eac74b6d92095c6cf40ad8d5c
+    .agents/skills/azure-diagnostics/scripts/pod-evidence.ps1: sha256:ec95c20067b66df2dae73ceed09d561e089b0b0b09fa3f6172836b8c3fc2ec27
+    .agents/skills/azure-diagnostics/scripts/pod-evidence.sh: sha256:cb6bbea2957017f1815a87f90f896dcbdcc3aec538097958242752724bf1fefb
     .agents/skills/azure-diagnostics/scripts/run-ig.ps1: sha256:044c1311c7be68ff990e978c8a6a34c79ba0b8dc0720f14a0570193150ac9201
     .agents/skills/azure-diagnostics/scripts/run-ig.sh: sha256:35a64f1d4da8c3c1b107b243bae6d4a9a9fa66957c9878febb0b6bcf3fe2582e
     .agents/skills/azure-diagnostics/scripts/test-messaging-connectivity.ps1: sha256:a42d229408b4281fc6f6110c6e9286091523ce00d48b96e0f28672307c6f49a2
     .agents/skills/azure-diagnostics/scripts/test-messaging-connectivity.sh: sha256:cf6d212b403a8846c8d58629fc20272f3e7a325d9a97a12688f367d665d87c36
-    .agents/skills/azure-diagnostics/troubleshooting/aks/aks-troubleshooting.md: sha256:1e94e13a6fa2d0d22e3b13e762e32552fb773af2e4da422e05cece8ff19bf4cd
+    .agents/skills/azure-diagnostics/troubleshooting/aks/aks-troubleshooting.md: sha256:913646320959dd89a3d9d282a984a99bfb8b0ee5b2e694d432e2bcfd3ed48c04
     .agents/skills/azure-diagnostics/troubleshooting/aks/general-diagnostics.md: sha256:8acf6259604ef912d6ac763d75552a65925e76ab2020da56168ca879c389ef56
     .agents/skills/azure-diagnostics/troubleshooting/aks/load-balancer-and-ingress.md: sha256:411fe1e7af9b072011d1cdc34733051cf8c31d6fa59355c0b0a5b2421a5f4681
     .agents/skills/azure-diagnostics/troubleshooting/aks/network-policy.md: sha256:557901c258eb637baad32466e6e4eb9e570fa66deebb21520cef3436fe4672ce
     .agents/skills/azure-diagnostics/troubleshooting/aks/networking.md: sha256:75ec5358fc5baff4a8c3f5891e3c6bf8fbb6930972abe00cbc09096aa96db66a
     .agents/skills/azure-diagnostics/troubleshooting/aks/node-issues.md: sha256:1913b8383ecf748ea2fae53b1e3dfb176205c0f1a4183070f5a35ecce01a41d6
-    .agents/skills/azure-diagnostics/troubleshooting/aks/pod-failures.md: sha256:db7b028ffeefee4d3fccf746f1e86d999955e3f5ae3d1f31fb330c3f73f56786
+    .agents/skills/azure-diagnostics/troubleshooting/aks/pod-failures.md: sha256:930c8da84023a13da2fc92793f283eb7252bb03779b611716852338fe79a2126
     .agents/skills/azure-diagnostics/troubleshooting/aks/references/aks-mcp.md: sha256:ed4217e6db4b7a42027e0be101111fe316ebeea828410008c6943704d01202a8
-    .agents/skills/azure-diagnostics/troubleshooting/aks/references/command-flows.md: sha256:1ed4cddb56e3b99ef9d53ce81287c940743f677f1d8c88fae4670b4ceac47dc5
+    .agents/skills/azure-diagnostics/troubleshooting/aks/references/command-flows.md: sha256:b4fc209525a46021cae205d8fb8e3f7701365bd01d16298b1f2472574803a510
     .agents/skills/azure-diagnostics/troubleshooting/aks/references/inspektor-gadget.md: sha256:b306c51c46d8a545b93a50b0a164782fa504012c444f3b9f47b459d003da7da7
     .agents/skills/azure-diagnostics/troubleshooting/aks/references/structured-input-modes.md: sha256:eb1d1efe70567b5583d56c155a640ed6d3964befba1e63589d57045ee0640119
     .agents/skills/azure-diagnostics/troubleshooting/aks/spot-and-zone-issues.md: sha256:00531f4c15aafa5d89d9d8696d2b83c37611fbf7014600308252ef2382ec0379
@@ -2804,7 +2810,7 @@ dependencies:
     .agents/skills/azure-kubernetes/references/cli-reference.md: sha256:b3c5588bd3abf50244c984f6ee79cfa4d6d157a9ac488a1cc6bf20060087d7f3
     .agents/skills/azure-kusto/SKILL.md: sha256:a8b8e9f6743b0f0a400a06fa2ded9f5273b44cda9be15d3bb64cafbe16074c68
     .agents/skills/azure-messaging/SKILL.md: sha256:36f2b20f79c68f86a8dfe4d539c64971eecece198646dfb9080d7afa233210fa
-    .agents/skills/azure-prepare/SKILL.md: sha256:529179f6546bfe7c0af465be517a34f420883b330485bfa7dcbb222c6360b176
+    .agents/skills/azure-prepare/SKILL.md: sha256:21382114dadeee7ca9e6b310640fbc0fca57d1014e58bba7511df1187575ed98
     .agents/skills/azure-prepare/references/analyze.md: sha256:b85092c863ef647dee3c792b7764e83597dab38c7ac59869b435acafc9dd29f5
     .agents/skills/azure-prepare/references/apim.md: sha256:bd5644658deccf0f422ed1e98d0bccc9ddb8d91d09dc07f90d743bfd00dd3511
     .agents/skills/azure-prepare/references/architecture.md: sha256:bee463c674f8d8084ce11c70de28da6e1334b1040061aa224a400b93c1e3037a
@@ -2849,8 +2855,8 @@ dependencies:
     .agents/skills/azure-prepare/references/services/aks/bicep.md: sha256:c6e579389cb3e8a750830c3339e380ed358cf4b0b6bc700b620eb916ff324631
     .agents/skills/azure-prepare/references/services/aks/manifests.md: sha256:570fe29171f300544b792d28b65204a212cc777af76d098136ffc8e0e5d0cc9d
     .agents/skills/azure-prepare/references/services/app-insights/README.md: sha256:f8d6a35633f8932183622cd50f60ffbb7304ce91dccc2253daeb51df6d11426d
-    .agents/skills/azure-prepare/references/services/app-service/README.md: sha256:a89c891f41515651ca000aa818ef035353f13d3a090c6217340f3dd2e11a53fb
-    .agents/skills/azure-prepare/references/services/app-service/bicep.md: sha256:07c26e364b01b72e7c51d48202c2e4ff76c2ebaa981a04104042673fc3dfa768
+    .agents/skills/azure-prepare/references/services/app-service/README.md: sha256:2360e06a2226d167cbe0455b569a93855bcf5727cddfd95749c83086af6889c7
+    .agents/skills/azure-prepare/references/services/app-service/bicep.md: sha256:99dac58f9647998fde77377fc98ff92eea2a8e0346eebe26c1c5cbb173b9f7c8
     .agents/skills/azure-prepare/references/services/app-service/custom-domains.md: sha256:ed308f983c8720df4e20ded5edc5f734a08515ccc5bbc5abf55b912e61a992ee
     .agents/skills/azure-prepare/references/services/app-service/deployment-slots.md: sha256:a45d073bba02005ea63698970293e86a5db3e5ea0f6753e968224e63439a693a
     .agents/skills/azure-prepare/references/services/app-service/networking.md: sha256:3ae911674e78345fc18873b9758fabe60ae492d8d762b276da72a67ba20a3488
@@ -2876,7 +2882,7 @@ dependencies:
     .agents/skills/azure-prepare/references/services/app-service/templates/recipes/sql/source/python.md: sha256:19e59b8520297d4015c479314843e234740bff2f18e3772be8f0744afa9f7b4a
     .agents/skills/azure-prepare/references/services/app-service/templates/selection.md: sha256:f75f38923c87e169b72d13cc6a905141d0f28bfcbaa34e52527f52f0244800c2
     .agents/skills/azure-prepare/references/services/app-service/templates/web-api.md: sha256:12f2b97bc5e7e63ac017d78034599bfbc69251fcd3b7a57068e7519e3aa18708
-    .agents/skills/azure-prepare/references/services/app-service/templates/web-app.md: sha256:7f1a5f27c9663fb4ea182e3d23983970c04108f7b86f72cd81623c9732085b2e
+    .agents/skills/azure-prepare/references/services/app-service/templates/web-app.md: sha256:4e865e9585be5b1b03b7823584e6f9227606eb3a3f965ce1371d24941147f883
     .agents/skills/azure-prepare/references/services/container-apps/README.md: sha256:2b8ddcda88e643368c81db332d34fd8093e4aa813a861edbb8a7759594634f35
     .agents/skills/azure-prepare/references/services/container-apps/bicep.md: sha256:cdea67a37758a3f6241b319c5f1361b397f7ba48d1ea1395422aaae52d4b6ffc
     .agents/skills/azure-prepare/references/services/container-apps/day2-operations.md: sha256:61ae28f5f8f423e65fa93f4913c3812d9cef17120c9d628836b51ea47f8cccf9
@@ -2903,7 +2909,7 @@ dependencies:
     .agents/skills/azure-prepare/references/services/foundry/region-availability.md: sha256:dcd10fa7d4ede175fd30b7e785b83a8365b4b7194cb831eff9fca4c9e7e40036
     .agents/skills/azure-prepare/references/services/functions/README.md: sha256:a0770a69eb050c304794dcb7227ad2f97053cf2878caa2c00dece399fd2ca661
     .agents/skills/azure-prepare/references/services/functions/aspire-containerapps.md: sha256:f7a05b303d2f6ac35d5c3fce10e154e3270aaf6080a8df50ae75852d5eb5939c
-    .agents/skills/azure-prepare/references/services/functions/bicep.md: sha256:80920985cc2b999faacb4962e23fb09af49286ec33d686ede6f1cd0deff48d20
+    .agents/skills/azure-prepare/references/services/functions/bicep.md: sha256:5bc680cb113838222aa197b7068b573861bbcaa78d01ace1558cee4a16de9429
     .agents/skills/azure-prepare/references/services/functions/durable.md: sha256:0b4ae4cb0413c6232b6d9f328af9c48a66cf715aa66a27e80726a984a77ed2c3
     .agents/skills/azure-prepare/references/services/functions/templates/README.md: sha256:fdce203aa98c49f18cd51a8322e9257f27a0a92d2e9c13d90f3ebf4a6d74bbec
     .agents/skills/azure-prepare/references/services/functions/templates/base/eval/python.md: sha256:2fe415baa317973631744aa942406af23025985ced28373ee809a2719f2354b8
@@ -2989,8 +2995,8 @@ dependencies:
     .agents/skills/azure-reliability/references/zone-redundancy-checks.md: sha256:6a328177624859e845e87cec80f3fb59e434b3f077f7232669d5c795cd4310c7
     .agents/skills/azure-resource-lookup/SKILL.md: sha256:259698027a6ab6fd6f9b51080f2b29faf533c038bce7b5af73bf63164020ad2a
     .agents/skills/azure-resource-lookup/references/azure-resource-graph.md: sha256:0cb6fb725c75d5a9958ffecf110bb4b092ab83601a1e7f53b85f295176c48c9a
-    .agents/skills/azure-resource-visualizer/SKILL.md: sha256:1c461696c8235a280a8fbd5f08450c1e2d441e03cb7fdb0e7db5f3f6fb640f37
-    .agents/skills/azure-resource-visualizer/assets/example-diagram.md: sha256:19641e72cdbdaa1fd2725e492740465817f263a793de8d01eb3ff36f063d03b7
+    .agents/skills/azure-resource-visualizer/SKILL.md: sha256:eb7d6ecae5ba4f8c0da5d1bd506486d3cbd71eff5d7d12b24b42e710b4f47fcb
+    .agents/skills/azure-resource-visualizer/assets/example-diagram.md: sha256:634ad47b9dc958dd36e37b51369d1df60cc0430c072697b45f71b5a3e1ea221c
     .agents/skills/azure-resource-visualizer/assets/template-architecture.md: sha256:4f77937ad89eb8d333afb928592f0b5b22a83044083521dacfe55d8b7b1eff22
     .agents/skills/azure-resource-visualizer/references/azure-resource-graph.md: sha256:c178445ad2a41f459b2b83353b7f3dc5bf0f99c102bac043f2eb482ffb00f726
     .agents/skills/azure-storage/SKILL.md: sha256:a032c55a4414a1aa3ea40245806944b3e497ee094be04f933a049018fbe8da81
@@ -3308,8 +3314,8 @@ dependencies:
     .agents/skills/python-appservice-deploy/scripts/generate-app-name.sh: sha256:06dd60528ab2870eaf38194d508c56efff2e77fd3c1979adcbc765134f0db183
     .agents/skills/python-appservice-deploy/scripts/retry-az-create.ps1: sha256:432adb3d4d52a13360f8ac554cf9cb603848fee8ac0b9873a571e1d53f833d7b
     .agents/skills/python-appservice-deploy/scripts/retry-az-create.sh: sha256:bf1b6f1bc07a96f3e2b8f1d95c7a1c870353289a4006fbf2cd4f0efd87f4f7af
-    .claude/hooks/azure-skills/hooks/scripts/track-telemetry.ps1: sha256:b7b1e19ed897250193656fdf874007fc5acb1eb45a68e3ae1b36c416bf057c54
-    .claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh: sha256:1a3a28cc6b26d909d01e1b4c414985157584134a7d752c245f6e39d32849ba50
+    .claude/hooks/azure-skills/hooks/scripts/track-telemetry.ps1: sha256:a6b82a1a175a159536f2a88f6858b3b901b287bd7766df837600eb6faf39bc54
+    .claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh: sha256:37dc1baf4b0244d124f7c52b1351c569657031b4cd7a468fa13d485f96ed9521
     .claude/skills/airunway-aks-setup/SKILL.md: sha256:fff89af6c8c81005b48a073e470636f3b11ef3f991e55c109dae9f36105ffda7
     .claude/skills/airunway-aks-setup/references/gpu-profiles.md: sha256:d9782a61870446dac17dc2b6c62049a586372ec14bfa18493d4926162b10807b
     .claude/skills/airunway-aks-setup/references/model-sizing.md: sha256:00118f56befd015b53eb6df2572a8c5590fcaa3afd7f3b729c8d75fabfd8626f
@@ -3359,7 +3365,7 @@ dependencies:
     .claude/skills/azure-aigateway/references/sdk/azure-mgmt-apimanagement-dotnet.md: sha256:156cd0f2ad7fc73d1f07c13ead5a46f759746c08d9f9f6612d48a73615c0f258
     .claude/skills/azure-aigateway/references/sdk/azure-mgmt-apimanagement-py.md: sha256:2096c2199a2861d4e6fad37b7850d32fabfd3e75c323436d51746565ef349949
     .claude/skills/azure-aigateway/references/troubleshooting.md: sha256:ebe564f5b4a5628887d49aa11699ccc967eba0c96e336c989c8ce28028e842e8
-    .claude/skills/azure-app-onboard-prereq/SKILL.md: sha256:524cd94fbd67446fd6a78ac63f0975bd5f9889f9bdaf929b62b8ab976a71d510
+    .claude/skills/azure-app-onboard-prereq/SKILL.md: sha256:a150e1100779a26ba72a4c0b3ba5329bfd2c72bb9a3a65f4164c6dccef60abda
     .claude/skills/azure-app-onboard-prereq/references/build-check.md: sha256:cd9f1ad5c09ed043a06d37d9eac48c6f1fbfb0307f07dbab2f1bd1aefd60bd29
     .claude/skills/azure-app-onboard-prereq/references/cloud-sdk-migration.md: sha256:f9bf62edbd0fe9a0b3cf3836c3a646af5b43522b53a3fc3bfea361e729dfc4da
     .claude/skills/azure-app-onboard-prereq/references/completeness-check.md: sha256:38c650084cc75b3ef16fdda6355e57d0dbd80835d20c05606d8f3db2c5304d60
@@ -3372,10 +3378,10 @@ dependencies:
     .claude/skills/azure-app-onboard-prereq/references/remediation-protocol.md: sha256:f214373fcb01eda159ebf60e92f83b200e88c8240d66e529637796d7fe418ad5
     .claude/skills/azure-app-onboard-prereq/references/session-protocol.md: sha256:2ce773528f34ee3027135e8ba3b9af1f408dd66b3d471523e1ba31350de77199
     .claude/skills/azure-app-onboard-prereq/references/session-schemas.ts: sha256:490334a85094a57c479c5667411ee05c35e5a873401326ce75626140068bdd0a
-    .claude/skills/azure-app-onboard-prereq/references/subagent-starter-scaffold.md: sha256:03191dbd737a6a228bddd0dcbf44025f3e1e274e7a6713ab095c3ee669eb997b
+    .claude/skills/azure-app-onboard-prereq/references/subagent-starter-scaffold.md: sha256:d943a7b3e4d04deaaa22637f5f7c911fa4a8bbf001ba54ee59035445e7f299a4
     .claude/skills/azure-app-onboard-prereq/references/subscription-resolution.md: sha256:3430f1ddf59a0c124e97e8e1841d67fb4961a40073ccf01260e688f0c06fa78b
     .claude/skills/azure-app-onboard-prereq/references/zero-code-path.md: sha256:5979cfd1a7a76d36b290621cebfb13cb6815a8cc5996edbe72f22c5edffbf443
-    .claude/skills/azure-app-onboard/SKILL.md: sha256:16c378c05c61d78be2e99c45085acfaf7e00b39f607b53f1e2e1f5a27f6d4f9b
+    .claude/skills/azure-app-onboard/SKILL.md: sha256:fbfac0fb1c9498081369aa3d90ab3012b6406e3571bb81c6371b6c7c2c157ecf
     .claude/skills/azure-app-onboard/deploy/SKILL.md: sha256:9b0ec210a5116fc6266970646c456aa30828f4fbd8c4d2eb203734f18da3f2a0
     .claude/skills/azure-app-onboard/deploy/references/approval-gate-template.md: sha256:ca0b2b5b86c0463f8bbb5972438013fe9a5237dd225953fb89e627769898e049
     .claude/skills/azure-app-onboard/deploy/references/blocked-patterns.md: sha256:e6b1604901a625d6784d8ef5f800ef9591e67eeae61dbdeb88d9c0a3d3ba73ea
@@ -3421,7 +3427,7 @@ dependencies:
     .claude/skills/azure-app-onboard/scaffold/references/bicep-container-apps.md: sha256:490c716d5fbbcd7c334fcd4d96d2448fbf0cfd3c35d786bf8400837dc551895b
     .claude/skills/azure-app-onboard/scaffold/references/bicep-patterns-data.md: sha256:ad66fbe650a41b91bfa2b7b7bcc93c2a97fd8d12d358da687772f2031a63ebfd
     .claude/skills/azure-app-onboard/scaffold/references/bicep-patterns-security.md: sha256:28a9a99ed93b59841d28e962510c12a134c304150fa8ccb8f64f1bd985e88367
-    .claude/skills/azure-app-onboard/scaffold/references/bicep-patterns.md: sha256:ee9e545d6b3bcf1878d701596152094da8a924f4b46a91247c79ddb999d76acd
+    .claude/skills/azure-app-onboard/scaffold/references/bicep-patterns.md: sha256:55b4b915647cb6c68f197fa76abaf861b42d90e7e7dd87851dfd9eae6a3a61f2
     .claude/skills/azure-app-onboard/scaffold/references/bicep-swa.md: sha256:31c03f23799c8111e9fcfe13c087483d3b30b9f4a6e4738c1b98d25329440475
     .claude/skills/azure-app-onboard/scaffold/references/cicd-pipelines.md: sha256:89a3efa48c3084deab93955a052a879de7c2021a69c3874432e8babcc7b5cb81
     .claude/skills/azure-app-onboard/scaffold/references/dockerfile-generation.md: sha256:e4830c9fc2daa21df834d03525de654e3ddcbe86bfde03cc4bd625b14adb26ec
@@ -3443,10 +3449,10 @@ dependencies:
     .claude/skills/azure-app-onboard/scaffold/references/waf-checklist.md: sha256:3ad06a9ce5a1a5d688dedc18e3f1231ae7b01d4ec3d1418d527aabd1893fdf09
     .claude/skills/azure-app-onboard/scaffold/scripts/scaffold-conformance.ps1: sha256:82492a9917c2db76cff9ef9be843be8c86f29a2457da66212cd8b6a9a80183f1
     .claude/skills/azure-app-onboard/scaffold/scripts/scaffold-conformance.sh: sha256:18b1ce6ba2e13e52f07da1d7c703d04552094f96119b869efbf65b5742b9cfbd
-    .claude/skills/azure-cloud-migrate/SKILL.md: sha256:5f1052c60a4312212055a9659f7dec7ef1f1cd9b1a16bbc61108440dd09921bc
-    .claude/skills/azure-cloud-migrate/references/services/app-service/app-engine-to-app-service.md: sha256:01f4270a14b2af97adc14d355456917d1f603bbdb326ba94ff46156a5d8f38d3
+    .claude/skills/azure-cloud-migrate/SKILL.md: sha256:92766b8047f8f31eae9e4168d2bb903515d211146a97d00c795b535f77677ca7
+    .claude/skills/azure-cloud-migrate/references/services/app-service/app-engine-to-app-service.md: sha256:058778007848861540b37896041542c579686f0935575b0bc08d7f1baa205164
     .claude/skills/azure-cloud-migrate/references/services/app-service/assessment.md: sha256:cf98667abca7ef539134002414921971a176dc5de425e513af8febe6f625a6a1
-    .claude/skills/azure-cloud-migrate/references/services/app-service/beanstalk-to-app-service.md: sha256:0fa1380a393293bda0883eebb792e0f11efb783842e84f712fd24246c038f3d3
+    .claude/skills/azure-cloud-migrate/references/services/app-service/beanstalk-to-app-service.md: sha256:2609a01dfe1a015ea3a8135c44eef996cd6dadad8f18fd59d0b4192197d96565
     .claude/skills/azure-cloud-migrate/references/services/app-service/code-migration.md: sha256:ee9eca0e706b305b0966a81d90ac8d41ca71a33c7fac43445a2d3c9125e33eea
     .claude/skills/azure-cloud-migrate/references/services/app-service/global-rules.md: sha256:8b078ab6f5c6f119a09866955edee501ae87f150cd52561002dd9e906b355170
     .claude/skills/azure-cloud-migrate/references/services/app-service/heroku-to-app-service.md: sha256:f76c8684acbe605e7706e6bae3816eb93c60ef67101ac055a3e042e9a3284715
@@ -3595,7 +3601,7 @@ dependencies:
     .claude/skills/azure-deploy/references/sdk/azure-identity-py.md: sha256:87730a9669cfa561efd23cf98da106a90b12a94872c8fe9f27a7a5b582af3ce0
     .claude/skills/azure-deploy/references/sdk/azure-identity-ts.md: sha256:7cf5556fb9e06f4a3e9327dab8ce4aae5de09a9225fe5df6c95b3e7f4dc5e5bd
     .claude/skills/azure-deploy/references/troubleshooting.md: sha256:c5116670186964d0c44e6c8b9d235408eaf3aa77e90fd71dddc34d1c08d4ede4
-    .claude/skills/azure-diagnostics/SKILL.md: sha256:1757ca855de159303deb036ab06ccca4016b32fec7223d9675efea9a2d621acf
+    .claude/skills/azure-diagnostics/SKILL.md: sha256:513f4aae9d13460a83edee10c03e56b099532fd905bf7ec0bf825a02ce10fb45
     .claude/skills/azure-diagnostics/references/app-service/README.md: sha256:0b9d3cf3c3413d0279d2636c24be20d2dff84ae920a3cc3aa9f97fa5202edcb1
     .claude/skills/azure-diagnostics/references/azure-resource-graph.md: sha256:cd7cf01f8f74983a38e24f8bb20cb8f492f682319a56ac73cdc8647ddf550491
     .claude/skills/azure-diagnostics/references/container-apps/README.md: sha256:0ecf9c4f923e0ce7aca9c493b2391c2c339c2ff3b8659e6a778dedbedf465ad4
@@ -3607,19 +3613,21 @@ dependencies:
     .claude/skills/azure-diagnostics/scripts/appservice-diagnostics.sh: sha256:503a3a6d83a2b555ea404f467ff6aff7495c7d8e519bfbe70bd2a53e863de362
     .claude/skills/azure-diagnostics/scripts/containerapp-diagnostics.ps1: sha256:ba33255d6deb9051cbd0aebf1da5bccaf88e4bf82bcb557ced7221563d55c53b
     .claude/skills/azure-diagnostics/scripts/containerapp-diagnostics.sh: sha256:bb9bb8f2bbf92aa9c0ac5390966028e46e038b1eac74b6d92095c6cf40ad8d5c
+    .claude/skills/azure-diagnostics/scripts/pod-evidence.ps1: sha256:ec95c20067b66df2dae73ceed09d561e089b0b0b09fa3f6172836b8c3fc2ec27
+    .claude/skills/azure-diagnostics/scripts/pod-evidence.sh: sha256:cb6bbea2957017f1815a87f90f896dcbdcc3aec538097958242752724bf1fefb
     .claude/skills/azure-diagnostics/scripts/run-ig.ps1: sha256:044c1311c7be68ff990e978c8a6a34c79ba0b8dc0720f14a0570193150ac9201
     .claude/skills/azure-diagnostics/scripts/run-ig.sh: sha256:35a64f1d4da8c3c1b107b243bae6d4a9a9fa66957c9878febb0b6bcf3fe2582e
     .claude/skills/azure-diagnostics/scripts/test-messaging-connectivity.ps1: sha256:a42d229408b4281fc6f6110c6e9286091523ce00d48b96e0f28672307c6f49a2
     .claude/skills/azure-diagnostics/scripts/test-messaging-connectivity.sh: sha256:cf6d212b403a8846c8d58629fc20272f3e7a325d9a97a12688f367d665d87c36
-    .claude/skills/azure-diagnostics/troubleshooting/aks/aks-troubleshooting.md: sha256:1e94e13a6fa2d0d22e3b13e762e32552fb773af2e4da422e05cece8ff19bf4cd
+    .claude/skills/azure-diagnostics/troubleshooting/aks/aks-troubleshooting.md: sha256:913646320959dd89a3d9d282a984a99bfb8b0ee5b2e694d432e2bcfd3ed48c04
     .claude/skills/azure-diagnostics/troubleshooting/aks/general-diagnostics.md: sha256:8acf6259604ef912d6ac763d75552a65925e76ab2020da56168ca879c389ef56
     .claude/skills/azure-diagnostics/troubleshooting/aks/load-balancer-and-ingress.md: sha256:411fe1e7af9b072011d1cdc34733051cf8c31d6fa59355c0b0a5b2421a5f4681
     .claude/skills/azure-diagnostics/troubleshooting/aks/network-policy.md: sha256:557901c258eb637baad32466e6e4eb9e570fa66deebb21520cef3436fe4672ce
     .claude/skills/azure-diagnostics/troubleshooting/aks/networking.md: sha256:75ec5358fc5baff4a8c3f5891e3c6bf8fbb6930972abe00cbc09096aa96db66a
     .claude/skills/azure-diagnostics/troubleshooting/aks/node-issues.md: sha256:1913b8383ecf748ea2fae53b1e3dfb176205c0f1a4183070f5a35ecce01a41d6
-    .claude/skills/azure-diagnostics/troubleshooting/aks/pod-failures.md: sha256:db7b028ffeefee4d3fccf746f1e86d999955e3f5ae3d1f31fb330c3f73f56786
+    .claude/skills/azure-diagnostics/troubleshooting/aks/pod-failures.md: sha256:930c8da84023a13da2fc92793f283eb7252bb03779b611716852338fe79a2126
     .claude/skills/azure-diagnostics/troubleshooting/aks/references/aks-mcp.md: sha256:ed4217e6db4b7a42027e0be101111fe316ebeea828410008c6943704d01202a8
-    .claude/skills/azure-diagnostics/troubleshooting/aks/references/command-flows.md: sha256:1ed4cddb56e3b99ef9d53ce81287c940743f677f1d8c88fae4670b4ceac47dc5
+    .claude/skills/azure-diagnostics/troubleshooting/aks/references/command-flows.md: sha256:b4fc209525a46021cae205d8fb8e3f7701365bd01d16298b1f2472574803a510
     .claude/skills/azure-diagnostics/troubleshooting/aks/references/inspektor-gadget.md: sha256:b306c51c46d8a545b93a50b0a164782fa504012c444f3b9f47b459d003da7da7
     .claude/skills/azure-diagnostics/troubleshooting/aks/references/structured-input-modes.md: sha256:eb1d1efe70567b5583d56c155a640ed6d3964befba1e63589d57045ee0640119
     .claude/skills/azure-diagnostics/troubleshooting/aks/spot-and-zone-issues.md: sha256:00531f4c15aafa5d89d9d8696d2b83c37611fbf7014600308252ef2382ec0379
@@ -3739,7 +3747,7 @@ dependencies:
     .claude/skills/azure-kubernetes/references/cli-reference.md: sha256:b3c5588bd3abf50244c984f6ee79cfa4d6d157a9ac488a1cc6bf20060087d7f3
     .claude/skills/azure-kusto/SKILL.md: sha256:a8b8e9f6743b0f0a400a06fa2ded9f5273b44cda9be15d3bb64cafbe16074c68
     .claude/skills/azure-messaging/SKILL.md: sha256:36f2b20f79c68f86a8dfe4d539c64971eecece198646dfb9080d7afa233210fa
-    .claude/skills/azure-prepare/SKILL.md: sha256:529179f6546bfe7c0af465be517a34f420883b330485bfa7dcbb222c6360b176
+    .claude/skills/azure-prepare/SKILL.md: sha256:21382114dadeee7ca9e6b310640fbc0fca57d1014e58bba7511df1187575ed98
     .claude/skills/azure-prepare/references/analyze.md: sha256:b85092c863ef647dee3c792b7764e83597dab38c7ac59869b435acafc9dd29f5
     .claude/skills/azure-prepare/references/apim.md: sha256:bd5644658deccf0f422ed1e98d0bccc9ddb8d91d09dc07f90d743bfd00dd3511
     .claude/skills/azure-prepare/references/architecture.md: sha256:bee463c674f8d8084ce11c70de28da6e1334b1040061aa224a400b93c1e3037a
@@ -3784,8 +3792,8 @@ dependencies:
     .claude/skills/azure-prepare/references/services/aks/bicep.md: sha256:c6e579389cb3e8a750830c3339e380ed358cf4b0b6bc700b620eb916ff324631
     .claude/skills/azure-prepare/references/services/aks/manifests.md: sha256:570fe29171f300544b792d28b65204a212cc777af76d098136ffc8e0e5d0cc9d
     .claude/skills/azure-prepare/references/services/app-insights/README.md: sha256:f8d6a35633f8932183622cd50f60ffbb7304ce91dccc2253daeb51df6d11426d
-    .claude/skills/azure-prepare/references/services/app-service/README.md: sha256:a89c891f41515651ca000aa818ef035353f13d3a090c6217340f3dd2e11a53fb
-    .claude/skills/azure-prepare/references/services/app-service/bicep.md: sha256:07c26e364b01b72e7c51d48202c2e4ff76c2ebaa981a04104042673fc3dfa768
+    .claude/skills/azure-prepare/references/services/app-service/README.md: sha256:2360e06a2226d167cbe0455b569a93855bcf5727cddfd95749c83086af6889c7
+    .claude/skills/azure-prepare/references/services/app-service/bicep.md: sha256:99dac58f9647998fde77377fc98ff92eea2a8e0346eebe26c1c5cbb173b9f7c8
     .claude/skills/azure-prepare/references/services/app-service/custom-domains.md: sha256:ed308f983c8720df4e20ded5edc5f734a08515ccc5bbc5abf55b912e61a992ee
     .claude/skills/azure-prepare/references/services/app-service/deployment-slots.md: sha256:a45d073bba02005ea63698970293e86a5db3e5ea0f6753e968224e63439a693a
     .claude/skills/azure-prepare/references/services/app-service/networking.md: sha256:3ae911674e78345fc18873b9758fabe60ae492d8d762b276da72a67ba20a3488
@@ -3811,7 +3819,7 @@ dependencies:
     .claude/skills/azure-prepare/references/services/app-service/templates/recipes/sql/source/python.md: sha256:19e59b8520297d4015c479314843e234740bff2f18e3772be8f0744afa9f7b4a
     .claude/skills/azure-prepare/references/services/app-service/templates/selection.md: sha256:f75f38923c87e169b72d13cc6a905141d0f28bfcbaa34e52527f52f0244800c2
     .claude/skills/azure-prepare/references/services/app-service/templates/web-api.md: sha256:12f2b97bc5e7e63ac017d78034599bfbc69251fcd3b7a57068e7519e3aa18708
-    .claude/skills/azure-prepare/references/services/app-service/templates/web-app.md: sha256:7f1a5f27c9663fb4ea182e3d23983970c04108f7b86f72cd81623c9732085b2e
+    .claude/skills/azure-prepare/references/services/app-service/templates/web-app.md: sha256:4e865e9585be5b1b03b7823584e6f9227606eb3a3f965ce1371d24941147f883
     .claude/skills/azure-prepare/references/services/container-apps/README.md: sha256:2b8ddcda88e643368c81db332d34fd8093e4aa813a861edbb8a7759594634f35
     .claude/skills/azure-prepare/references/services/container-apps/bicep.md: sha256:cdea67a37758a3f6241b319c5f1361b397f7ba48d1ea1395422aaae52d4b6ffc
     .claude/skills/azure-prepare/references/services/container-apps/day2-operations.md: sha256:61ae28f5f8f423e65fa93f4913c3812d9cef17120c9d628836b51ea47f8cccf9
@@ -3838,7 +3846,7 @@ dependencies:
     .claude/skills/azure-prepare/references/services/foundry/region-availability.md: sha256:dcd10fa7d4ede175fd30b7e785b83a8365b4b7194cb831eff9fca4c9e7e40036
     .claude/skills/azure-prepare/references/services/functions/README.md: sha256:a0770a69eb050c304794dcb7227ad2f97053cf2878caa2c00dece399fd2ca661
     .claude/skills/azure-prepare/references/services/functions/aspire-containerapps.md: sha256:f7a05b303d2f6ac35d5c3fce10e154e3270aaf6080a8df50ae75852d5eb5939c
-    .claude/skills/azure-prepare/references/services/functions/bicep.md: sha256:80920985cc2b999faacb4962e23fb09af49286ec33d686ede6f1cd0deff48d20
+    .claude/skills/azure-prepare/references/services/functions/bicep.md: sha256:5bc680cb113838222aa197b7068b573861bbcaa78d01ace1558cee4a16de9429
     .claude/skills/azure-prepare/references/services/functions/durable.md: sha256:0b4ae4cb0413c6232b6d9f328af9c48a66cf715aa66a27e80726a984a77ed2c3
     .claude/skills/azure-prepare/references/services/functions/templates/README.md: sha256:fdce203aa98c49f18cd51a8322e9257f27a0a92d2e9c13d90f3ebf4a6d74bbec
     .claude/skills/azure-prepare/references/services/functions/templates/base/eval/python.md: sha256:2fe415baa317973631744aa942406af23025985ced28373ee809a2719f2354b8
@@ -3923,8 +3931,8 @@ dependencies:
     .claude/skills/azure-reliability/references/zone-redundancy-checks.md: sha256:6a328177624859e845e87cec80f3fb59e434b3f077f7232669d5c795cd4310c7
     .claude/skills/azure-resource-lookup/SKILL.md: sha256:259698027a6ab6fd6f9b51080f2b29faf533c038bce7b5af73bf63164020ad2a
     .claude/skills/azure-resource-lookup/references/azure-resource-graph.md: sha256:0cb6fb725c75d5a9958ffecf110bb4b092ab83601a1e7f53b85f295176c48c9a
-    .claude/skills/azure-resource-visualizer/SKILL.md: sha256:1c461696c8235a280a8fbd5f08450c1e2d441e03cb7fdb0e7db5f3f6fb640f37
-    .claude/skills/azure-resource-visualizer/assets/example-diagram.md: sha256:19641e72cdbdaa1fd2725e492740465817f263a793de8d01eb3ff36f063d03b7
+    .claude/skills/azure-resource-visualizer/SKILL.md: sha256:eb7d6ecae5ba4f8c0da5d1bd506486d3cbd71eff5d7d12b24b42e710b4f47fcb
+    .claude/skills/azure-resource-visualizer/assets/example-diagram.md: sha256:634ad47b9dc958dd36e37b51369d1df60cc0430c072697b45f71b5a3e1ea221c
     .claude/skills/azure-resource-visualizer/assets/template-architecture.md: sha256:4f77937ad89eb8d333afb928592f0b5b22a83044083521dacfe55d8b7b1eff22
     .claude/skills/azure-resource-visualizer/references/azure-resource-graph.md: sha256:c178445ad2a41f459b2b83353b7f3dc5bf0f99c102bac043f2eb482ffb00f726
     .claude/skills/azure-storage/SKILL.md: sha256:a032c55a4414a1aa3ea40245806944b3e497ee094be04f933a049018fbe8da81
@@ -4223,12 +4231,12 @@ dependencies:
     .claude/skills/python-appservice-deploy/scripts/generate-app-name.sh: sha256:06dd60528ab2870eaf38194d508c56efff2e77fd3c1979adcbc765134f0db183
     .claude/skills/python-appservice-deploy/scripts/retry-az-create.ps1: sha256:432adb3d4d52a13360f8ac554cf9cb603848fee8ac0b9873a571e1d53f833d7b
     .claude/skills/python-appservice-deploy/scripts/retry-az-create.sh: sha256:bf1b6f1bc07a96f3e2b8f1d95c7a1c870353289a4006fbf2cd4f0efd87f4f7af
-    .codex/hooks/azure-skills/hooks/scripts/track-telemetry.ps1: sha256:b7b1e19ed897250193656fdf874007fc5acb1eb45a68e3ae1b36c416bf057c54
-    .codex/hooks/azure-skills/hooks/scripts/track-telemetry.sh: sha256:1a3a28cc6b26d909d01e1b4c414985157584134a7d752c245f6e39d32849ba50
+    .codex/hooks/azure-skills/hooks/scripts/track-telemetry.ps1: sha256:a6b82a1a175a159536f2a88f6858b3b901b287bd7766df837600eb6faf39bc54
+    .codex/hooks/azure-skills/hooks/scripts/track-telemetry.sh: sha256:37dc1baf4b0244d124f7c52b1351c569657031b4cd7a468fa13d485f96ed9521
     .github/hooks/azure-skills-copilot-hooks.json: sha256:16ae349703f4d9e9a60b7f697bf55038e2cc42424774116c6c95a2fc8b834aa1
-    .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.ps1: sha256:b7b1e19ed897250193656fdf874007fc5acb1eb45a68e3ae1b36c416bf057c54
-    .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.sh: sha256:1a3a28cc6b26d909d01e1b4c414985157584134a7d752c245f6e39d32849ba50
-  content_hash: sha256:17687f12c27e1e37716ddcc2aab2d07e77c1454fdf23e322350f2ff1699eefb2
+    .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.ps1: sha256:a6b82a1a175a159536f2a88f6858b3b901b287bd7766df837600eb6faf39bc54
+    .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.sh: sha256:37dc1baf4b0244d124f7c52b1351c569657031b4cd7a468fa13d485f96ed9521
+  content_hash: sha256:98743b2bf6fb25abb18da3ff99e577648960136bc6692eb4d52fa4cddc6ac8e6
   declared_license: MIT
 - repo_url: microsoftdocs/mcp
   materialization_repo_url: MicrosoftDocs/mcp
@@ -4784,7 +4792,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:524cd94fbd67446fd6a78ac63f0975bd5f9889f9bdaf929b62b8ab976a71d510
+  content_hash: sha256:a150e1100779a26ba72a4c0b3ba5329bfd2c72bb9a3a65f4164c6dccef60abda
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-app-onboard-prereq/references/build-check.md
@@ -4901,7 +4909,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:03191dbd737a6a228bddd0dcbf44025f3e1e274e7a6713ab095c3ee669eb997b
+  content_hash: sha256:d943a7b3e4d04deaaa22637f5f7c911fa4a8bbf001ba54ee59035445e7f299a4
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-app-onboard-prereq/references/subscription-resolution.md
@@ -4928,7 +4936,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:16c378c05c61d78be2e99c45085acfaf7e00b39f607b53f1e2e1f5a27f6d4f9b
+  content_hash: sha256:fbfac0fb1c9498081369aa3d90ab3012b6406e3571bb81c6371b6c7c2c157ecf
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-app-onboard/deploy/SKILL.md
@@ -5342,7 +5350,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:ee9e545d6b3bcf1878d701596152094da8a924f4b46a91247c79ddb999d76acd
+  content_hash: sha256:55b4b915647cb6c68f197fa76abaf861b42d90e7e7dd87851dfd9eae6a3a61f2
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-app-onboard/scaffold/references/bicep-swa.md
@@ -5549,7 +5557,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:5f1052c60a4312212055a9659f7dec7ef1f1cd9b1a16bbc61108440dd09921bc
+  content_hash: sha256:92766b8047f8f31eae9e4168d2bb903515d211146a97d00c795b535f77677ca7
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-cloud-migrate/references/services/app-service/app-engine-to-app-service.md
@@ -5558,7 +5566,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:01f4270a14b2af97adc14d355456917d1f603bbdb326ba94ff46156a5d8f38d3
+  content_hash: sha256:058778007848861540b37896041542c579686f0935575b0bc08d7f1baa205164
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-cloud-migrate/references/services/app-service/assessment.md
@@ -5576,7 +5584,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:0fa1380a393293bda0883eebb792e0f11efb783842e84f712fd24246c038f3d3
+  content_hash: sha256:2609a01dfe1a015ea3a8135c44eef996cd6dadad8f18fd59d0b4192197d96565
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-cloud-migrate/references/services/app-service/code-migration.md
@@ -6962,7 +6970,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:1757ca855de159303deb036ab06ccca4016b32fec7223d9675efea9a2d621acf
+  content_hash: sha256:513f4aae9d13460a83edee10c03e56b099532fd905bf7ec0bf825a02ce10fb45
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-diagnostics/references/app-service/README.md
@@ -7064,6 +7072,24 @@ deployments:
   content_hash: sha256:bb9bb8f2bbf92aa9c0ac5390966028e46e038b1eac74b6d92095c6cf40ad8d5c
 - kind: project-relative
   target: agent-skills
+  value: .agents/skills/azure-diagnostics/scripts/pod-evidence.ps1
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:ec95c20067b66df2dae73ceed09d561e089b0b0b09fa3f6172836b8c3fc2ec27
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/azure-diagnostics/scripts/pod-evidence.sh
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:cb6bbea2957017f1815a87f90f896dcbdcc3aec538097958242752724bf1fefb
+- kind: project-relative
+  target: agent-skills
   value: .agents/skills/azure-diagnostics/scripts/run-ig.ps1
   runtime: null
   scope: project
@@ -7106,7 +7132,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:1e94e13a6fa2d0d22e3b13e762e32552fb773af2e4da422e05cece8ff19bf4cd
+  content_hash: sha256:913646320959dd89a3d9d282a984a99bfb8b0ee5b2e694d432e2bcfd3ed48c04
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-diagnostics/troubleshooting/aks/general-diagnostics.md
@@ -7160,7 +7186,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:db7b028ffeefee4d3fccf746f1e86d999955e3f5ae3d1f31fb330c3f73f56786
+  content_hash: sha256:930c8da84023a13da2fc92793f283eb7252bb03779b611716852338fe79a2126
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-diagnostics/troubleshooting/aks/references/aks-mcp.md
@@ -7178,7 +7204,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:1ed4cddb56e3b99ef9d53ce81287c940743f677f1d8c88fae4670b4ceac47dc5
+  content_hash: sha256:b4fc209525a46021cae205d8fb8e3f7701365bd01d16298b1f2472574803a510
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-diagnostics/troubleshooting/aks/references/inspektor-gadget.md
@@ -8303,7 +8329,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:529179f6546bfe7c0af465be517a34f420883b330485bfa7dcbb222c6360b176
+  content_hash: sha256:21382114dadeee7ca9e6b310640fbc0fca57d1014e58bba7511df1187575ed98
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-prepare/references/analyze.md
@@ -8708,7 +8734,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:a89c891f41515651ca000aa818ef035353f13d3a090c6217340f3dd2e11a53fb
+  content_hash: sha256:2360e06a2226d167cbe0455b569a93855bcf5727cddfd95749c83086af6889c7
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-prepare/references/services/app-service/bicep.md
@@ -8717,7 +8743,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:07c26e364b01b72e7c51d48202c2e4ff76c2ebaa981a04104042673fc3dfa768
+  content_hash: sha256:99dac58f9647998fde77377fc98ff92eea2a8e0346eebe26c1c5cbb173b9f7c8
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-prepare/references/services/app-service/custom-domains.md
@@ -8951,7 +8977,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:7f1a5f27c9663fb4ea182e3d23983970c04108f7b86f72cd81623c9732085b2e
+  content_hash: sha256:4e865e9585be5b1b03b7823584e6f9227606eb3a3f965ce1371d24941147f883
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-prepare/references/services/container-apps/README.md
@@ -9194,7 +9220,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:80920985cc2b999faacb4962e23fb09af49286ec33d686ede6f1cd0deff48d20
+  content_hash: sha256:5bc680cb113838222aa197b7068b573861bbcaa78d01ace1558cee4a16de9429
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-prepare/references/services/functions/durable.md
@@ -9995,7 +10021,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:1c461696c8235a280a8fbd5f08450c1e2d441e03cb7fdb0e7db5f3f6fb640f37
+  content_hash: sha256:eb7d6ecae5ba4f8c0da5d1bd506486d3cbd71eff5d7d12b24b42e710b4f47fcb
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-resource-visualizer/assets/example-diagram.md
@@ -10004,7 +10030,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:19641e72cdbdaa1fd2725e492740465817f263a793de8d01eb3ff36f063d03b7
+  content_hash: sha256:634ad47b9dc958dd36e37b51369d1df60cc0430c072697b45f71b5a3e1ea221c
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-resource-visualizer/assets/template-architecture.md
@@ -14027,7 +14053,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:b7b1e19ed897250193656fdf874007fc5acb1eb45a68e3ae1b36c416bf057c54
+  content_hash: sha256:a6b82a1a175a159536f2a88f6858b3b901b287bd7766df837600eb6faf39bc54
 - kind: project-relative
   target: claude
   value: .claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh
@@ -14036,7 +14062,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:1a3a28cc6b26d909d01e1b4c414985157584134a7d752c245f6e39d32849ba50
+  content_hash: sha256:37dc1baf4b0244d124f7c52b1351c569657031b4cd7a468fa13d485f96ed9521
 - kind: project-relative
   target: claude
   value: .claude/skills/airunway-aks-setup
@@ -14558,7 +14584,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:524cd94fbd67446fd6a78ac63f0975bd5f9889f9bdaf929b62b8ab976a71d510
+  content_hash: sha256:a150e1100779a26ba72a4c0b3ba5329bfd2c72bb9a3a65f4164c6dccef60abda
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-app-onboard-prereq/references/build-check.md
@@ -14675,7 +14701,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:03191dbd737a6a228bddd0dcbf44025f3e1e274e7a6713ab095c3ee669eb997b
+  content_hash: sha256:d943a7b3e4d04deaaa22637f5f7c911fa4a8bbf001ba54ee59035445e7f299a4
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-app-onboard-prereq/references/subscription-resolution.md
@@ -14702,7 +14728,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:16c378c05c61d78be2e99c45085acfaf7e00b39f607b53f1e2e1f5a27f6d4f9b
+  content_hash: sha256:fbfac0fb1c9498081369aa3d90ab3012b6406e3571bb81c6371b6c7c2c157ecf
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-app-onboard/deploy/SKILL.md
@@ -15116,7 +15142,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:ee9e545d6b3bcf1878d701596152094da8a924f4b46a91247c79ddb999d76acd
+  content_hash: sha256:55b4b915647cb6c68f197fa76abaf861b42d90e7e7dd87851dfd9eae6a3a61f2
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-app-onboard/scaffold/references/bicep-swa.md
@@ -15323,7 +15349,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:5f1052c60a4312212055a9659f7dec7ef1f1cd9b1a16bbc61108440dd09921bc
+  content_hash: sha256:92766b8047f8f31eae9e4168d2bb903515d211146a97d00c795b535f77677ca7
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-cloud-migrate/references/services/app-service/app-engine-to-app-service.md
@@ -15332,7 +15358,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:01f4270a14b2af97adc14d355456917d1f603bbdb326ba94ff46156a5d8f38d3
+  content_hash: sha256:058778007848861540b37896041542c579686f0935575b0bc08d7f1baa205164
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-cloud-migrate/references/services/app-service/assessment.md
@@ -15350,7 +15376,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:0fa1380a393293bda0883eebb792e0f11efb783842e84f712fd24246c038f3d3
+  content_hash: sha256:2609a01dfe1a015ea3a8135c44eef996cd6dadad8f18fd59d0b4192197d96565
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-cloud-migrate/references/services/app-service/code-migration.md
@@ -16736,7 +16762,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:1757ca855de159303deb036ab06ccca4016b32fec7223d9675efea9a2d621acf
+  content_hash: sha256:513f4aae9d13460a83edee10c03e56b099532fd905bf7ec0bf825a02ce10fb45
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-diagnostics/references/app-service/README.md
@@ -16838,6 +16864,24 @@ deployments:
   content_hash: sha256:bb9bb8f2bbf92aa9c0ac5390966028e46e038b1eac74b6d92095c6cf40ad8d5c
 - kind: project-relative
   target: claude
+  value: .claude/skills/azure-diagnostics/scripts/pod-evidence.ps1
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:ec95c20067b66df2dae73ceed09d561e089b0b0b09fa3f6172836b8c3fc2ec27
+- kind: project-relative
+  target: claude
+  value: .claude/skills/azure-diagnostics/scripts/pod-evidence.sh
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:cb6bbea2957017f1815a87f90f896dcbdcc3aec538097958242752724bf1fefb
+- kind: project-relative
+  target: claude
   value: .claude/skills/azure-diagnostics/scripts/run-ig.ps1
   runtime: null
   scope: project
@@ -16880,7 +16924,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:1e94e13a6fa2d0d22e3b13e762e32552fb773af2e4da422e05cece8ff19bf4cd
+  content_hash: sha256:913646320959dd89a3d9d282a984a99bfb8b0ee5b2e694d432e2bcfd3ed48c04
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-diagnostics/troubleshooting/aks/general-diagnostics.md
@@ -16934,7 +16978,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:db7b028ffeefee4d3fccf746f1e86d999955e3f5ae3d1f31fb330c3f73f56786
+  content_hash: sha256:930c8da84023a13da2fc92793f283eb7252bb03779b611716852338fe79a2126
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-diagnostics/troubleshooting/aks/references/aks-mcp.md
@@ -16952,7 +16996,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:1ed4cddb56e3b99ef9d53ce81287c940743f677f1d8c88fae4670b4ceac47dc5
+  content_hash: sha256:b4fc209525a46021cae205d8fb8e3f7701365bd01d16298b1f2472574803a510
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-diagnostics/troubleshooting/aks/references/inspektor-gadget.md
@@ -18077,7 +18121,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:529179f6546bfe7c0af465be517a34f420883b330485bfa7dcbb222c6360b176
+  content_hash: sha256:21382114dadeee7ca9e6b310640fbc0fca57d1014e58bba7511df1187575ed98
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-prepare/references/analyze.md
@@ -18482,7 +18526,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:a89c891f41515651ca000aa818ef035353f13d3a090c6217340f3dd2e11a53fb
+  content_hash: sha256:2360e06a2226d167cbe0455b569a93855bcf5727cddfd95749c83086af6889c7
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-prepare/references/services/app-service/bicep.md
@@ -18491,7 +18535,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:07c26e364b01b72e7c51d48202c2e4ff76c2ebaa981a04104042673fc3dfa768
+  content_hash: sha256:99dac58f9647998fde77377fc98ff92eea2a8e0346eebe26c1c5cbb173b9f7c8
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-prepare/references/services/app-service/custom-domains.md
@@ -18725,7 +18769,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:7f1a5f27c9663fb4ea182e3d23983970c04108f7b86f72cd81623c9732085b2e
+  content_hash: sha256:4e865e9585be5b1b03b7823584e6f9227606eb3a3f965ce1371d24941147f883
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-prepare/references/services/container-apps/README.md
@@ -18968,7 +19012,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:80920985cc2b999faacb4962e23fb09af49286ec33d686ede6f1cd0deff48d20
+  content_hash: sha256:5bc680cb113838222aa197b7068b573861bbcaa78d01ace1558cee4a16de9429
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-prepare/references/services/functions/durable.md
@@ -19769,7 +19813,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:1c461696c8235a280a8fbd5f08450c1e2d441e03cb7fdb0e7db5f3f6fb640f37
+  content_hash: sha256:eb7d6ecae5ba4f8c0da5d1bd506486d3cbd71eff5d7d12b24b42e710b4f47fcb
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-resource-visualizer/assets/example-diagram.md
@@ -19778,7 +19822,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:19641e72cdbdaa1fd2725e492740465817f263a793de8d01eb3ff36f063d03b7
+  content_hash: sha256:634ad47b9dc958dd36e37b51369d1df60cc0430c072697b45f71b5a3e1ea221c
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-resource-visualizer/assets/template-architecture.md
@@ -23468,7 +23512,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:b7b1e19ed897250193656fdf874007fc5acb1eb45a68e3ae1b36c416bf057c54
+  content_hash: sha256:a6b82a1a175a159536f2a88f6858b3b901b287bd7766df837600eb6faf39bc54
 - kind: project-relative
   target: codex
   value: .codex/hooks/azure-skills/hooks/scripts/track-telemetry.sh
@@ -23477,7 +23521,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:1a3a28cc6b26d909d01e1b4c414985157584134a7d752c245f6e39d32849ba50
+  content_hash: sha256:37dc1baf4b0244d124f7c52b1351c569657031b4cd7a468fa13d485f96ed9521
 - kind: project-relative
   target: copilot
   value: .github/agents/code-testing-builder.agent.md
@@ -23585,7 +23629,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:b7b1e19ed897250193656fdf874007fc5acb1eb45a68e3ae1b36c416bf057c54
+  content_hash: sha256:a6b82a1a175a159536f2a88f6858b3b901b287bd7766df837600eb6faf39bc54
 - kind: project-relative
   target: copilot
   value: .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.sh
@@ -23594,7 +23638,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:1a3a28cc6b26d909d01e1b4c414985157584134a7d752c245f6e39d32849ba50
+  content_hash: sha256:37dc1baf4b0244d124f7c52b1351c569657031b4cd7a468fa13d485f96ed9521
 - kind: uri
   target: mcp
   value: azure

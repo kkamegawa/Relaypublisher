@@ -20,6 +20,7 @@
 SchemaVersion: "1.0"
 PackageIdentifier: Microsoft.PowerShell
 PackageName: PowerShell
+Developer: Microsoft Corporation
 Publisher: Microsoft Corporation
 Description: PowerShell 7 cross-platform automation and configuration tool.
 PackageVersion: 7.6.5
@@ -53,7 +54,7 @@ Apps:
       # PowerShell 7.6 (LTS) supports macOS 14 (Sonoma), 15 (Sequoia), and 26 (Tahoe).
       # 14.0 is the lowest version Relaypublisher's version table can map (26.0 is not
       # yet defined there); AppType: pkg allows the beta-only v14_0 flag.
-      MinimumOSVersion: "14.0"
+      MinimumOSVersion: "15.0"
 
     Detection:
       IgnoreAppVersion: false
