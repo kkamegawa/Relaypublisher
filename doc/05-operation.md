@@ -14,7 +14,7 @@ feeds, so pick the one your environment can reach:
 | Feed | Intended consumer |
 | --- | --- |
 | nuget.org | General users. This is the default source, so no extra flag is needed. |
-| GitHub Packages | Users working from this repository. Requires a GitHub token with `read:packages`. |
+| GitHub Packages | Users working from this repository. Always requires a GitHub token with `read:packages`, even for a public package. |
 | Azure Artifacts | Internal CI or closed networks. Requires access to the organization's feed. |
 
 Install from nuget.org:
@@ -23,17 +23,50 @@ Install from nuget.org:
 dotnet tool install --global relaypublisher
 ```
 
-Install from GitHub Packages:
+Install from GitHub Packages. `--add-source` only supplies the feed URL, so the source must be
+registered with credentials first - GitHub Packages returns 401 for an anonymous NuGet request even
+when the package is public:
 
 ```bash
-dotnet tool install --global relaypublisher   --add-source "https://nuget.pkg.github.com/<owner>/index.json"
+# Provide the token through the environment; do not paste it on the command line.
+export GH_PACKAGES_TOKEN="<github-pat-with-read-packages>"
+
+dotnet nuget add source "https://nuget.pkg.github.com/<owner>/index.json"   --name relaypublisher-github   --username "<github-username>"   --password "$GH_PACKAGES_TOKEN"   --store-password-in-clear-text
+
+dotnet tool install --global relaypublisher --add-source relaypublisher-github
 ```
 
-Install from Azure Artifacts (after the credential provider is set up):
+PowerShell 7:
+
+```powershell
+$env:GH_PACKAGES_TOKEN = '<github-pat-with-read-packages>'
+
+dotnet nuget add source "https://nuget.pkg.github.com/<owner>/index.json" `
+  --name relaypublisher-github `
+  --username "<github-username>" `
+  --password $env:GH_PACKAGES_TOKEN `
+  --store-password-in-clear-text
+
+dotnet tool install --global relaypublisher --add-source relaypublisher-github
+```
+
+`--store-password-in-clear-text` writes the token into the user-level *NuGet.config* in plain text.
+It is required on Linux and macOS because NuGet's encrypted credential store is Windows-only. Treat
+that file as a secret, or drop the flag on Windows. Remove the source with
+`dotnet nuget remove source relaypublisher-github` when it is no longer needed.
+
+Install from Azure Artifacts. Install the credential provider first, then authenticate once:
 
 ```bash
-dotnet tool install --global relaypublisher   --add-source "<azure-artifacts-feed-v3-index-url>"
+dotnet tool install --global Microsoft.Artifacts.CredentialProvider.NuGet.Tool   --source https://api.nuget.org/v3/index.json
+
+dotnet nuget add source "<azure-artifacts-feed-v3-index-url>" --name relaypublisher-ado
+
+dotnet tool install --global relaypublisher --add-source relaypublisher-ado --interactive
 ```
+
+`--interactive` triggers the sign-in prompt on first use. Later commands reuse the cached session
+token and do not need the flag.
 
 Update:
 

@@ -49,6 +49,50 @@
 4. **設計判断の記録**: [adr.md](adr.md) に 3 feed 化・`release: published` gating・
    `.github/workflows/` への移動の 3 件を記録。
 
+### 2026-08-24 追記: PR #102 のレビュー指摘対応
+
+[PR #102](https://github.com/kkamegawa/Relaypublisher/pull/102) の Copilot レビューで挙がった
+workflow のセキュリティ / release 整合性の指摘 7 件に対応した。
+
+1. **publish 済み release への upload を禁止** (`release-draft.yml`): 既存 release があるとき
+   `isDraft` を確認し、draft でなければ fail させる。publish 済み release に tag を打ち直して資産を
+   差し替えても `release: published` は再発火しないため、release の添付物と feed に push 済みの
+   package が食い違ったまま公開され続ける事故を防ぐ。
+2. **`persist-credentials: false` を全 checkout に付与** (3 本すべて): 既定の `true` は job token を
+   `.git/config` に書き込む。とくに `contents: write` を持つ `draft-release` job では、その後に走る
+   `dotnet pack` / `dotnet publish`(tag 時点のビルドコードと NuGet 依存関係)が token を読み出せる。
+3. **`git merge-base` を GitHub API 比較に置き換え**: `persist-credentials: true` を必要としないよう、
+   main 到達性の検証を `gh api repos/{owner}/{repo}/compare/main...<sha>` の `status` で行う
+   (`behind` / `identical` のみ通す)。あわせて read-only の `guard` job に切り出し、ビルドコードを
+   実行しない状態で provenance を確定させてから write 権限を持つ job を動かす構成にした。
+4. **`dotnet nuget push` のワイルドカードを廃止** (`release-publish.yml`): 3 feed とも
+   `relaypublisher.<version>.nupkg` の実パスを指定する。`gh release download` も同様に
+   `--pattern` を実ファイル名に固定した。release に別の `.nupkg` が添付されていた場合の巻き込み
+   publish を防ぐ。
+5. **`curl | sh` による credential provider install を廃止**: 可変リダイレクト(`aka.ms`)越しの
+   スクリプトを publishing secrets と OIDC token を持つ job で実行しないため、署名済み NuGet package
+   `Microsoft.Artifacts.CredentialProvider.NuGet.Tool` を `--version 2.0.4` 固定で
+   `dotnet tool install` する方式に変更した。
+6. **`release: published` の provenance ガードを追加**: この event は repository 全体で発火し、
+   `release-draft.yml` が作った draft にも `v*` tag にも限定されない。read-only の `guard` job で
+   (a) tag 形式、(b) tag commit の main 到達性、(c) 添付 `.nupkg` が `relaypublisher.<version>.nupkg`
+   ちょうど 1 個であること、の 3 段を検証してから publish job を起動する。
+7. **GitHub Packages の install 手順を修正** ([05-operation.md](05-operation.md) /
+   [05-operation_ja.md](05-operation_ja.md)): `--add-source` は feed URL を渡すだけで認証しない。
+   GitHub Packages は package が public でも匿名リクエストに 401 を返すため、
+   `dotnet nuget add source --username --password --store-password-in-clear-text` で認証情報つきの
+   source を先に登録する手順に書き換えた(bash / PowerShell 7 両方)。平文保存のリスクと
+   source 削除方法も明記。Azure Artifacts 側も credential provider install と `--interactive` を
+   含む実際に通る手順に修正した。
+
+設計正本側は [03-ci-github-actions.md](03-ci-github-actions.md) §11a に
+`persist-credentials: false` 必須・`curl | sh` 禁止・push のワイルドカード禁止を共通方針として追記し、
+§12a の `release-draft.yml` / `release-publish.yml` の設計ポイントを上記に合わせて更新した。
+
+**未検証**: `Microsoft.Artifacts.CredentialProvider.NuGet.Tool` を `dotnet tool install` した場合に
+plugin discovery が期待どおり働き、`VSS_NUGET_ACCESSTOKEN` / `VSS_NUGET_URI_PREFIXES` を読むかは
+実環境で未確認。Microsoft Learn の推奨手順ではあるが、初回の実リリースで確認が必要。
+
 ### 検証結果
 
 ```

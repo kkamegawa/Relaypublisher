@@ -22,6 +22,19 @@
   | `actions/upload-artifact` | v7.0.1 | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` |
   | `azure/login` | v3.0.1 | `f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca` |
 
+- **`actions/checkout` は必ず `persist-credentials: false` を指定する。** 既定の `true` は job token を
+  `.git/config` に書き込むため、その後に走る `dotnet build` / `dotnet pack` / `dotnet publish`
+  (= tag 時点のリポジトリのビルドコードと NuGet 依存関係)が token を読み出せてしまう。
+  とくに `contents: write` を持つ job では、侵害されたビルドターゲットがリポジトリや release を
+  書き換えられる経路になる。git 履歴を必要とする検査は git ではなく GitHub API で行う(下記)。
+- **外部スクリプトを `curl | sh` でパイプ実行しない。** publishing secrets と OIDC token を持つ job で
+  可変リダイレクト(`aka.ms/...`)越しのスクリプトを実行するのは、token 窃取と意図しない publish の
+  経路になる。Azure Artifacts credential provider は署名済み NuGet package
+  `Microsoft.Artifacts.CredentialProvider.NuGet.Tool` を **version 固定**で
+  `dotnet tool install` する。
+- **`dotnet nuget push` にワイルドカードを渡さない。** tag から導出した
+  `relaypublisher.<version>.nupkg` の**実パス**を指定する。release に別の `.nupkg` が添付されていた
+  場合に巻き込みで publish されるのを防ぐ。
 - 実 URL / tenant id / feed URL を YAML に直書きしない(AGENTS.md 禁止事項)。secret 経由で渡す。
   GitHub Packages の URL だけは認証なしで公開されている既知 URL なので直書きしてよい。
 - secret 由来の値をシェル内で導出した場合は `::add-mask::` でマスクしてからでないと使わない。
@@ -312,31 +325,53 @@ publish する操作を最後の関門にする**。tag の打ち直しは draft
 
 ### release-draft.yml の設計上のポイント
 
-- trigger は `v*` tag push のみ。
-- **tag が main から到達可能であることを検証する** (`git merge-base --is-ancestor`)。
-  main 以外の履歴に打たれた tag はここで fail させる。
+- trigger は `v*` tag push のみ。job は `verify`(build/test)/ `guard`(provenance)/ `draft-release` の 3 本。
+- **`guard` job は read-only で、ビルドコードを一切実行しない。** version 検証と main 到達性検証を
+  ここで済ませてから、`contents: write` を持つ `draft-release` job を動かす。
 - version は tag から抽出し、`^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$` で検証してから
   `dotnet pack -p:Version=<X.Y.Z>` に渡す。不正な tag 名がそのまま MSBuild に流れるのを防ぐ。
+- **tag が main から到達可能であることを GitHub API で検証する。**
+  `gh api repos/{owner}/{repo}/compare/main...<sha>` の `status` が `behind` または `identical` の
+  ときだけ通す(`behind` = main が既にその commit を含む、`identical` = main の先端)。
+  `git merge-base` を使わないのは、そのために `persist-credentials: true` で checkout する必要が
+  生じるため。
 - pack 対象は `src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj` のみ。
 - `dotnet build` / `dotnet test` を ubuntu / windows の matrix で先に通してから pack する。
 - 添付する資産: `.nupkg`、3 RID の single-file app zip、`SHA256SUMS.txt`。
 - `gh release view` で存在確認してから create / upload を出し分け、同一 tag での再実行を冪等にする。
+- **ただし既に publish 済みの release には絶対に upload しない**(`isDraft` を確認して fail させる)。
+  publish 済み release に tag を打ち直して資産だけ差し替えると、`release: published` は再発火しないため、
+  release に添付された資産と feed に push 済みの package が食い違ったまま公開され続ける。
+  その場合は新しい version tag を切る。
 - prerelease version (`-` を含む) の場合は `--prerelease` を付ける。
 - `contents: write` は draft release 作成に必要。
 
 ### release-publish.yml の設計上のポイント
 
-- trigger は `release: [published]`。手動での release publish 以外では動かない。
-- **再ビルドしない。** `gh release download --pattern '*.nupkg'` で release に添付された
-  bits をそのまま push する。レビューしたものと publish するものを一致させるため。
-- push 前に `relaypublisher.<tag から導出した version>.nupkg` が存在することを確認する。
+- trigger は `release: [published]`。ただし **この event は repository 全体で発火する**。
+  `release-draft.yml` が作った draft に限定されないし、`v*` tag に限定もされない。
+  そのため provenance は workflow 側で再検証する。
+- **read-only の `guard` job で 3 段の provenance 検証を行い、それが通るまで publishing secrets を
+  持つ job を起動しない。**
+  1. tag が `v` 前置 + `^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$` に一致すること。
+  2. tag が指す commit が main から到達可能であること(annotated tag は dereference してから
+     `compare/main...<sha>` を見る)。
+  3. release に添付された `.nupkg` が `relaypublisher.<version>.nupkg` **ちょうど 1 個**であること。
+     `release-draft.yml` は 1 個しか添付しないため、それ以外は別経路で作られた release を意味する。
+- **再ビルドしない。** `gh release download --pattern "relaypublisher.<version>.nupkg"` で
+  release に添付された bits をそのまま push する。レビューしたものと publish するものを
+  一致させるため。ワイルドカードでは download も push もしない。
 - `environment: release` に publishing secrets をスコープする。必要なら required reviewers も付ける。
+  event 由来の trigger に対する最終的な人間側のゲートはこの environment protection。
 - Azure Artifacts は Microsoft Learn の
   [GitHub Actions → Azure Artifacts quickstart (managed identity)](https://learn.microsoft.com/azure/devops/artifacts/quickstarts/github-actions?view=azure-devops)
   に準拠する。`azure/login` → credential provider install →
   `az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798` →
   `VSS_NUGET_ACCESSTOKEN` / `VSS_NUGET_URI_PREFIXES` を設定 → `dotnet nuget push --api-key AzureDevOps`。
   `499b84ac-1321-427f-aa17-267ca6975798` は Azure DevOps の固定リソース ID。
+  ただし credential provider の install だけは Learn の例(`curl ... aka.ms/... | sh`)を採らず、
+  署名済み NuGet package `Microsoft.Artifacts.CredentialProvider.NuGet.Tool` を version 固定で
+  `dotnet tool install` する(§11a の共通方針)。
 - **feed URL は secret** (`AZURE_ARTIFACTS_FEED_URL`)。`VSS_NUGET_URI_PREFIXES` はその場で導出し、
   `::add-mask::` でマスクしてからログに出さないようにする。取得した access token も同様にマスクする。
 - 3 feed とも `--skip-duplicate` を付け、release publish のやり直しを冪等にする。

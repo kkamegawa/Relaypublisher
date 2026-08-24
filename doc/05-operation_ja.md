@@ -14,7 +14,7 @@ Relaypublisher は NuGet global tool として配布します。同じ version �
 | Feed | 想定利用者 |
 | --- | --- |
 | nuget.org | 一般利用者。既定の source なので追加指定は不要です。 |
-| GitHub Packages | この repository を直接使う利用者。`read:packages` 権限の GitHub token が必要です。 |
+| GitHub Packages | この repository を直接使う利用者。package が public でも `read:packages` 権限の GitHub token が必ず必要です。 |
 | Azure Artifacts | 社内 CI / 閉じたネットワーク。組織の feed へのアクセス権が必要です。 |
 
 nuget.org からの install:
@@ -23,17 +23,50 @@ nuget.org からの install:
 dotnet tool install --global relaypublisher
 ```
 
-GitHub Packages からの install:
+GitHub Packages からの install。`--add-source` は feed URL を渡すだけで認証は行いません。
+GitHub Packages は package が public でも匿名の NuGet リクエストに 401 を返すため、先に認証情報つきで
+source を登録します:
 
 ```bash
-dotnet tool install --global relaypublisher   --add-source "https://nuget.pkg.github.com/<owner>/index.json"
+# token は環境変数で渡します。コマンドラインに直接書かないでください。
+export GH_PACKAGES_TOKEN="<github-pat-with-read-packages>"
+
+dotnet nuget add source "https://nuget.pkg.github.com/<owner>/index.json"   --name relaypublisher-github   --username "<github-username>"   --password "$GH_PACKAGES_TOKEN"   --store-password-in-clear-text
+
+dotnet tool install --global relaypublisher --add-source relaypublisher-github
 ```
 
-Azure Artifacts からの install（credential provider 設定後）:
+PowerShell 7:
+
+```powershell
+$env:GH_PACKAGES_TOKEN = '<github-pat-with-read-packages>'
+
+dotnet nuget add source "https://nuget.pkg.github.com/<owner>/index.json" `
+  --name relaypublisher-github `
+  --username "<github-username>" `
+  --password $env:GH_PACKAGES_TOKEN `
+  --store-password-in-clear-text
+
+dotnet tool install --global relaypublisher --add-source relaypublisher-github
+```
+
+`--store-password-in-clear-text` はユーザーレベルの *NuGet.config* に token を平文で書き込みます。
+NuGet の暗号化ストアが Windows 専用のため、Linux / macOS では必須です。この設定ファイル自体を
+secret として扱うか、Windows ではこのフラグを外してください。不要になったら
+`dotnet nuget remove source relaypublisher-github` で削除します。
+
+Azure Artifacts からの install。先に credential provider を入れ、初回だけ認証します:
 
 ```bash
-dotnet tool install --global relaypublisher   --add-source "<azure-artifacts-feed-v3-index-url>"
+dotnet tool install --global Microsoft.Artifacts.CredentialProvider.NuGet.Tool   --source https://api.nuget.org/v3/index.json
+
+dotnet nuget add source "<azure-artifacts-feed-v3-index-url>" --name relaypublisher-ado
+
+dotnet tool install --global relaypublisher --add-source relaypublisher-ado --interactive
 ```
+
+`--interactive` で初回のサインインプロンプトが出ます。以降はキャッシュされた session token を
+再利用するため、このフラグは不要です。
 
 Update:
 
