@@ -86,3 +86,20 @@
   - **影響**: public 化後は fork からの PR が走るため、`ci.yml` は secrets を一切参照しない設計にした
     (`pull_request_target` も使わない)。`doc/00-overview.md` のリポジトリ構成図と
     `doc/05-operation.md` §6 の checklist を、利用者向けと Relaypublisher 自身向けに分けて記述し直した。
+
+## 2026-08-25: win32LobApp payload に `setupFilePath` / `fileName` を追加
+
+- **決定**: `Win32LobAppPayloadMapper` が Graph へ送る `win32LobApp` payload に `setupFilePath`
+  (manifest `Package.IntuneWin.SetupFile`、バックスラッシュ区切りに正規化)と `fileName`
+  (`.intunewin` ファイル名。`IntuneWinPackager` と同じ命名規則を共有ヘルパーに切り出して使う)を追加する。
+  - **理由**: production への publish が `POST /v1.0/deviceAppManagement/mobileApps` で
+    `400 The Win32LobApp must have a valid value for the SetupFilePath property.` により失敗した。
+    `doc/issues/issue-003-intune-graph-win32.md` の "Create / update mapping" 節がそもそも
+    `setupFilePath` に触れておらず、実装(`Win32LobAppPayload.cs` / `Win32LobAppPayloadMapper.cs`)にも
+    該当プロパティが存在しなかった。`fileName`(`mobileLobApp` 継承の必須プロパティ)も同様に欠落して
+    いたため、`setupFilePath` を直しても次の 400 で再度失敗する可能性があり、同時に追加した。
+  - **影響**: `400` は create の最初の書き込みで発生していたため、テナント側に不完全なアプリは残って
+    いない。既存の app は存在しないので update 側の後方互換は考慮不要。
+  - **今後の注意**: `win32LobApp` の必須プロパティを追加・変更する場合は、必ず Microsoft Learn の
+    [win32LobApp resource type](https://learn.microsoft.com/graph/api/resources/intune-apps-win32lobapp?view=graph-rest-1.0)
+    で必須/オプションを裏取りしてから `issue-003` を更新し、その後に実装すること(今回の bug の再発防止)。

@@ -46,6 +46,8 @@ public sealed class GraphWin32LobAppClientTests
         UninstallCommandLine = "uninstall.cmd",
         AllowedArchitectures = "x64",
         MinimumSupportedWindowsRelease = "21H2",
+        SetupFilePath = "contoso-tool.exe",
+        FileName = "contoso-tool.intunewin",
         InstallExperience = new Win32LobAppInstallExperiencePayload
         {
             RunAsAccount = "system",
@@ -79,6 +81,8 @@ public sealed class GraphWin32LobAppClientTests
         StringAssert.Contains(body, "\"@odata.type\":\"#microsoft.graph.win32LobApp\"");
         StringAssert.Contains(body, "\"displayName\":\"Contoso Tool\"");
         StringAssert.Contains(body, "\"notes\":");
+        StringAssert.Contains(body, "\"setupFilePath\":\"contoso-tool.exe\"");
+        StringAssert.Contains(body, "\"fileName\":\"contoso-tool.intunewin\"");
     }
 
     [TestMethod]
@@ -121,6 +125,8 @@ public sealed class GraphWin32LobAppClientTests
         Assert.AreEqual("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app%201", handler.Requests[0].Uri);
         var body = handler.Requests[0].Body!;
         StringAssert.Contains(body, "\"displayName\":\"Contoso Tool\"");
+        StringAssert.Contains(body, "\"setupFilePath\":\"contoso-tool.exe\"");
+        StringAssert.Contains(body, "\"fileName\":\"contoso-tool.intunewin\"");
         Assert.IsFalse(body.Contains("\"notes\""), "Update must omit notes so the content upload flow owns that field.");
     }
 

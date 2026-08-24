@@ -64,6 +64,18 @@ public sealed class Win32LobAppPayload
     [JsonPropertyName("minimumSupportedWindowsRelease")]
     public required string MinimumSupportedWindowsRelease { get; init; }
 
+    /// <summary>
+    /// Relative path of the setup file inside the encrypted <c>.intunewin</c> package (from manifest
+    /// `Package.IntuneWin.SetupFile`). Graph requires this: omitting it fails app creation with
+    /// "400 The Win32LobApp must have a valid value for the SetupFilePath property." (doc/adr.md 2026-08-25).
+    /// </summary>
+    [JsonPropertyName("setupFilePath")]
+    public required string SetupFilePath { get; init; }
+
+    /// <summary>The generated `.intunewin` file name (`mobileLobApp.fileName`), e.g. "Contoso Setup.intunewin".</summary>
+    [JsonPropertyName("fileName")]
+    public required string FileName { get; init; }
+
     [JsonPropertyName("installExperience")]
     public required Win32LobAppInstallExperiencePayload InstallExperience { get; init; }
 

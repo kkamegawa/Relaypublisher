@@ -385,6 +385,16 @@ If publish reports missing package metadata:
   entry - a skip, a dry-run, or a failure before the preflight. It does not mean categories were cleared. A
   failure after the app was resolved still reports `appId` as null, which is the accepted result-file shape.
 
+## 6c. Windows Create Fails With `SetupFilePath`
+
+- **Graph 400 `The Win32LobApp must have a valid value for the SetupFilePath property.`**: fixed in
+  this release. Older builds omitted `setupFilePath` (and `fileName`) from the `win32LobApp` create/update
+  payload entirely (`Win32LobAppPayloadMapper`), so Graph rejected the very first write for any new Windows
+  app - `0 published, ... 1 failed` with no app created (the failure happens before content upload, so no
+  partial/incomplete app is left behind in the tenant). Upgrade the CLI to a version that includes
+  `setupFilePath`/`fileName` mapping (doc/adr.md 2026-08-25 entry) and rerun `publish`; no manifest or
+  package change is needed since the value comes from the already-required `Package.IntuneWin.SetupFile`.
+
 ## 7. Safe Rerun Rules
 
 - `validate`, `plan`, and `package --stage-only` are safe to rerun.

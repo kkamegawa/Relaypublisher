@@ -1,6 +1,7 @@
 using System.Text;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
+using IntuneLobPublisher.Core.Packaging;
 
 namespace IntuneLobPublisher.Core.Publishing;
 
@@ -37,6 +38,7 @@ public static class Win32LobAppPayloadMapper
     {
         var install = app.Install!;
         var detection = app.Detection;
+        var setupFile = app.Package!.IntuneWin!.SetupFile!;
 
         return new Win32LobAppPayload
         {
@@ -52,6 +54,8 @@ public static class Win32LobAppPayloadMapper
             UninstallCommandLine = install.UninstallCommandLine!,
             AllowedArchitectures = app.Architecture!,
             MinimumSupportedWindowsRelease = WindowsReleaseTable.Map(app.Requirements!.MinimumOSVersion!),
+            SetupFilePath = setupFile.Replace('/', '\\'),
+            FileName = IntuneWinNaming.PackageFileNameFor(setupFile),
             InstallExperience = new Win32LobAppInstallExperiencePayload
             {
                 RunAsAccount = install.InstallExperience!,
