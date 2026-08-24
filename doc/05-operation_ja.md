@@ -8,13 +8,65 @@
 
 ## 0. ツールのインストールとバージョン運用
 
-Relaypublisher は NuGet global tool として配布します。
+Relaypublisher は NuGet global tool として配布します。同じ version を 3 つの feed に publish するため、
+環境から到達できる feed を選んでください。
 
-Install:
+| Feed | 想定利用者 |
+| --- | --- |
+| nuget.org | 一般利用者。既定の source なので追加指定は不要です。 |
+| GitHub Packages | この repository を直接使う利用者。package が public でも `read:packages` 権限の GitHub token が必ず必要です。 |
+| Azure Artifacts | 社内 CI / 閉じたネットワーク。組織の feed へのアクセス権が必要です。 |
+
+nuget.org からの install:
 
 ```bash
 dotnet tool install --global relaypublisher
 ```
+
+GitHub Packages からの install。`--add-source` は feed URL を渡すだけで認証は行いません。
+GitHub Packages は package が public でも匿名の NuGet リクエストに 401 を返すため、先に認証情報つきで
+source を登録します:
+
+```bash
+# token は環境変数で渡します。コマンドラインに直接書かないでください。
+export GH_PACKAGES_TOKEN="<github-pat-with-read-packages>"
+
+dotnet nuget add source "https://nuget.pkg.github.com/<owner>/index.json"   --name relaypublisher-github   --username "<github-username>"   --password "$GH_PACKAGES_TOKEN"   --store-password-in-clear-text
+
+dotnet tool install --global relaypublisher --add-source relaypublisher-github
+```
+
+PowerShell 7:
+
+```powershell
+$env:GH_PACKAGES_TOKEN = '<github-pat-with-read-packages>'
+
+dotnet nuget add source "https://nuget.pkg.github.com/<owner>/index.json" `
+  --name relaypublisher-github `
+  --username "<github-username>" `
+  --password $env:GH_PACKAGES_TOKEN `
+  --store-password-in-clear-text
+
+dotnet tool install --global relaypublisher --add-source relaypublisher-github
+```
+
+`--store-password-in-clear-text` はユーザーレベルの *NuGet.config* に token を平文で書き込みます。
+NuGet の暗号化ストアが Windows 専用のため、Linux / macOS では必須です。この設定ファイル自体を
+secret として扱うか、Windows ではこのフラグを外してください。不要になったら
+`dotnet nuget remove source relaypublisher-github` で削除します。
+
+Azure Artifacts からの install。先に credential provider を入れ、初回だけ認証します:
+
+```bash
+dotnet tool install --global Microsoft.Artifacts.CredentialProvider.NuGet.Tool   --source https://api.nuget.org/v3/index.json
+
+dotnet nuget add source "<azure-artifacts-feed-v3-index-url>" --name relaypublisher-ado
+
+dotnet tool install --global relaypublisher --add-source relaypublisher-ado --interactive
+```
+
+`--interactive` で初回のサインインプロンプトが出ます。以降はキャッシュされた session token を
+再利用するため、このフラグは不要です。
 
 Update:
 
@@ -39,6 +91,11 @@ dotnet tool list --global | grep relaypublisher
 - Published package ID: `relaypublisher`
 - Command name: `relaypublisher`
 - Package version source: Git tag `vX.Y.Z` を CI が `-p:Version=X.Y.Z` で注入する
+- リリースの流れ: main に `v*` tag を push すると、`.nupkg`、self-contained single-file app
+  (`win-x64` / `win-arm64` / `osx-arm64`)、`SHA256SUMS.txt` を添付した **draft** GitHub release が作られます。
+  その draft release を手動で publish した時点で 3 つの feed への push が走ります。
+  詳細は [03-ci-github-actions.md](03-ci-github-actions.md) §12a を参照してください。
+- single-file app には署名・notarization を行っていません。macOS では Gatekeeper の警告が出ます。
 
 ## 1. Microsoft Entra app registration
 
@@ -465,6 +522,10 @@ Apps:
 `workflows/` の参照 sample をコピーした後、次を確認します。sample は対象 repository にコピーするまで
 自動的には有効になりません。
 
+この節は Intune app を publish する**利用者側**の workflow を対象とします。Relaypublisher 自身の CI/CD は
+`.github/workflows/` にあり、この repository で既に有効です。そちらの checklist は後述の
+「Relaypublisher release pipeline」を参照してください。
+
 ### 共通
 
 - [ ] 対象 repository に workflow をコピーし、trigger が参照する manifest / script path が存在する。
@@ -476,7 +537,6 @@ Apps:
 ### GitHub Actions
 
 - [ ] `workflows/github-actions/publish-intune-apps.yml` を `.github/workflows/publish-intune-apps.yml` にコピーする。
-- [ ] PR build validation が必要なら `workflows/github-actions/ci.yml` を `.github/workflows/ci.yml` にコピーする。
 - [ ] `production` environment を作成し、reviewer または policy で保護する。
 - [ ] `id-token: write` は OIDC が必要な job だけに付与し、PR validation job には付与しない。
 - [ ] GitHub federated credential に issuer `https://token.actions.githubusercontent.com/`、subject `repo:<owner>/<repo>:environment:production`、audience `api://AzureADTokenExchange` を設定する。
@@ -492,6 +552,22 @@ Apps:
 - [ ] sample が使う protected variable group に `AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、`AZURE_SUBSCRIPTION_ID`、expected tenant を登録する。
 - [ ] `githubRelease` を使う場合は `Auth.SecretName` の secret（例: `GH_RELEASE_PAT`）を package job だけに map する。
 - [ ] `azureBlob` を使う場合は package job が authorized service connection と storage reader role を使うことを確認する。
+
+### Relaypublisher release pipeline
+
+これは Relaypublisher repository 自身に対する項目です。利用者 repository には適用しません。
+
+- [ ] `release` GitHub environment を作成し、publishing secrets を repository ではなくこの environment に置く。
+- [ ] `NUGET_API_KEY` は nuget.org の package publish 権限のみを持つ key にする。
+- [ ] `AZURE_ARTIFACTS_FEED_URL` に feed の v3 `index.json` URL を入れる。URL が workflow のログに出ないよう
+      必ず secret にする。
+- [ ] user-assigned managed identity を作成し、その client ID / tenant ID / subscription ID を
+      `AZURE_ARTIFACTS_CLIENT_ID` / `AZURE_ARTIFACTS_TENANT_ID` / `AZURE_ARTIFACTS_SUBSCRIPTION_ID` に設定する。
+- [ ] その managed identity に、この repository の `release` environment を信頼する federated identity
+      credential を audience `api://AzureADTokenExchange` で設定する。
+- [ ] Azure DevOps 側で、その managed identity を対象プロジェクトの **Contributors** グループに追加する。
+- [ ] `packages: write` と `id-token: write` を持つ workflow が `release-publish.yml` だけであることを確認する。
+- [ ] `ci.yml` が secrets を一切参照していないことを確認する（fork からの PR を通すため）。
 
 ## 7. Production checklist
 

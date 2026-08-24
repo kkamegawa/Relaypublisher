@@ -105,11 +105,14 @@ repo/
     manifest-schema.md
     operation.md
     troubleshooting.md
+  .github/
+    workflows/
+      ci.yml
+      release-draft.yml
+      release-publish.yml
   workflows/
     github-actions/
-      ci.yml
       publish-intune-apps.yml
-      release-nuget-tool.yml
     azure-pipelines/
       azure-pipelines.yml
       release-nuget-tool.yml
@@ -118,8 +121,13 @@ repo/
   SECURITY.md
 ```
 
-`workflows/` 配下は参照用サンプルであり、この repository で自動的に有効になる workflow ではない。
-GitHub Actions の publish / CI sample は対象 repository の `.github/workflows/` に、Azure Pipelines の
+`.github/workflows/` 配下は **この repository 自身の CI/CD** であり、実際に動作する。
+`ci.yml` が pull request の build / test / 成果物生成、`release-draft.yml` が `v*` tag からの draft release
+作成、`release-publish.yml` が draft release の手動 publish をトリガーとする NuGet feed への push を行う。
+詳細は `doc/03-ci-github-actions.md` §11b / §12a を参照する。
+
+`workflows/` 配下は**利用者向けの参照用サンプル**であり、この repository では有効にならない。
+GitHub Actions の publish sample は対象 repository の `.github/workflows/` に、Azure Pipelines の
 publish sample は対象 repository の root にコピーしてから、`doc/05-operation.md` の workflow setup
 checklist に従って secret、variable、environment、service connection を設定する。
 

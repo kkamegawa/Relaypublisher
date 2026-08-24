@@ -2,6 +2,126 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-08-24: GitHub Actions CI/CD の設計と実装 (public 化前提)
+
+**ブランチ**: `feature/add-github-actions-ci`
+
+**対応 Issue**: なし(リモートの GitHub MCP が未認証のため issue を起票できず)。設計正本としては
+[issue-019](issues/issue-019-nuget-global-tool-distribution.md) のスコープを更新して対応した。
+
+**背景**: このリポジトリは `.github/workflows/` に実 workflow を 1 本も持たず、CI らしきものは
+`workflows/github-actions/` の「コピーして使う参照サンプル」だけだった。将来 public 化する前提で、
+リポジトリ自身の CI/CD を実装する必要があった。
+
+### 確定した要件(ユーザー回答済み)
+
+| 項目 | 決定 |
+|---|---|
+| main への PR | build / test を実行し、NuGet package と single-file self-contained app を成果物として生成 |
+| main 到達可能な `v*` tag push | draft release を作成し成果物を添付。release の publish は手動 |
+| feed への push タイミング | draft release を人が publish した時点 (`release: published`) |
+| publish 先 feed | GitHub Packages / Azure Artifacts / nuget.org の 3 つ |
+| Azure Artifacts 認証 | OIDC (workload identity federation) + artifacts-credprovider。feed URL は secret |
+| single-file RID | `win-x64` / `win-arm64` / `osx-arm64` |
+
+### 実施内容(承認済み plan に基づく)
+
+1. **workflow 3 本の作成**: `ci.yml`(PR/main の build・test・pack・single-file publish、secrets 不使用)、
+   `release-draft.yml`(`v*` tag → main 到達性検証 → pack/publish → draft release 作成)、
+   `release-publish.yml`(`release: published` → release 資産の `.nupkg` を 3 feed へ push)。
+   YAML の構文と job 構造は検証済み。
+   `uses:` は **すべて最新リリースの commit SHA でピン留め**した(`actions/checkout` v7.0.1 /
+   `actions/setup-dotnet` v6.0.0 / `actions/upload-artifact` v7.0.1 / `azure/login` v3.0.1)。
+   当初 plan では `actions/*` を major tag のままにしていたが、public リポジトリの supply chain 上
+   tag は付け替え可能でありピン留めにならないため、ユーザー指摘を受けて全件 SHA 固定に変更した。
+   あわせて `release-draft.yml` の `git fetch --no-tags --depth=0 origin main` を修正した
+   (`--depth=0` は git が受け付けない。`fetch-depth: 0` で既に full clone のため `--depth` は不要)。
+2. **参照サンプルの整理**: `workflows/github-actions/ci.yml` と `release-nuget-tool.yml` を削除した。
+   Relaypublisher 自身のビルド/リリースであり、実 workflow 化すると重複するため。
+   利用者向けの `publish-intune-apps.yml` と `workflows/azure-pipelines/` は残した。
+3. **ドキュメント更新**: [03-ci-github-actions.md](03-ci-github-actions.md) の §11b / §12a を実 CI の設計に
+   書き換え、冒頭に「Relaypublisher 自身の CI/CD」と「利用者向けサンプル」の区別表を追加。
+   [00-overview.md](00-overview.md) のリポジトリ構成図を更新。
+   [05-operation.md](05-operation.md) / [05-operation_ja.md](05-operation_ja.md) の §0 に 3 feed からの
+   install 手順を、§6 に「Relaypublisher release pipeline」checklist を追加。
+   [README.md](../README.md) / [README_ja.md](../README_ja.md) に workflow 節を追加。
+   [issue-019](issues/issue-019-nuget-global-tool-distribution.md) のスコープを更新。
+4. **設計判断の記録**: [adr.md](adr.md) に 3 feed 化・`release: published` gating・
+   `.github/workflows/` への移動の 3 件を記録。
+
+### 2026-08-24 追記: PR #102 のレビュー指摘対応
+
+[PR #102](https://github.com/kkamegawa/Relaypublisher/pull/102) の Copilot レビューで挙がった
+workflow のセキュリティ / release 整合性の指摘 7 件に対応した。
+
+1. **publish 済み release への upload を禁止** (`release-draft.yml`): 既存 release があるとき
+   `isDraft` を確認し、draft でなければ fail させる。publish 済み release に tag を打ち直して資産を
+   差し替えても `release: published` は再発火しないため、release の添付物と feed に push 済みの
+   package が食い違ったまま公開され続ける事故を防ぐ。
+2. **`persist-credentials: false` を全 checkout に付与** (3 本すべて): 既定の `true` は job token を
+   `.git/config` に書き込む。とくに `contents: write` を持つ `draft-release` job では、その後に走る
+   `dotnet pack` / `dotnet publish`(tag 時点のビルドコードと NuGet 依存関係)が token を読み出せる。
+3. **`git merge-base` を GitHub API 比較に置き換え**: `persist-credentials: true` を必要としないよう、
+   main 到達性の検証を `gh api repos/{owner}/{repo}/compare/main...<sha>` の `status` で行う
+   (`behind` / `identical` のみ通す)。あわせて read-only の `guard` job に切り出し、ビルドコードを
+   実行しない状態で provenance を確定させてから write 権限を持つ job を動かす構成にした。
+4. **`dotnet nuget push` のワイルドカードを廃止** (`release-publish.yml`): 3 feed とも
+   `relaypublisher.<version>.nupkg` の実パスを指定する。`gh release download` も同様に
+   `--pattern` を実ファイル名に固定した。release に別の `.nupkg` が添付されていた場合の巻き込み
+   publish を防ぐ。
+5. **`curl | sh` による credential provider install を廃止**: 可変リダイレクト(`aka.ms`)越しの
+   スクリプトを publishing secrets と OIDC token を持つ job で実行しないため、署名済み NuGet package
+   `Microsoft.Artifacts.CredentialProvider.NuGet.Tool` を `--version 2.0.4` 固定で
+   `dotnet tool install` する方式に変更した。
+6. **`release: published` の provenance ガードを追加**: この event は repository 全体で発火し、
+   `release-draft.yml` が作った draft にも `v*` tag にも限定されない。read-only の `guard` job で
+   (a) tag 形式、(b) tag commit の main 到達性、(c) 添付 `.nupkg` が `relaypublisher.<version>.nupkg`
+   ちょうど 1 個であること、の 3 段を検証してから publish job を起動する。
+7. **GitHub Packages の install 手順を修正** ([05-operation.md](05-operation.md) /
+   [05-operation_ja.md](05-operation_ja.md)): `--add-source` は feed URL を渡すだけで認証しない。
+   GitHub Packages は package が public でも匿名リクエストに 401 を返すため、
+   `dotnet nuget add source --username --password --store-password-in-clear-text` で認証情報つきの
+   source を先に登録する手順に書き換えた(bash / PowerShell 7 両方)。平文保存のリスクと
+   source 削除方法も明記。Azure Artifacts 側も credential provider install と `--interactive` を
+   含む実際に通る手順に修正した。
+
+設計正本側は [03-ci-github-actions.md](03-ci-github-actions.md) §11a に
+`persist-credentials: false` 必須・`curl | sh` 禁止・push のワイルドカード禁止を共通方針として追記し、
+§12a の `release-draft.yml` / `release-publish.yml` の設計ポイントを上記に合わせて更新した。
+
+**未検証**: `Microsoft.Artifacts.CredentialProvider.NuGet.Tool` を `dotnet tool install` した場合に
+plugin discovery が期待どおり働き、`VSS_NUGET_ACCESSTOKEN` / `VSS_NUGET_URI_PREFIXES` を読むかは
+実環境で未確認。Microsoft Learn の推奨手順ではあるが、初回の実リリースで確認が必要。
+
+### 検証結果
+
+```
+dotnet pack src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj -c Release -p:Version=0.0.0-ci.1
+→ relaypublisher.0.0.0-ci.1.nupkg を生成。release-publish.yml の version 整合チェックが期待する
+  ファイル名 `relaypublisher.<version>.nupkg` と一致することを確認。
+
+dotnet publish -r {win-x64|win-arm64|osx-arm64} --self-contained true -p:PublishSingleFile=true
+→ 3 RID とも単一実行ファイルを生成(80–89 MB)。
+  artifacts/single-file/win-x64/relaypublisher.exe --help の起動を確認。
+
+dotnet build IntuneLobPublisher.slnx -c Release  (WSL / Ubuntu / .NET SDK 10.0.111)
+→ ビルドに成功しました。0 エラー、2 警告(既存の CS8631)。
+```
+
+### 未確定事項
+
+- **Linux での `dotnet test` はローカル未検証。** WSL 上で VSTest の testhost が
+  vstest.console に接続できず(`failed to connect to testhost process`、WSL の systemd user session 起動
+  失敗が原因と思われる)、テスト実行そのものができなかった。ビルドは通っている。コード側は
+  `PathSafety.IsSafeRelativePath` がドライブレター前置とセパレータを明示的に検査しており
+  ([PathSafety.cs](../src/IntuneLobPublisher.Core/Staging/PathSafety.cs))、`IntuneWinPackagerTests` は
+  `[OSCondition(OperatingSystems.Windows)]` で除外されているため、Linux 固有の失敗は想定していないが、
+  **CI の ubuntu leg が実質的な初回検証**になる。最初の PR で赤くなったらそこで対処する。
+- `release-publish.yml` は secrets 投入と Azure 側の事前セットアップ(managed identity /
+  federated credential / Azure DevOps Contributors 追加)が済むまで実行できない。初回の実リリースが初検証。
+- workflow ファイルの配置はユーザーが手動で行った(`.github/workflows/**` がエージェントの
+  書き込み deny 対象のため)。
+
 ## 2026-08-21: macOS PKG アップロード HTTP 400 の根本修正
 
 **ブランチ**: `fix/97-contentversions-compile-error`
