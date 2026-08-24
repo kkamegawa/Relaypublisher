@@ -8,12 +8,31 @@ For a complete local terminal procedure, see [07-local-e2e.md](07-local-e2e.md).
 
 ## 0. Tool Installation and Version Control
 
-Relaypublisher is distributed as a NuGet global tool.
+Relaypublisher is distributed as a NuGet global tool. The same package version is published to three
+feeds, so pick the one your environment can reach:
 
-Install:
+| Feed | Intended consumer |
+| --- | --- |
+| nuget.org | General users. This is the default source, so no extra flag is needed. |
+| GitHub Packages | Users working from this repository. Requires a GitHub token with `read:packages`. |
+| Azure Artifacts | Internal CI or closed networks. Requires access to the organization's feed. |
+
+Install from nuget.org:
 
 ```bash
 dotnet tool install --global relaypublisher
+```
+
+Install from GitHub Packages:
+
+```bash
+dotnet tool install --global relaypublisher   --add-source "https://nuget.pkg.github.com/<owner>/index.json"
+```
+
+Install from Azure Artifacts (after the credential provider is set up):
+
+```bash
+dotnet tool install --global relaypublisher   --add-source "<azure-artifacts-feed-v3-index-url>"
 ```
 
 Update:
@@ -39,6 +58,11 @@ Release version policy:
 - Published package ID: `relaypublisher`
 - Command name: `relaypublisher`
 - Package version source: Git tag `vX.Y.Z` injected by CI (`-p:Version=X.Y.Z`)
+- Release flow: pushing a `v*` tag onto main creates a **draft** GitHub release with the `.nupkg`,
+  the self-contained single-file apps (`win-x64`, `win-arm64`, `osx-arm64`) and `SHA256SUMS.txt`.
+  Publishing that draft release by hand is what pushes the package to the three feeds.
+  See [03-ci-github-actions.md](03-ci-github-actions.md) section 12a.
+- The single-file apps are neither code-signed nor notarized. macOS shows a Gatekeeper warning.
 
 ## 1. Microsoft Entra App Registration
 
@@ -479,6 +503,10 @@ Operational notes:
 Complete this checklist after copying a reference sample from `workflows/`. The sample files are not active until
 they are copied into the target repository.
 
+This section covers the *consumer* workflows that publish Intune apps. Relaypublisher's own CI/CD lives in
+`.github/workflows/` and is already active in this repository; its setup checklist is in
+"Relaypublisher release pipeline" below.
+
 ### Common
 
 - [ ] The target repository contains the copied workflow and the manifest / script paths used by its triggers.
@@ -490,7 +518,6 @@ they are copied into the target repository.
 ### GitHub Actions
 
 - [ ] Copy `workflows/github-actions/publish-intune-apps.yml` to `.github/workflows/publish-intune-apps.yml`.
-- [ ] Copy `workflows/github-actions/ci.yml` to `.github/workflows/ci.yml` if PR build validation is required.
 - [ ] Create the `production` environment and protect it with the required reviewers or policy.
 - [ ] Give `id-token: write` only to jobs that need OIDC; PR validation jobs must not receive it.
 - [ ] Configure the GitHub federated credential with issuer `https://token.actions.githubusercontent.com/`, subject `repo:<owner>/<repo>:environment:production`, and audience `api://AzureADTokenExchange`.
@@ -506,6 +533,23 @@ they are copied into the target repository.
 - [ ] Add the protected variable group used by the sample, including `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, and the expected tenant value.
 - [ ] If a manifest uses `githubRelease`, map the secret named by `Auth.SecretName` (for example `GH_RELEASE_PAT`) only to the package job.
 - [ ] If a manifest uses `azureBlob`, ensure the package job uses the authorized service connection and has the storage reader role.
+
+### Relaypublisher release pipeline
+
+This applies to the Relaypublisher repository itself, not to consumer repositories.
+
+- [ ] Create the `release` GitHub environment and store the publishing secrets on it, not on the repository.
+- [ ] `NUGET_API_KEY` holds a nuget.org key scoped to package publish only.
+- [ ] `AZURE_ARTIFACTS_FEED_URL` holds the feed's v3 `index.json` URL. Keep it a secret so the URL never
+      reaches the workflow logs.
+- [ ] Create a user-assigned managed identity and copy its client ID, tenant ID, and subscription ID into
+      `AZURE_ARTIFACTS_CLIENT_ID`, `AZURE_ARTIFACTS_TENANT_ID`, and `AZURE_ARTIFACTS_SUBSCRIPTION_ID`.
+- [ ] Configure a federated identity credential on that managed identity that trusts this repository's
+      `release` environment, with audience `api://AzureADTokenExchange`.
+- [ ] In Azure DevOps, add the managed identity to the target project's **Contributors** group so it can
+      push to the feed.
+- [ ] Confirm `release-publish.yml` is the only workflow with `packages: write` and `id-token: write`.
+- [ ] Confirm `ci.yml` references no secrets, so pull requests from forks still pass.
 
 ## 7. Production Checklist
 

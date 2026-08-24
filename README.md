@@ -7,12 +7,18 @@ Distribution:
 - NuGet global tool package id: `relaypublisher`
 - Command name: `relaypublisher`
 - Package version: injected by CI from Git tag `vX.Y.Z`
+- Feeds: nuget.org, GitHub Packages (this repository), and Azure Artifacts
+- Self-contained single-file apps for `win-x64`, `win-arm64`, and `osx-arm64` are attached to each
+  GitHub release. They are neither code-signed nor notarized, so macOS shows a Gatekeeper warning.
 
 Quick install:
 
 ```bash
 dotnet tool install --global relaypublisher
 ```
+
+See [doc/05-operation.md](doc/05-operation.md#0-tool-installation-and-version-control) for installing
+from GitHub Packages or Azure Artifacts instead.
 
 The repository now contains the .NET CLI foundation for the normal workflow:
 
@@ -63,15 +69,28 @@ and validation rules, and [doc/00-overview.md](doc/00-overview.md) §6.13 for th
 
 Japanese translations are provided with the `_ja` postfix, for example [doc/05-operation_ja.md](doc/05-operation_ja.md).
 
+## Workflows
+
+`.github/workflows/` holds this repository's own CI/CD and is active here:
+
+- `ci.yml` - builds and tests every pull request targeting main on Linux and Windows, and produces the
+  NuGet package and the self-contained single-file apps as artifacts. It uses no secrets, so pull
+  requests from forks pass.
+- `release-draft.yml` - on a `v*` tag pushed onto main, packs the release and creates a **draft** GitHub
+  release with the `.nupkg`, the single-file app archives, and `SHA256SUMS.txt`.
+- `release-publish.yml` - when that draft release is published by hand, pushes the released `.nupkg` to
+  GitHub Packages, Azure Artifacts, and nuget.org.
+
+See [doc/03-ci-github-actions.md](doc/03-ci-github-actions.md) for the design.
+
 ## Workflow Samples
 
-The files under `workflows/` are reference samples and are not enabled automatically in this repository.
-Copy the sample for the CI platform into the target repository, then complete the setup checklist in
-[doc/05-operation.md](doc/05-operation.md#6-workflow-setup-checklist).
+The files under `workflows/` are reference samples for *consumer* repositories and are not enabled
+automatically here. Copy the sample for the CI platform into the target repository, then complete the
+setup checklist in [doc/05-operation.md](doc/05-operation.md#6-workflow-setup-checklist).
 
-- GitHub Actions: copy `workflows/github-actions/publish-intune-apps.yml` and `ci.yml` into `.github/workflows/`.
+- GitHub Actions: copy `workflows/github-actions/publish-intune-apps.yml` into `.github/workflows/`.
 - Azure Pipelines: copy `workflows/azure-pipelines/azure-pipelines.yml` into the target repository root.
-- NuGet release: copy the corresponding `release-nuget-tool.yml` sample and configure its publishing secrets.
 
 ## Basic CLI Flow
 

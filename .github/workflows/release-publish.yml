@@ -1,0 +1,103 @@
+# Push the reviewed release artifacts to the NuGet feeds.
+#
+# Triggered when a human publishes the draft release that release-draft.yml created.
+# The packages are downloaded from the release instead of being rebuilt, so the bits that
+# were reviewed are exactly the bits that get published. A NuGet feed cannot un-publish a
+# version (only unlist it), which is why the manual release publish is the gate.
+name: Release (publish packages)
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+concurrency:
+  group: release-publish-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  push-packages:
+    name: push to GitHub Packages, Azure Artifacts and nuget.org
+    runs-on: ubuntu-latest
+    # Scope the publishing secrets (and optionally required reviewers) to this environment.
+    environment: release
+    permissions:
+      contents: read # gh release download
+      packages: write # GitHub Packages
+      id-token: write # Azure workload identity federation
+    env:
+      TAG_NAME: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Download packages from the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p ./artifacts/nuget
+          gh release download "$TAG_NAME" --pattern '*.nupkg' --dir ./artifacts/nuget
+          ls -l ./artifacts/nuget
+
+      # Guard against publishing a package whose version does not match the released tag.
+      - name: Verify package version matches the tag
+        run: |
+          set -euo pipefail
+          VERSION="${TAG_NAME#v}"
+          EXPECTED="relaypublisher.${VERSION}.nupkg"
+          if [ ! -f "./artifacts/nuget/${EXPECTED}" ]; then
+            echo "::error::expected ./artifacts/nuget/${EXPECTED} on release ${TAG_NAME}"
+            ls -1 ./artifacts/nuget
+            exit 1
+          fi
+
+      - name: Push to GitHub Packages
+        run: >
+          dotnet nuget push ./artifacts/nuget/*.nupkg
+          --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+          --api-key "${{ secrets.GITHUB_TOKEN }}"
+          --skip-duplicate
+
+      - name: Sign in to Azure with workload identity federation
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
+        with:
+          client-id: ${{ secrets.AZURE_ARTIFACTS_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_ARTIFACTS_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_ARTIFACTS_SUBSCRIPTION_ID }}
+
+      - name: Install the Azure Artifacts credential provider
+        run: sh -c "$(curl -fsSL https://aka.ms/install-artifacts-credprovider.sh)"
+
+      - name: Acquire an Azure DevOps token for the credential provider
+        run: |
+          set -euo pipefail
+          # 499b84ac-1321-427f-aa17-267ca6975798 is the fixed Azure DevOps resource id.
+          TOKEN="$(az account get-access-token \
+            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+            --query accessToken -o tsv)"
+          echo "::add-mask::$TOKEN"
+          echo "VSS_NUGET_ACCESSTOKEN=$TOKEN" >> "$GITHUB_ENV"
+          # The feed URL is a secret, so derive the organization prefix here and mask it too.
+          FEED='${{ secrets.AZURE_ARTIFACTS_FEED_URL }}'
+          PREFIX="$(printf '%s' "$FEED" | sed -E 's#^(https://[^/]+/[^/]+)/.*#\1/#')"
+          echo "::add-mask::$PREFIX"
+          echo "VSS_NUGET_URI_PREFIXES=$PREFIX" >> "$GITHUB_ENV"
+
+      - name: Push to Azure Artifacts
+        run: >
+          dotnet nuget push ./artifacts/nuget/*.nupkg
+          --api-key AzureDevOps
+          --source '${{ secrets.AZURE_ARTIFACTS_FEED_URL }}'
+          --skip-duplicate
+
+      - name: Push to nuget.org
+        run: >
+          dotnet nuget push ./artifacts/nuget/*.nupkg
+          --source https://api.nuget.org/v3/index.json
+          --api-key "${{ secrets.NUGET_API_KEY }}"
+          --skip-duplicate

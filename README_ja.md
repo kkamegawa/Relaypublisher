@@ -7,12 +7,18 @@ Relaypublisher は、winget 風の YAML manifest を CI から Microsoft Intune 
 - NuGet global tool package id: `relaypublisher`
 - Command name: `relaypublisher`
 - Package version: Git tag `vX.Y.Z` から CI が注入
+- 配布 feed: nuget.org / GitHub Packages（このリポジトリ）/ Azure Artifacts
+- `win-x64` / `win-arm64` / `osx-arm64` の self-contained single-file app を各 GitHub release に添付します。
+  署名・notarization は行っていないため、macOS では Gatekeeper の警告が出ます。
 
 Install:
 
 ```bash
 dotnet tool install --global relaypublisher
 ```
+
+GitHub Packages / Azure Artifacts からの install 手順は
+[doc/05-operation_ja.md](doc/05-operation_ja.md) を参照してください。
 
 このリポジトリには、通常運用に必要な .NET CLI の基礎実装が含まれています。
 
@@ -23,6 +29,21 @@ dotnet tool install --global relaypublisher
 - `publish` は Intune app の作成・更新、package content upload、app category 同期、assignment 同期を行います。
 
 正式ドキュメントは英語版の [README.md](README.md) です。
+
+## ワークフロー
+
+`.github/workflows/` はこのリポジトリ自身の CI/CD で、実際に動作します。
+
+- `ci.yml` — main への pull request を Linux / Windows で build / test し、NuGet package と
+  single-file app を artifact として生成します。secrets を使わないため fork からの PR も通ります。
+- `release-draft.yml` — main に `v*` tag を push すると、`.nupkg` / single-file app の zip /
+  `SHA256SUMS.txt` を添付した **draft** GitHub release を作成します。
+- `release-publish.yml` — その draft release を手動で publish した時点で、release に添付された `.nupkg` を
+  GitHub Packages / Azure Artifacts / nuget.org へ push します。
+
+設計は [doc/03-ci-github-actions.md](doc/03-ci-github-actions.md) を参照してください。
+
+`workflows/` 配下は**利用者リポジトリ向けの参照サンプル**で、このリポジトリでは有効になりません。
 
 ## 対応プラットフォーム
 

@@ -1,68 +1,57 @@
 # GitHub Actions Workflow
 
+このドキュメントは 2 種類の workflow を扱う。混同しないこと。
+
+| 区分 | 対象 | 置き場所 |
+|---|---|---|
+| **Relaypublisher 自身の CI/CD** (§11b, §12a) | このリポジトリのビルド・テスト・リリース | `.github/workflows/` に実在し、実際に動作する |
+| **利用者向け Intune publish サンプル** (§12) | manifest を持つ利用者リポジトリ | `workflows/github-actions/publish-intune-apps.yml`。コピーして使う参照サンプル |
+
+## 11a. 3 本共通の方針
+
+- workflow top-level は `permissions: {}`。job ごとに必要最小限の permission だけを与える。
+- **`uses:` の参照はすべて 40 桁の commit SHA でピン留めする。** major tag (`@v5` など) は
+  上流が同じ tag を別 commit に付け替えられるため、public リポジトリでは supply chain 上のリスクになる。
+  `actions/*` も例外にしない。行末コメントに対応する semver を書き、更新時はその両方を差し替える。
+  ピン留め対象と現在の版:
+
+  | action | semver | commit SHA |
+  |---|---|---|
+  | `actions/checkout` | v7.0.1 | `3d3c42e5aac5ba805825da76410c181273ba90b1` |
+  | `actions/setup-dotnet` | v6.0.0 | `a98b56852c35b8e3190ac28c8c2271da59106c68` |
+  | `actions/upload-artifact` | v7.0.1 | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` |
+  | `azure/login` | v3.0.1 | `f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca` |
+
+- 実 URL / tenant id / feed URL を YAML に直書きしない(AGENTS.md 禁止事項)。secret 経由で渡す。
+  GitHub Packages の URL だけは認証なしで公開されている既知 URL なので直書きしてよい。
+- secret 由来の値をシェル内で導出した場合は `::add-mask::` でマスクしてからでないと使わない。
+
 ## 11b. CI workflow (PR build / test validation)
 
-main ブランチへの pull request では、build / test に加えて global tool pack の検証まで実行する。
-実際にコピーして使える参照サンプルは `workflows/github-actions/ci.yml`。この repository では有効化されないため、
-対象 repository の `.github/workflows/ci.yml` にコピーして使用する。導入前 checklist は `doc/05-operation.md` §6 を参照する。
-
-PowerShell:
-
-```powershell
-New-Item -ItemType Directory -Force .github/workflows | Out-Null
-Copy-Item workflows/github-actions/ci.yml .github/workflows/ci.yml
-```
-
-bash:
-
-```bash
-mkdir -p .github/workflows
-cp workflows/github-actions/ci.yml .github/workflows/ci.yml
-```
+`.github/workflows/ci.yml`。main ブランチへの pull request と main への push で動作する。
 
 設計上のポイント:
 
-- trigger は `pull_request` の `main` ブランチのみ。
-- `dotnet build` / `dotnet test` を必ず通す。
-- NuGet global tool として pack できることを `dotnet pack -p:Version=0.0.0-ci` で検証する。
-- secrets / OIDC は不要なため `permissions: contents: read` のみ付与する。
+- trigger は `pull_request` (base: `main`) / `push` (`main`) / `workflow_dispatch`。
+  `pull_request_target` は使わない。fork からの PR に secrets と write 権限を渡さないため。
+- **secrets を一切参照しない。** リポジトリを public 化すると fork からの PR が走るため、
+  CI が secrets を要求する設計だと fork PR が構造的に失敗する。
+- workflow top-level は `permissions: {}` とし、job ごとに `contents: read` だけを与える。
+- `actions/setup-dotnet` には `global-json-file: global.json` を渡す。SDK バージョンの正本は
+  `global.json` (`10.0.100` / `rollForward: latestFeature`) の 1 箇所だけにする。
+- job 構成:
+  - `build-test`: `ubuntu-latest` / `windows-latest` の matrix (`fail-fast: false`)。
+    `dotnet build` → `dotnet test`。trx を `if: always()` で artifact 化する。
+  - `package`: `dotnet pack -p:Version=0.0.0-ci.<run_number>` で `.nupkg` を生成し artifact 化する。
+    NuGet global tool として pack できることの検証を兼ねる。
+  - `single-file`: `win-x64` / `win-arm64` / `osx-arm64` の matrix で
+    self-contained single-file app を生成し artifact 化する。
+- single-file は native AOT ではないため、3 RID とも `ubuntu-latest` からクロスビルドできる。
+- **`PublishTrimmed` は明示的に `false`。** YamlDotNet / FluentValidation / Azure.Identity が
+  リフレクションに依存しており、trim すると実行時に落ちる。
+- CI 版のバージョンは `0.0.0-ci.<run_number>`。実バージョンの正本は release tag だけ。
 
-```yaml
-name: CI
-
-on:
-  pull_request:
-    branches:
-      - main
-
-permissions: {}
-
-jobs:
-  build-and-test:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-
-      - name: Build
-        run: dotnet build IntuneLobPublisher.slnx --configuration Release
-
-      - name: Test
-        run: dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
-
-      - name: Verify global tool pack
-        shell: bash
-        run: |
-          dotnet pack src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj \
-            --configuration Release \
-            -p:Version=0.0.0-ci \
-            --output ./artifacts/nuget
-```
+導入前 checklist は `doc/05-operation.md` §6 を参照する。
 
 ## 12. GitHub Actions example
 
@@ -300,81 +289,78 @@ jobs:
 
 ## 12a. NuGet global tool release workflow
 
-`relaypublisher` を `nuget.org` に公開する workflow は、Intune publish workflow と分離する。
-実際にコピーして使えるサンプルは `workflows/github-actions/release-nuget-tool.yml` を参照。
+`relaypublisher` パッケージのリリースは、Intune publish workflow とは完全に分離した 2 本の workflow で行う。
 
-設計上のポイント:
+| workflow | trigger | 役割 |
+|---|---|---|
+| `.github/workflows/release-draft.yml` | `push` tags `v*` | build / test / pack / single-file publish → **draft** GitHub release を作成し資産を添付する |
+| `.github/workflows/release-publish.yml` | `release: [published]` | draft release を人が publish した時点で、その資産を NuGet feed へ push する |
 
-- trigger は `v*` tag push のみ(`v1.2.3` 形式)。
-- version は tag から抽出し、`dotnet pack -p:Version=<X.Y.Z>` で注入する。
+### なぜ 2 本に分けるか
+
+NuGet feed は一度 push した version を削除できない(unlist しかできない)。したがって
+「tag を打った瞬間に feed へ公開が確定する」構成は取らず、**draft release を人がレビューして
+publish する操作を最後の関門にする**。tag の打ち直しは draft release を消せばやり直せる。
+
+### 配布先 feed
+
+| feed | 想定利用者 | 認証 |
+|---|---|---|
+| GitHub Packages (このリポジトリ) | リポジトリを直接見ている利用者 | `GITHUB_TOKEN` (`packages: write`) |
+| Azure Artifacts | 社内 CI / 閉じたネットワーク | OIDC (workload identity federation) + artifacts-credprovider |
+| nuget.org | 一般利用者 | `NUGET_API_KEY` |
+
+### release-draft.yml の設計上のポイント
+
+- trigger は `v*` tag push のみ。
+- **tag が main から到達可能であることを検証する** (`git merge-base --is-ancestor`)。
+  main 以外の履歴に打たれた tag はここで fail させる。
+- version は tag から抽出し、`^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$` で検証してから
+  `dotnet pack -p:Version=<X.Y.Z>` に渡す。不正な tag 名がそのまま MSBuild に流れるのを防ぐ。
 - pack 対象は `src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj` のみ。
-- `dotnet build` / `dotnet test` を先に通してから pack / publish する。
-- pack 後に `gh release create --draft` で GitHub draft release を作成し、`.nupkg` を添付する。draft release は手動で確認・公開する運用とする。
-- nuget.org への publish step は `--skip-duplicate` を付け、再実行可能にする。
-- `contents: write` が GitHub release 作成に必要。
+- `dotnet build` / `dotnet test` を ubuntu / windows の matrix で先に通してから pack する。
+- 添付する資産: `.nupkg`、3 RID の single-file app zip、`SHA256SUMS.txt`。
+- `gh release view` で存在確認してから create / upload を出し分け、同一 tag での再実行を冪等にする。
+- prerelease version (`-` を含む) の場合は `--prerelease` を付ける。
+- `contents: write` は draft release 作成に必要。
 
-```yaml
-name: Release NuGet Tool
+### release-publish.yml の設計上のポイント
 
-on:
-  push:
-    tags:
-      - "v*"
+- trigger は `release: [published]`。手動での release publish 以外では動かない。
+- **再ビルドしない。** `gh release download --pattern '*.nupkg'` で release に添付された
+  bits をそのまま push する。レビューしたものと publish するものを一致させるため。
+- push 前に `relaypublisher.<tag から導出した version>.nupkg` が存在することを確認する。
+- `environment: release` に publishing secrets をスコープする。必要なら required reviewers も付ける。
+- Azure Artifacts は Microsoft Learn の
+  [GitHub Actions → Azure Artifacts quickstart (managed identity)](https://learn.microsoft.com/azure/devops/artifacts/quickstarts/github-actions?view=azure-devops)
+  に準拠する。`azure/login` → credential provider install →
+  `az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798` →
+  `VSS_NUGET_ACCESSTOKEN` / `VSS_NUGET_URI_PREFIXES` を設定 → `dotnet nuget push --api-key AzureDevOps`。
+  `499b84ac-1321-427f-aa17-267ca6975798` は Azure DevOps の固定リソース ID。
+- **feed URL は secret** (`AZURE_ARTIFACTS_FEED_URL`)。`VSS_NUGET_URI_PREFIXES` はその場で導出し、
+  `::add-mask::` でマスクしてからログに出さないようにする。取得した access token も同様にマスクする。
+- 3 feed とも `--skip-duplicate` を付け、release publish のやり直しを冪等にする。
+- 3 feed の push step は独立させる。どれか 1 つが失敗したら job は失敗する
+  (`continue-on-error` は使わない)。
 
-permissions:
-  contents: read
+### 必要な secrets (environment `release`)
 
-jobs:
-  release-nuget:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write   # required to create GitHub releases
-    steps:
-      - uses: actions/checkout@v4
+| 名前 | 用途 |
+|---|---|
+| `AZURE_ARTIFACTS_FEED_URL` | Azure Artifacts feed の v3 index URL |
+| `AZURE_ARTIFACTS_CLIENT_ID` | user-assigned managed identity / app registration の client id |
+| `AZURE_ARTIFACTS_TENANT_ID` | tenant id |
+| `AZURE_ARTIFACTS_SUBSCRIPTION_ID` | subscription id |
+| `NUGET_API_KEY` | nuget.org の package publish 権限のみを持つ API key |
 
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-
-      - name: Build and test
-        run: |
-          dotnet build IntuneLobPublisher.slnx --configuration Release
-          dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
-
-      - name: Pack global tool
-        shell: bash
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          dotnet pack src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj \
-            --configuration Release \
-            -p:ContinuousIntegrationBuild=true \
-            -p:Version="$VERSION" \
-            --output ./artifacts/nuget
-
-      - name: Create draft GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          gh release create "$GITHUB_REF_NAME" \
-            --title "relaypublisher v${VERSION}" \
-            --draft \
-            --generate-notes \
-            ./artifacts/nuget/*.nupkg
-
-      - name: Publish to nuget.org
-        run: |
-          dotnet nuget push ./artifacts/nuget/*.nupkg \
-            --source https://api.nuget.org/v3/index.json \
-            --api-key "${{ secrets.NUGET_API_KEY }}" \
-            --skip-duplicate
-```
+`GITHUB_TOKEN` は自動供給される。Intune publish 用の `AZURE_CLIENT_ID` 等と名前空間を分けるため
+`AZURE_ARTIFACTS_` prefix を付けている。
 
 補足:
 
-- `NUGET_API_KEY` は package publish 権限のみを持つ key を使う。
-- NuGet Trusted Publishing(OIDC)を使う場合は、上記 publish step を trusted publishing 用手順に置き換える。
-- draft release を確認後、手動で「Publish release」する運用とする。
+- Azure Artifacts 側の事前セットアップ(managed identity 作成、federated credential 設定、
+  Azure DevOps プロジェクトの Contributors への追加)は `doc/05-operation.md` §6 を参照する。
+- NuGet Trusted Publishing (OIDC) を使う場合は、nuget.org 向け push step を trusted publishing 用手順に置き換える。
+- single-file app には署名・notarization を行わない。macOS では Gatekeeper の警告が出る。
 
 ---
