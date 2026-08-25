@@ -101,6 +101,32 @@ public sealed class Win32LobAppPayloadMapperTests
     }
 
     [TestMethod]
+    public void Map_SetupFile_SetsSetupFilePathAndFileName()
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = manifest.Apps[0];
+        app.Package!.IntuneWin!.SetupFile = "install.ps1";
+
+        var payload = Win32LobAppPayloadMapper.Map(manifest, app, DetectionScript, iconBytes: null);
+
+        Assert.AreEqual("install.ps1", payload.SetupFilePath);
+        Assert.AreEqual("install.intunewin", payload.FileName);
+    }
+
+    [TestMethod]
+    public void Map_SetupFileInSubdirectory_NormalizesSetupFilePathAndUsesBaseNameForFileName()
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = manifest.Apps[0];
+        app.Package!.IntuneWin!.SetupFile = "sub/dir/setup.exe";
+
+        var payload = Win32LobAppPayloadMapper.Map(manifest, app, DetectionScript, iconBytes: null);
+
+        Assert.AreEqual("sub\\dir\\setup.exe", payload.SetupFilePath);
+        Assert.AreEqual("setup.intunewin", payload.FileName);
+    }
+
+    [TestMethod]
     public void Map_UnknownMinimumOsVersion_Throws()
     {
         var manifest = TestManifests.CreateValid();

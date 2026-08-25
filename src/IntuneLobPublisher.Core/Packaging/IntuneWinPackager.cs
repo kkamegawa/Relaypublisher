@@ -94,7 +94,7 @@ public sealed class IntuneWinPackager : IIntuneWinPackager
         }
 
         // The tool names the package after the setup file's base name.
-        var intuneWinFileName = Path.GetFileNameWithoutExtension(stagingResult.SetupFile) + ".intunewin";
+        var intuneWinFileName = IntuneWinNaming.PackageFileNameFor(stagingResult.SetupFile);
         var intuneWinPath = Path.Combine(outputDirectory, intuneWinFileName);
         if (!File.Exists(intuneWinPath))
         {

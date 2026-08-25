@@ -378,6 +378,17 @@ Publish が package metadata missing を報告した場合:
   preflight 前の失敗)。category が解除されたという意味ではない。app 解決後に失敗した場合でも `appId` は null の
   ままになるが、これは許容された result file の形。
 
+## 6c. Windows の作成が `SetupFilePath` で失敗する
+
+- **Graph 400 `The Win32LobApp must have a valid value for the SetupFilePath property.`**: このリリースで
+  修正済み。以前のビルドは `win32LobApp` の create/update payload(`Win32LobAppPayloadMapper`)に
+  `setupFilePath`(と `fileName`)を一切含めていなかったため、新規 Windows アプリの最初の書き込みが
+  Graph に拒否されていた -「`0 published, ... 1 failed`」となり app 自体は作成されない(コンテンツ
+  アップロードより前に失敗するため、テナント側に不完全な app が残ることもない)。
+  `setupFilePath`/`fileName` のマッピングを含むバージョン(doc/adr.md の 2026-08-25 のエントリ参照)に
+  CLI をアップグレードして `publish` を再実行すること。値はすでに必須項目である
+  `Package.IntuneWin.SetupFile` から取得するため、manifest やパッケージの変更は不要。
+
 ## 7. Safe rerun rules
 
 - `validate`、`plan`、`package --stage-only` は rerun して安全です。

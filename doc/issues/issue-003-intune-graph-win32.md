@@ -41,6 +41,8 @@ Publish generated `.intunewin` packages to Microsoft Intune through Microsoft Gr
   - `returnCodes`: from manifest `Install.ReturnCodes`; when omitted apply the Intune default set (0 success, 1707 success, 3010 softReboot, 1641 hardReboot, 1618 retry). `returnCodes` must never be empty.
   - Architecture: use `allowedArchitectures` (`x64`, `arm64`). Note: the v1.0 `applicableArchitectures` enum has NO `arm64` value; when `allowedArchitectures` is set, `applicableArchitectures` becomes `none`.
   - `minimumSupportedWindowsRelease`: map from manifest `MinimumOSVersion` build number using a table in Core (e.g. `10.0.19045` -> `Windows10_22H2`). Fail on unknown build numbers.
+  - `setupFilePath`: manifest `Package.IntuneWin.SetupFile`, the relative path of the setup file inside the encrypted `.intunewin` package (backslash-separated, per the Graph example). Required by Graph; omitting it fails app creation with `400 The Win32LobApp must have a valid value for the SetupFilePath property.`.
+  - `fileName` (inherited from `mobileLobApp`): the generated `.intunewin` file name, i.e. `<SetupFile base name>.intunewin` (IntuneWinAppUtil's naming rule, shared with the packaging step that names the output file).
   - Detection: read `Detection.ScriptFile` content from the repository and embed it base64-encoded into a `win32LobAppPowerShellScriptRule` (detection rule). The script is NOT distributed via the package; it lives in the Graph payload.
   - Optional app info: `owner`, `developer`, `informationUrl`, `largeIcon` (from manifest `Icon`), `roleScopeTagIds`.
   - `displayVersion`: set from `PackageVersion`.
@@ -76,6 +78,7 @@ Transaction boundary: steps 1–7 are safe to retry — existing clients keep re
 - Publishing a lower version is skipped unless `--allow-downgrade`.
 - Unchanged input hash skips content upload.
 - Arm64 app is created with `allowedArchitectures = arm64`.
+- `setupFilePath` and `fileName` are populated on both create and update payloads.
 - `returnCodes` are always populated (manifest values or defaults).
 - Detection script content is embedded base64 in the detection rule.
 - `fileEncryptionInfo` from `Detection.xml` is sent on commit; `committedContentVersion` is patched after commit succeeds.
