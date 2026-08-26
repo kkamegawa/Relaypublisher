@@ -32,6 +32,45 @@ public sealed class XarPkgBundleInspectorTests
     }
 
     [TestMethod]
+    public async Task Inspect_BundleWithAppQualifiedPath_IsAccepted()
+    {
+        var pkg = BuildPackageInfo(
+            "<pkg-info><bundle CFBundleIdentifier=\"com.contoso.tool\" CFBundleShortVersionString=\"1.0\" path=\"Applications/Contoso Tool.app\" /></pkg-info>");
+
+        var result = await InspectAsync(pkg);
+
+        Assert.AreEqual(1, result.Bundles.Count);
+        Assert.AreEqual("com.contoso.tool", result.Bundles[0].BundleId);
+    }
+
+    [TestMethod]
+    public async Task Inspect_BundleWithNonAppPath_IsExcluded()
+    {
+        // A declared path is only ever used to *exclude* a non-application component (a framework or
+        // helper nested inside the .app); a bundle with no path at all is still accepted (see the next test).
+        var pkg = BuildPackageInfo(
+            "<pkg-info><bundle CFBundleIdentifier=\"com.contoso.helper\" CFBundleShortVersionString=\"1.0\" path=\"Applications/Contoso Tool.app/Contents/Frameworks/Helper.framework\" /></pkg-info>");
+
+        var result = await InspectAsync(pkg);
+
+        Assert.IsEmpty(result.Bundles);
+    }
+
+    [TestMethod]
+    public async Task Inspect_BundleWithNoPathAttribute_IsStillAccepted()
+    {
+        // PackageInfo bundle records commonly omit `path`; treating that as "not an app" would silently
+        // drop legitimately detected applications, so absence of a path is not itself exclusionary.
+        var pkg = BuildPackageInfo(
+            "<pkg-info><bundle CFBundleIdentifier=\"com.contoso.tool\" CFBundleShortVersionString=\"1.0\" /></pkg-info>");
+
+        var result = await InspectAsync(pkg);
+
+        Assert.AreEqual(1, result.Bundles.Count);
+        Assert.AreEqual("com.contoso.tool", result.Bundles[0].BundleId);
+    }
+
+    [TestMethod]
     public async Task Inspect_DistributionGzip_ReturnsBundleFacts()
     {
         var pkg = BuildXar(

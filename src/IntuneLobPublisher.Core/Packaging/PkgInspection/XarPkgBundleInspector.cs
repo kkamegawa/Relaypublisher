@@ -519,6 +519,10 @@ public class XarPkgBundleInspector : IPkgBundleInspector
                             continue;
                         }
 
+                        // A declared path is only ever used to exclude a component (a framework or
+                        // helper nested inside the .app, or any other non-.app resource); no path at
+                        // all is common for PackageInfo bundle records and does not, by itself, mean
+                        // the bundle is not an installed application.
                         var path = reader.GetAttribute("path");
                         if (path is not null && !IsApplicationBundlePath(path))
                         {
