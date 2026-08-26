@@ -96,8 +96,11 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
             return new PublishResult(PublishOutcome.SkippedDowngrade, resolution.AppId, false, null, null, reason);
         }
 
-        var artifacts = await PackageMetadataReader.ReadAsync(request.PackageDirectory, identity, cancellationToken)
-            .ConfigureAwait(false);
+        // A preflighted request already carries a re-verified artifact (issue #116); only fall back to
+        // a plain read when none was supplied, which keeps every existing test and library caller working.
+        var artifacts = request.VerifiedArtifacts
+            ?? await PackageMetadataReader.ReadAsync(request.PackageDirectory, identity, cancellationToken)
+                .ConfigureAwait(false);
         var managementMetadata = new ManagementMetadata
         {
             PackageIdentifier = identity.PackageIdentifier,

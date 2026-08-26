@@ -12,6 +12,16 @@ namespace IntuneLobPublisher.Core.Publishing;
 /// and null when publishing never reached a category write (skip, dry-run, or a failure before the
 /// preflight). Per-category detail stays in console output and logs.
 /// </param>
+/// <param name="WarningCodes">
+/// Additive optional field (issue #116). The macOS PKG semantic inspection warning codes raised for
+/// this entry's preflight, or null when the entry is not macOS, had none, or publishing never reached
+/// the preflight step. Present even when the batch failed because the warnings were not acknowledged.
+/// </param>
+/// <param name="ForceAcknowledged">
+/// Additive optional field (issue #116). True when <c>--force</c> acknowledged this entry's semantic
+/// warnings, false when an interactive confirmation acknowledged them, and null when there was nothing
+/// to acknowledge or the entry never reached the preflight step.
+/// </param>
 public sealed record PublishResultEntry(
     [property: JsonPropertyName("packageIdentifier")] string PackageIdentifier,
     [property: JsonPropertyName("packageVersion")] string PackageVersion,
@@ -22,7 +32,9 @@ public sealed record PublishResultEntry(
     [property: JsonPropertyName("appId")] string? AppId,
     [property: JsonPropertyName("contentOutcome")] string? ContentOutcome,
     [property: JsonPropertyName("skipReason")] string? SkipReason,
-    [property: JsonPropertyName("categoryOutcome")] string? CategoryOutcome = null);
+    [property: JsonPropertyName("categoryOutcome")] string? CategoryOutcome = null,
+    [property: JsonPropertyName("warningCodes")] string[]? WarningCodes = null,
+    [property: JsonPropertyName("forceAcknowledged")] bool? ForceAcknowledged = null);
 
 /// <summary>Creates and writes stable JSON output for CI integrations.</summary>
 public static class PublishResultOutput
@@ -32,7 +44,11 @@ public static class PublishResultOutput
         WriteIndented = false,
     };
 
-    public static PublishResultEntry FromResult(PublishRequest request, PublishResult result)
+    public static PublishResultEntry FromResult(
+        PublishRequest request,
+        PublishResult result,
+        string[]? warningCodes = null,
+        bool? forceAcknowledged = null)
         => new(
             Require(request.Manifest.PackageIdentifier, nameof(request.Manifest.PackageIdentifier)),
             Require(request.Manifest.PackageVersion, nameof(request.Manifest.PackageVersion)),
@@ -43,9 +59,15 @@ public static class PublishResultOutput
             result.AppId,
             result.ContentOutcome is null ? null : ToWireValue(result.ContentOutcome.Value),
             result.SkipReason,
-            ToCategoryWireValue(result));
+            ToCategoryWireValue(result),
+            warningCodes,
+            forceAcknowledged);
 
-    public static PublishResultEntry FromFailure(PublishRequest request, string message)
+    public static PublishResultEntry FromFailure(
+        PublishRequest request,
+        string message,
+        string[]? warningCodes = null,
+        bool? forceAcknowledged = null)
         => new(
             Require(request.Manifest.PackageIdentifier, nameof(request.Manifest.PackageIdentifier)),
             Require(request.Manifest.PackageVersion, nameof(request.Manifest.PackageVersion)),
@@ -55,7 +77,10 @@ public static class PublishResultOutput
             "failed",
             null,
             null,
-            message);
+            message,
+            CategoryOutcome: null,
+            WarningCodes: warningCodes,
+            ForceAcknowledged: forceAcknowledged);
 
     public static string Serialize(IReadOnlyList<PublishResultEntry> entries)
         => JsonSerializer.Serialize(entries, SerializerOptions);

@@ -39,6 +39,12 @@ internal static class CommandSupport
         Description = "Enables verbose logging.",
     };
 
+    public static Option<bool> ForceOption() => new("--force")
+    {
+        Description = "Acknowledges semantic macOS PKG inspection warnings (issue #116). Never bypasses " +
+            "manifest validation, checksum, XAR, artifact, tenant or Graph failures.",
+    };
+
     /// <summary>Resolves --manifest / --manifest-list inputs into concrete file paths.</summary>
     public static IReadOnlyList<string> ResolveManifestInputs(
         string repoRoot,

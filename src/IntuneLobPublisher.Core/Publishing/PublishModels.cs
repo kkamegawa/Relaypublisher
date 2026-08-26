@@ -1,4 +1,5 @@
 using IntuneLobPublisher.Core.Manifests;
+using IntuneLobPublisher.Core.Packaging;
 using IntuneLobPublisher.Core.Publishing.Assignments;
 using IntuneLobPublisher.Core.Publishing.Categories;
 
@@ -13,6 +14,12 @@ namespace IntuneLobPublisher.Core.Publishing;
 /// <param name="SourceCommit">Commit SHA recorded in management metadata.</param>
 /// <param name="AllowDowngrade">Bypasses the version guard (doc/00-overview.md 6.8).</param>
 /// <param name="DryRun">Report what would change without calling any Graph write.</param>
+/// <param name="VerifiedArtifacts">
+/// The package artifacts already re-verified by <see cref="PublishPreflight"/> before the batch's first
+/// Graph write. When set, <see cref="PublishOrchestrator"/> uses this instead of re-reading metadata
+/// from disk. Null callers (tests, library use outside the CLI's preflighted path) fall back to the
+/// orchestrator's own <see cref="PackageMetadataReader.ReadAsync"/> call, unchanged from before issue #116.
+/// </param>
 public sealed record PublishRequest(
     IntunePackageManifest Manifest,
     AppManifest App,
@@ -21,7 +28,8 @@ public sealed record PublishRequest(
     string PackageDirectory,
     string SourceCommit,
     bool AllowDowngrade,
-    bool DryRun);
+    bool DryRun,
+    PackageArtifacts? VerifiedArtifacts = null);
 
 /// <summary>
 /// The plan callbacks <see cref="IPublishOrchestrator"/> invokes before applying each kind of plan,

@@ -1,5 +1,5 @@
 using System.Text.Json;
-using System.Reflection;
+using IntuneLobPublisher.Core;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Sources;
@@ -122,7 +122,7 @@ public sealed class MacOsPackager : IMacOsPackager
 
         var report = MacOsPkgInspectionPolicy.CreateReport(
             manifest, app, inspection, forceAcknowledged);
-        var producerVersion = cliVersion ?? GetCurrentCliVersion();
+        var producerVersion = cliVersion ?? CliVersion.Current;
 
         // Stored relative to outputDirectory (the metadata file's own directory), matching how
         // PackageMetadataReader resolves IntuneWinFile for Windows packages.
@@ -162,14 +162,6 @@ public sealed class MacOsPackager : IMacOsPackager
             contentSize,
             producerVersion,
             report);
-    }
-
-    private static string GetCurrentCliVersion()
-    {
-        var assembly = Assembly.GetEntryAssembly();
-        return assembly?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-            ?? assembly?.GetName().Version?.ToString()
-            ?? "unknown";
     }
 
     // The staging result intentionally carries only filesystem/source facts. MacOsPackager is used

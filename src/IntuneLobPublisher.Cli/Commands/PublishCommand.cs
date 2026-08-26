@@ -1,6 +1,8 @@
 using System.CommandLine;
+using IntuneLobPublisher.Core;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
+using IntuneLobPublisher.Core.Packaging;
 using IntuneLobPublisher.Core.Publishing;
 using IntuneLobPublisher.Core.Publishing.Assignments;
 using IntuneLobPublisher.Core.Publishing.Categories;
@@ -43,6 +45,7 @@ internal static class PublishCommand
         {
             Description = "Writes a machine-readable JSON array with one result entry per published app entry.",
         };
+        var forceOption = CommandSupport.ForceOption();
 
         var command = new Command("publish", "Publishes staged packages to Microsoft Intune.");
         command.Options.Add(manifestOption);
@@ -54,6 +57,7 @@ internal static class PublishCommand
         command.Options.Add(dryRunOption);
         command.Options.Add(sourceCommitOption);
         command.Options.Add(resultFileOption);
+        command.Options.Add(forceOption);
         command.Options.Add(verboseOption);
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -101,13 +105,39 @@ internal static class PublishCommand
                 var packageDirectory = parseResult.GetValue(packageDirOption)!;
                 var allowDowngrade = parseResult.GetValue(allowDowngradeOption);
                 var dryRun = parseResult.GetValue(dryRunOption);
+                var force = parseResult.GetValue(forceOption);
+
+                // Layer 3 preflight (issue #116): every entry's artifact is re-verified locally, and
+                // every semantic warning is acknowledged, before the batch's first Graph call. A single
+                // entry's failure or an unacknowledged warning must not let any other entry's Graph
+                // write through, so this always runs over the whole batch up front rather than per entry.
+                var gateResult = await RunPreflightAsync(
+                    entries,
+                    packageDirectory,
+                    repoRoot,
+                    services.GetRequiredService<IPkgBundleInspector>(),
+                    services.GetRequiredService<ILoggerFactory>().CreateLogger<PublishPreflight>(),
+                    CliVersion.Current,
+                    force,
+                    () => SemanticWarningGate.IsInteractive(() => Console.IsInputRedirected, () => Console.IsOutputRedirected),
+                    () => SemanticWarningGate.ConfirmOnConsole(Console.In, Console.Out),
+                    Console.Write,
+                    Console.Error.WriteLine,
+                    cancellationToken);
+
+                if (gateResult.AbortExitCode is { } abortExitCode)
+                {
+                    await WriteResultFileAsync(resultFile, gateResult.AbortResultEntries ?? [], cancellationToken);
+                    return abortExitCode;
+                }
 
                 using var composition = PublishComposition.Create(
                     graphOptions, services.GetRequiredService<ILoggerFactory>());
 
                 return await PublishEntriesAsync(
-                    composition.Orchestrator, entries, repoRoot, packageDirectory,
-                    sourceCommit, allowDowngrade, dryRun, resultFile, cancellationToken);
+                    composition.Orchestrator, gateResult.Entries, repoRoot, packageDirectory,
+                    sourceCommit, allowDowngrade, dryRun, resultFile, cancellationToken,
+                    composition.VerifyTenantAsync, gateResult.WarningsAcknowledgedViaForce);
             }
             catch (PublisherException ex)
             {
@@ -119,7 +149,142 @@ internal static class PublishCommand
         return command;
     }
 
-    internal sealed record PublishEntry(IntuneLobPublisher.Core.Validation.LoadedManifest Loaded, AppManifest App);
+    /// <param name="AbortExitCode">Set when the batch must not proceed to Graph at all; null on success.</param>
+    /// <param name="AbortResultEntries">The result-file entries to write when aborted; null on success.</param>
+    /// <param name="Entries">
+    /// On success, every input entry with <see cref="PublishEntry.VerifiedArtifacts"/> and
+    /// <see cref="PublishEntry.Warnings"/> attached. Empty when aborted - the caller must not iterate
+    /// it, but an empty list is also itself the proof that nothing downstream can reach Graph.
+    /// </param>
+    internal sealed record PreflightGateResult(
+        int? AbortExitCode,
+        List<PublishResultEntry>? AbortResultEntries,
+        List<PublishEntry> Entries,
+        bool? WarningsAcknowledgedViaForce);
+
+    /// <summary>
+    /// Runs the all-entry, zero-Graph-write preflight and semantic-warning gate (issue #116,
+    /// doc/00-overview.md 6.21) ahead of the publish loop. Every entry is checked locally - artifact
+    /// existence/hash/re-inspection for macOS, existence/identity for every other platform - and every
+    /// semantic warning across the whole batch is acknowledged (via a single TTY confirmation or
+    /// <paramref name="force"/>) before any entry is handed to <see cref="PublishEntriesAsync"/>. A
+    /// failure in either step aborts with an empty <see cref="PreflightGateResult.Entries"/>, so the
+    /// caller's next step (constructing a Graph client and looping) is unreachable.
+    /// </summary>
+    internal static async Task<PreflightGateResult> RunPreflightAsync(
+        List<PublishEntry> entries,
+        string packageDirectory,
+        string repoRoot,
+        IPkgBundleInspector inspector,
+        ILogger<PublishPreflight> preflightLogger,
+        string cliVersion,
+        bool force,
+        Func<bool> isInteractive,
+        Func<bool> confirm,
+        Action<string> writeLine,
+        Action<string> writeErrorLine,
+        CancellationToken cancellationToken)
+    {
+        var preflightItems = entries.Select(entry => new PreflightItem(
+                entry.Loaded.Manifest,
+                entry.App,
+                new AppIdentity(entry.Loaded.Manifest.PackageIdentifier!, entry.App.Platform!, entry.App.Architecture!),
+                $"{entry.Loaded.Manifest.PackageIdentifier} {entry.App.Platform}-{entry.App.Architecture}",
+                entry.Loaded.Path))
+            .ToList();
+        var preflight = new PublishPreflight(inspector, preflightLogger);
+        var preflightResult = await preflight.RunAsync(preflightItems, packageDirectory, cliVersion, cancellationToken);
+
+        if (preflightResult.Failures.Count > 0)
+        {
+            foreach (var failure in preflightResult.Failures)
+            {
+                writeErrorLine($"error: {failure.Item.EntryLabel}: {failure.Message}");
+            }
+
+            return new PreflightGateResult(
+                ExitCodes.Failure,
+                [.. preflightResult.Failures.Select(f => PreflightFailureResult(f, repoRoot))],
+                [],
+                null);
+        }
+
+        var warnedEntries = preflightResult.Entries.Where(e => e.Warnings.Count > 0).ToList();
+        // Tri-state: null (nothing to acknowledge), false (interactive [y/N] accept), true (--force).
+        // Recorded per warned entry in the result file so a CI log can distinguish an operator's
+        // interactive accept from an unattended --force run.
+        bool? warningsAcknowledgedViaForce = null;
+        if (warnedEntries.Count > 0)
+        {
+            writeLine(PkgInspectionWarningFormatter.FormatBatch(
+                [.. warnedEntries.Select(e => (e.Item.EntryLabel, e.Warnings))]));
+
+            var decision = SemanticWarningGate.Decide(hasWarnings: true, force, isInteractive(), confirm);
+            switch (decision)
+            {
+                case WarningGateDecision.ForceAcknowledged:
+                    warningsAcknowledgedViaForce = true;
+                    writeLine("Semantic PKG inspection warnings acknowledged via --force.\n");
+                    break;
+                case WarningGateDecision.Acknowledged:
+                    warningsAcknowledgedViaForce = false;
+                    writeLine("Semantic PKG inspection warnings acknowledged.\n");
+                    break;
+                case WarningGateDecision.ForceRequired:
+                case WarningGateDecision.Declined:
+                    writeErrorLine(decision == WarningGateDecision.ForceRequired
+                        ? "error: semantic PKG inspection warnings were found in a non-interactive run. Re-run with --force to acknowledge them."
+                        : "error: semantic PKG inspection warnings were not acknowledged.");
+                    return new PreflightGateResult(
+                        ExitCodes.Failure,
+                        [.. warnedEntries.Select(e => PreflightWarningDeclinedResult(e, repoRoot))],
+                        [],
+                        null);
+            }
+        }
+
+        // Every entry's artifact is already verified; attach it (and its warnings, for result output)
+        // so the orchestrator does not read - and re-trust - package-metadata.json a second time.
+        var verifiedEntries = entries.Zip(preflightResult.Entries, (entry, preflighted) =>
+                entry with { VerifiedArtifacts = preflighted.Artifacts, Warnings = preflighted.Warnings })
+            .ToList();
+        return new PreflightGateResult(null, null, verifiedEntries, warningsAcknowledgedViaForce);
+    }
+
+    private static PublishResultEntry PreflightFailureResult(PreflightFailure failure, string repoRoot)
+        => new(
+            failure.Item.Manifest.PackageIdentifier ?? "",
+            failure.Item.Manifest.PackageVersion ?? "",
+            failure.Item.App.Platform ?? "",
+            failure.Item.App.Architecture ?? "",
+            GetBestEffortManifestRepoRelativePath(repoRoot, failure.Item.ManifestPath),
+            "failed",
+            null,
+            null,
+            failure.Message);
+
+    private static PublishResultEntry PreflightWarningDeclinedResult(PreflightEntry entry, string repoRoot)
+        => new(
+            entry.Item.Manifest.PackageIdentifier ?? "",
+            entry.Item.Manifest.PackageVersion ?? "",
+            entry.Item.App.Platform ?? "",
+            entry.Item.App.Architecture ?? "",
+            GetBestEffortManifestRepoRelativePath(repoRoot, entry.Item.ManifestPath),
+            "failed",
+            null,
+            null,
+            "Semantic PKG inspection warnings were not acknowledged.",
+            CategoryOutcome: null,
+            WarningCodes: [.. entry.Warnings.Select(w => w.Code.ToString())],
+            ForceAcknowledged: false);
+
+    /// <param name="VerifiedArtifacts">Set by preflight (issue #116) once every entry has been re-verified; null before that point.</param>
+    /// <param name="Warnings">This entry's macOS semantic PKG inspection warnings, set by preflight; empty for every other platform or before preflight runs.</param>
+    internal sealed record PublishEntry(
+        IntuneLobPublisher.Core.Validation.LoadedManifest Loaded,
+        AppManifest App,
+        PackageArtifacts? VerifiedArtifacts = null,
+        IReadOnlyList<PkgInspectionWarning>? Warnings = null);
 
     /// <summary>
     /// When several manifests target the same app identity, only the highest PackageVersion is
@@ -183,8 +348,40 @@ internal static class PublishCommand
         bool allowDowngrade,
         bool dryRun,
         string? resultFile,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<CancellationToken, Task>? verifyTenant = null,
+        bool? warningsAcknowledgedViaForce = null)
     {
+        // Tenant verification is an explicit preflight step (issue #116): it must happen after every
+        // entry's local checks pass and before the loop's first Graph call, not as an incidental side
+        // effect of whichever request the orchestrator happens to issue first.
+        if (verifyTenant is not null)
+        {
+            try
+            {
+                await verifyTenant(cancellationToken).ConfigureAwait(false);
+            }
+            catch (TenantMismatchException ex)
+            {
+                await WriteResultFileAsync(resultFile, [], cancellationToken);
+                Console.Error.WriteLine($"error: {ex.Message}");
+                return ExitCodes.Failure;
+            }
+            catch (GraphAccessDeniedException ex)
+            {
+                await WriteResultFileAsync(resultFile, [], cancellationToken);
+                Console.Error.WriteLine($"error: {ex.Message}");
+                return ExitCodes.Failure;
+            }
+            catch (Azure.Identity.AuthenticationFailedException ex)
+            {
+                var message = $"Graph authentication failed: {ex.Message}";
+                await WriteResultFileAsync(resultFile, [], cancellationToken);
+                Console.Error.WriteLine($"error: {message}");
+                return ExitCodes.Failure;
+            }
+        }
+
         var published = 0;
         var skippedDowngrade = 0;
         var skippedPlatform = 0;
@@ -194,6 +391,10 @@ internal static class PublishCommand
         foreach (var entry in entries)
         {
             var label = $"{entry.Loaded.Manifest.PackageIdentifier} {entry.App.Platform}-{entry.App.Architecture}";
+            var warningCodes = entry.Warnings is { Count: > 0 }
+                ? entry.Warnings.Select(w => w.Code.ToString()).ToArray()
+                : null;
+            var forceAcknowledgedForEntry = warningCodes is null ? (bool?)null : warningsAcknowledgedViaForce;
 
             try
             {
@@ -207,7 +408,7 @@ internal static class PublishCommand
                         ReportAssignmentPlan = plan => Console.Write(AssignmentPlanFormatter.Format(plan)),
                     },
                     cancellationToken);
-                resultEntries.Add(PublishResultOutput.FromResult(request, result));
+                resultEntries.Add(PublishResultOutput.FromResult(request, result, warningCodes, forceAcknowledgedForEntry));
 
                 switch (result.Outcome)
                 {
@@ -230,14 +431,14 @@ internal static class PublishCommand
             }
             catch (TenantMismatchException ex)
             {
-                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
+                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message, warningCodes, forceAcknowledgedForEntry);
                 await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
                 Console.Error.WriteLine($"error: {ex.Message}");
                 return ExitCodes.Failure;
             }
             catch (GraphAccessDeniedException ex)
             {
-                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
+                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message, warningCodes, forceAcknowledgedForEntry);
                 await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
                 Console.Error.WriteLine($"error: {label}: {ex.Message}");
                 return ExitCodes.Failure;
@@ -245,7 +446,7 @@ internal static class PublishCommand
             catch (Azure.Identity.AuthenticationFailedException ex)
             {
                 var message = $"Graph authentication failed: {ex.Message}";
-                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, message);
+                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, message, warningCodes, forceAcknowledgedForEntry);
                 await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
                 Console.Error.WriteLine($"error: {message}");
                 return ExitCodes.Failure;
@@ -253,7 +454,7 @@ internal static class PublishCommand
             catch (PublisherException ex)
             {
                 failed++;
-                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
+                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message, warningCodes, forceAcknowledgedForEntry);
                 Console.Error.WriteLine($"error: {label}: {ex.Message}");
             }
         }
@@ -273,13 +474,15 @@ internal static class PublishCommand
         string sourceCommit,
         bool allowDowngrade,
         bool dryRun,
-        string message)
+        string message,
+        string[]? warningCodes = null,
+        bool? forceAcknowledged = null)
     {
         try
         {
             var request = CreatePublishRequest(
                 entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun);
-            resultEntries.Add(PublishResultOutput.FromFailure(request, message));
+            resultEntries.Add(PublishResultOutput.FromFailure(request, message, warningCodes, forceAcknowledged));
         }
         catch (PublisherException ex)
         {
@@ -292,7 +495,10 @@ internal static class PublishCommand
                 "failed",
                 null,
                 null,
-                $"{message}; additionally failed to resolve manifest path: {ex.Message}"));
+                $"{message}; additionally failed to resolve manifest path: {ex.Message}",
+                CategoryOutcome: null,
+                WarningCodes: warningCodes,
+                ForceAcknowledged: forceAcknowledged));
         }
     }
 
@@ -311,7 +517,8 @@ internal static class PublishCommand
             packageDirectory,
             sourceCommit,
             allowDowngrade,
-            dryRun);
+            dryRun,
+            entry.VerifiedArtifacts);
 
     internal static Task WriteResultFileAsync(
         string? resultFile,

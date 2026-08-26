@@ -49,6 +49,7 @@ internal static class PackageCommand
         {
             Description = "Directory downloaded tools are cached under. Defaults to <repo-root>/tools.",
         };
+        var forceOption = CommandSupport.ForceOption();
 
         var command = new Command("package", "Stages Windows Win32 app package files and generates .intunewin packages.");
         command.Options.Add(manifestOption);
@@ -61,6 +62,7 @@ internal static class PackageCommand
         command.Options.Add(toolVersionOption);
         command.Options.Add(toolSha256Option);
         command.Options.Add(toolsDirectoryOption);
+        command.Options.Add(forceOption);
         command.Options.Add(verboseOption);
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -112,6 +114,11 @@ internal static class PackageCommand
                     parseResult.GetValue(toolsDirectoryOption) ?? Path.Combine(repoRoot, "tools"));
                 var windowsPackager = services.GetRequiredService<IIntuneWinPackager>();
                 var macOsPackager = services.GetRequiredService<IMacOsPackager>();
+                var force = parseResult.GetValue(forceOption);
+
+                // Collected across every macOS entry so the operator sees the whole batch's semantic
+                // warnings and confirms once, not once per entry (doc/05-operation.md).
+                var warnedEntries = new List<(string Label, string MetadataPath, IReadOnlyList<PkgInspectionWarning> Warnings)>();
 
                 foreach (var loaded in manifests)
                 {
@@ -126,10 +133,19 @@ internal static class PackageCommand
 
                             if (generatePackageArtifact)
                             {
-                                var macPackage = await macOsPackager.CreatePackageAsync(loaded.Manifest, macResult, cancellationToken);
+                                var macPackage = await macOsPackager.CreatePackageAsync(
+                                    loaded.Manifest, macResult, cancellationToken, forceAcknowledged: force);
                                 Console.WriteLine(
                                     $"Packaged {macPackage.PackageIdentifier} {macPackage.Platform}-{macPackage.Architecture} -> " +
                                     $"{macPackage.ContentPath} (inputHash {macPackage.InputHash})");
+
+                                if (macPackage.Inspection is { Warnings.Count: > 0 } inspection)
+                                {
+                                    warnedEntries.Add((
+                                        $"{macPackage.PackageIdentifier} {macPackage.Platform}-{macPackage.Architecture}",
+                                        macPackage.MetadataPath,
+                                        inspection.Warnings));
+                                }
                             }
 
                             continue;
@@ -151,6 +167,40 @@ internal static class PackageCommand
                     }
                 }
 
+                if (warnedEntries.Count > 0)
+                {
+                    Console.Write(PkgInspectionWarningFormatter.FormatBatch(
+                        [.. warnedEntries.Select(e => (e.Label, e.Warnings))]));
+
+                    var interactive = SemanticWarningGate.IsInteractive(
+                        () => Console.IsInputRedirected, () => Console.IsOutputRedirected);
+                    var decision = SemanticWarningGate.Decide(
+                        hasWarnings: true,
+                        force,
+                        interactive,
+                        () => SemanticWarningGate.ConfirmOnConsole(Console.In, Console.Out));
+
+                    switch (decision)
+                    {
+                        case WarningGateDecision.ForceAcknowledged:
+                            Console.WriteLine("Semantic PKG inspection warnings acknowledged via --force.");
+                            break;
+                        case WarningGateDecision.Acknowledged:
+                            Console.WriteLine("Semantic PKG inspection warnings acknowledged.");
+                            break;
+                        case WarningGateDecision.ForceRequired:
+                            DeleteWarnedMetadata(warnedEntries);
+                            Console.Error.WriteLine(
+                                "error: semantic PKG inspection warnings were found in a non-interactive run. " +
+                                "Re-run with --force to acknowledge them, or fix the manifest/PKG mismatch.");
+                            return ExitCodes.Failure;
+                        case WarningGateDecision.Declined:
+                            DeleteWarnedMetadata(warnedEntries);
+                            Console.Error.WriteLine("error: semantic PKG inspection warnings were not acknowledged.");
+                            return ExitCodes.Failure;
+                    }
+                }
+
                 return ExitCodes.Success;
             }
             catch (PublisherException ex)
@@ -161,5 +211,26 @@ internal static class PackageCommand
         });
 
         return command;
+    }
+
+    /// <summary>
+    /// Deletes package-metadata.json for every entry whose semantic warnings were not acknowledged, so
+    /// the entry fails closed: a missing metadata file makes both a rerun of <c>package</c> and any
+    /// subsequent <c>publish</c> preflight fail loudly instead of silently trusting stale artifacts.
+    /// </summary>
+    private static void DeleteWarnedMetadata(
+        IReadOnlyList<(string Label, string MetadataPath, IReadOnlyList<PkgInspectionWarning> Warnings)> warnedEntries)
+    {
+        foreach (var entry in warnedEntries)
+        {
+            try
+            {
+                File.Delete(entry.MetadataPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"warning: could not remove unacknowledged package metadata '{entry.MetadataPath}': {ex.Message}");
+            }
+        }
     }
 }

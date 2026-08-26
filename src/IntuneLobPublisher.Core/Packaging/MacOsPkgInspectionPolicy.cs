@@ -42,6 +42,14 @@ public static class MacOsPkgInspectionPolicy
             .ToDictionary(group => group.Key, group => group.Single(), StringComparer.Ordinal);
         var warnings = new List<PkgInspectionWarning>();
 
+        if (inspection.Bundles.Count == 0)
+        {
+            warnings.Add(new PkgInspectionWarning(
+                PkgInspectionWarningCode.NoBundlesDetected,
+                null,
+                "The PKG metadata declares no application bundles; manifest and package contents may not match."));
+        }
+
         if (inspection.Bundles.Count > 1 && string.IsNullOrWhiteSpace(detection.PrimaryBundleId))
         {
             warnings.Add(new PkgInspectionWarning(

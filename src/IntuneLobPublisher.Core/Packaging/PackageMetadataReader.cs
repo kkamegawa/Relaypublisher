@@ -14,6 +14,15 @@ namespace IntuneLobPublisher.Core.Packaging;
 public sealed record PackageArtifacts(PackageMetadata Metadata, string ContentPath);
 
 /// <summary>
+/// Result of manifest-aware macOS artifact verification. <see cref="FreshReport"/> is rebuilt from the
+/// re-inspected archive and the *current* manifest/force state - the publish preflight layer must judge
+/// this report's <see cref="PkgInspectionReport.Warnings"/> itself rather than trusting the saved
+/// <see cref="PkgInspectionReport.ForceAcknowledged"/> flag, since a batch's <c>--force</c> acknowledgement
+/// applies only to that run and must never be inherited from a previous <c>package</c> invocation.
+/// </summary>
+public sealed record PackageVerification(PackageArtifacts Artifacts, PkgInspectionReport FreshReport);
+
+/// <summary>
 /// Reads <c>&lt;packageDir&gt;/&lt;PackageIdentifier&gt;/&lt;platform&gt;-&lt;architecture&gt;/package-metadata.json</c>
 /// written by <see cref="IntuneWinPackager"/> and resolves the <c>.intunewin</c> it references.
 /// The file name stored in the metadata goes through <see cref="PathSafety.ResolveWithin"/> so a
@@ -35,7 +44,8 @@ public static class PackageMetadataReader
         AppIdentity identity,
         IPkgBundleInspector inspector,
         CancellationToken cancellationToken)
-        => await ReadAndVerifyCoreAsync(
+    {
+        var (artifacts, _) = await ReadAndVerifyCoreAsync(
             packageDirectory,
             identity,
             null,
@@ -43,14 +53,19 @@ public static class PackageMetadataReader
             inspector,
             null,
             cancellationToken).ConfigureAwait(false);
+        return artifacts;
+    }
 
     /// <summary>
-    /// Reads and verifies a macOS artifact and, when the manifest/app are supplied, reconstructs the
-    /// manifest-aware inspection report so selected-primary and warning fields cannot be edited out of
+    /// Reads and verifies a macOS artifact and reconstructs the manifest-aware inspection report from
+    /// the freshly re-inspected archive, so selected-primary and warning fields cannot be edited out of
     /// the artifact metadata. <paramref name="expectedCliVersion"/> is optional so library callers can
-    /// verify a package produced by a separately pinned CLI; the publish command should provide it.
+    /// verify a package produced by a separately pinned CLI; the publish command should provide it. The
+    /// returned <see cref="PackageVerification.FreshReport"/> always has <c>ForceAcknowledged = false</c>
+    /// - the caller (the publish preflight) is responsible for deciding whether this run's <c>--force</c>
+    /// covers the returned warnings.
     /// </summary>
-    public static Task<PackageArtifacts> ReadAndVerifyAsync(
+    public static async Task<PackageVerification> ReadAndVerifyAsync(
         string packageDirectory,
         AppIdentity identity,
         IntunePackageManifest manifest,
@@ -58,16 +73,19 @@ public static class PackageMetadataReader
         IPkgBundleInspector inspector,
         string? expectedCliVersion,
         CancellationToken cancellationToken)
-        => ReadAndVerifyCoreAsync(
+    {
+        var (artifacts, freshReport) = await ReadAndVerifyCoreAsync(
             packageDirectory,
             identity,
             manifest,
             app,
             inspector,
             expectedCliVersion,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
+        return new PackageVerification(artifacts, freshReport!);
+    }
 
-    private static async Task<PackageArtifacts> ReadAndVerifyCoreAsync(
+    private static async Task<(PackageArtifacts Artifacts, PkgInspectionReport? FreshReport)> ReadAndVerifyCoreAsync(
         string packageDirectory,
         AppIdentity identity,
         IntunePackageManifest? manifest,
@@ -81,7 +99,7 @@ public static class PackageMetadataReader
         var artifacts = await ReadAsync(packageDirectory, identity, cancellationToken).ConfigureAwait(false);
         if (!string.Equals(identity.Platform, "macos", StringComparison.OrdinalIgnoreCase))
         {
-            return artifacts;
+            return (artifacts, null);
         }
 
         var metadata = artifacts.Metadata;
@@ -164,27 +182,28 @@ public static class PackageMetadataReader
                 "The artifact or inspection report is stale; run package again.");
         }
 
-        if (manifest is not null || app is not null)
+        if (manifest is null && app is null)
         {
-            if (manifest is null || app is null)
-            {
-                throw new ArgumentException("Manifest and app must be supplied together.");
-            }
-
-            var freshReport = MacOsPkgInspectionPolicy.CreateReport(
-                manifest,
-                app,
-                freshInspection,
-                metadata.Inspection.ForceAcknowledged);
-            if (!InspectionReportsEqual(metadata.Inspection, freshReport))
-            {
-                throw new PackagingException(
-                    "The staged macOS package inspection report does not match the manifest or current " +
-                    "archive facts. Run package again.");
-            }
+            return (artifacts, null);
         }
 
-        return artifacts;
+        if (manifest is null || app is null)
+        {
+            throw new ArgumentException("Manifest and app must be supplied together.");
+        }
+
+        // ForceAcknowledged is intentionally not passed through from the saved metadata: a batch's
+        // --force covers only that run, so the report handed back here always reports it as false and
+        // leaves the acknowledgement decision to the caller (PublishPreflight).
+        var freshReport = MacOsPkgInspectionPolicy.CreateReport(manifest, app, freshInspection);
+        if (!InspectionReportsEqual(metadata.Inspection, freshReport))
+        {
+            throw new PackagingException(
+                "The staged macOS package inspection report does not match the manifest or current " +
+                "archive facts. Run package again.");
+        }
+
+        return (artifacts, freshReport);
     }
 
     public static async Task<PackageArtifacts> ReadAsync(
@@ -279,10 +298,15 @@ public static class PackageMetadataReader
         return true;
     }
 
+    /// <summary>
+    /// Compares reconciliation facts only (selected primary + warnings + archive facts).
+    /// <see cref="PkgInspectionReport.ForceAcknowledged"/> is deliberately excluded: it records a
+    /// point-in-time operator decision, not an archive/manifest fact, and this batch's own
+    /// acknowledgement must never be judged against a previous run's.
+    /// </summary>
     private static bool InspectionReportsEqual(PkgInspectionReport expected, PkgInspectionReport actual)
     {
         if (!string.Equals(expected.SelectedPrimaryBundleId, actual.SelectedPrimaryBundleId, StringComparison.Ordinal) ||
-            expected.ForceAcknowledged != actual.ForceAcknowledged ||
             expected.Warnings.Count != actual.Warnings.Count)
         {
             return false;

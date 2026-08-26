@@ -139,7 +139,8 @@ public sealed class PublishResultOutputTests
     [TestMethod]
     public void Serialize_PublishedEntry_KeepsTheExistingFieldOrderAndAppendsCategoryOutcome()
     {
-        // categoryOutcome is purely additive: every previously written field keeps its name, type and position.
+        // categoryOutcome, warningCodes and forceAcknowledged are purely additive: every previously
+        // written field keeps its name, type and position (issue #99, issue #116).
         var request = CreateRequest();
         var result = new PublishResult(
             PublishOutcome.Published,
@@ -159,9 +160,31 @@ public sealed class PublishResultOutputTests
             {
                 "packageIdentifier", "packageVersion", "platform", "architecture", "manifestPath",
                 "outcome", "appId", "contentOutcome", "skipReason", "categoryOutcome",
+                "warningCodes", "forceAcknowledged",
             },
             entry.EnumerateObject().Select(p => p.Name).ToList());
         Assert.AreEqual("applied", entry.GetProperty("categoryOutcome").GetString());
+        Assert.AreEqual(JsonValueKind.Null, entry.GetProperty("warningCodes").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, entry.GetProperty("forceAcknowledged").ValueKind);
+    }
+
+    [TestMethod]
+    public void Serialize_PublishedEntryWithWarnings_WritesWarningCodesAndForceAcknowledged()
+    {
+        var request = CreateRequest();
+        var result = new PublishResult(
+            PublishOutcome.Published, "app-1", AppCreated: true, ContentUploadOutcome.Uploaded,
+            AssignmentPlan: null, SkipReason: null, CategoryPlan: null);
+
+        var json = PublishResultOutput.Serialize(
+            [PublishResultOutput.FromResult(request, result, ["ManifestBundleNotFound"], forceAcknowledged: true)]);
+
+        using var document = JsonDocument.Parse(json);
+        var entry = document.RootElement[0];
+        CollectionAssert.AreEqual(
+            new[] { "ManifestBundleNotFound" },
+            entry.GetProperty("warningCodes").EnumerateArray().Select(e => e.GetString()).ToList());
+        Assert.IsTrue(entry.GetProperty("forceAcknowledged").GetBoolean());
     }
 
     [TestMethod]

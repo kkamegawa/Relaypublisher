@@ -40,6 +40,15 @@ public sealed class GraphAuthenticationHandler : DelegatingHandler
         return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Acquires (or reuses the cached) Graph token and verifies its tenant, without issuing any HTTP
+    /// request. Publish preflight calls this explicitly so tenant verification is a deliberate step
+    /// before the batch's first Graph write, rather than an incidental side effect of whichever request
+    /// happens to run first (doc/00-overview.md 6.21).
+    /// </summary>
+    public Task EnsureTenantVerifiedAsync(CancellationToken cancellationToken)
+        => GetTokenAsync(cancellationToken);
+
     // Guards against attaching the Graph bearer token to a request that (by caller mistake) targets
     // some other host, which would leak the token to an unintended endpoint.
     private void EnsureRequestTargetsGraph(HttpRequestMessage request)

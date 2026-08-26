@@ -45,4 +45,7 @@ public enum PkgInspectionWarningCode
     ManifestBundleNotFound,
     PackageBundleNotDeclared,
     ManifestBundleVersionMismatch,
+
+    /// <summary>The PKG's XAR metadata declared zero application bundles.</summary>
+    NoBundlesDetected,
 }

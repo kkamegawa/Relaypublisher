@@ -21,21 +21,32 @@ namespace IntuneLobPublisher.Cli.Commands;
 internal sealed class PublishComposition : IDisposable
 {
     private readonly HttpClient _graphHttpClient;
+    private readonly GraphAuthenticationHandler _authenticationHandler;
 
-    private PublishComposition(HttpClient graphHttpClient, IPublishOrchestrator orchestrator)
+    private PublishComposition(
+        HttpClient graphHttpClient, GraphAuthenticationHandler authenticationHandler, IPublishOrchestrator orchestrator)
     {
         _graphHttpClient = graphHttpClient;
+        _authenticationHandler = authenticationHandler;
         Orchestrator = orchestrator;
     }
 
     public IPublishOrchestrator Orchestrator { get; }
+
+    /// <summary>
+    /// Acquires and verifies the Graph token before any batch write, so a tenant mismatch is caught by
+    /// an explicit preflight step rather than surfacing from whichever Graph call happens to run first.
+    /// </summary>
+    public Task VerifyTenantAsync(CancellationToken cancellationToken)
+        => _authenticationHandler.EnsureTenantVerifiedAsync(cancellationToken);
 
     public static PublishComposition Create(GraphClientOptions options, ILoggerFactory loggerFactory)
     {
         CredentialDeterminismCheck.WarnIfCredentialChainNotPinned(
             loggerFactory.CreateLogger<PublishComposition>(), Environment.GetEnvironmentVariable);
 
-        var httpClient = GraphClientFactory.Create(new DefaultAzureCredential(), options, loggerFactory);
+        var pipeline = GraphClientFactory.Create(new DefaultAzureCredential(), options, loggerFactory);
+        var httpClient = pipeline.Client;
 
         var windowsPublisher = new WindowsAppPublisher(
             new GraphWin32LobAppClient(httpClient),
@@ -68,7 +79,7 @@ internal sealed class PublishComposition : IDisposable
                 new AssignmentGraphClient(httpClient),
                 loggerFactory.CreateLogger<AssignmentService>()),
             loggerFactory.CreateLogger<PublishOrchestrator>());
-        return new PublishComposition(httpClient, orchestrator);
+        return new PublishComposition(httpClient, pipeline.AuthenticationHandler, orchestrator);
     }
 
     public void Dispose() => _graphHttpClient.Dispose();

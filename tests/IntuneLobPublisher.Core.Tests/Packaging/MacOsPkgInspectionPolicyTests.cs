@@ -45,7 +45,7 @@ public sealed class MacOsPkgInspectionPolicyTests
     }
 
     [TestMethod]
-    public void CreateReport_MissingDeclaredBundle_ReturnsManifestBundleNotFound()
+    public void CreateReport_MissingDeclaredBundle_ReturnsNoBundlesDetectedAndManifestBundleNotFound()
     {
         var manifest = TestManifests.CreateValid();
         var app = TestManifests.CreateValidMacOsApp();
@@ -54,8 +54,26 @@ public sealed class MacOsPkgInspectionPolicyTests
 
         var report = MacOsPkgInspectionPolicy.CreateReport(manifest, app, inspection);
 
-        Assert.HasCount(1, report.Warnings);
-        Assert.AreEqual(PkgInspectionWarningCode.ManifestBundleNotFound, report.Warnings[0].Code);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                PkgInspectionWarningCode.NoBundlesDetected,
+                PkgInspectionWarningCode.ManifestBundleNotFound,
+            },
+            report.Warnings.Select(warning => warning.Code).ToArray());
         Assert.AreEqual("com.contoso.tool", report.SelectedPrimaryBundleId);
+    }
+
+    [TestMethod]
+    public void CreateReport_ZeroDetectedBundles_ReturnsNoBundlesDetected()
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidMacOsApp();
+        manifest.Apps = [app];
+        var inspection = new PkgBundleInspectionResult("1", []);
+
+        var report = MacOsPkgInspectionPolicy.CreateReport(manifest, app, inspection);
+
+        Assert.IsTrue(report.Warnings.Any(warning => warning.Code == PkgInspectionWarningCode.NoBundlesDetected));
     }
 }

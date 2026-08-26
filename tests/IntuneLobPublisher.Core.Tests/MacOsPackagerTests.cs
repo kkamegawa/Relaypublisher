@@ -180,11 +180,13 @@ public sealed class MacOsPackagerTests
         var stagingResult = StageFile();
         var inspector = new TestPkgBundleInspector();
         var manifest = CreateValidMacOsManifest();
+        // forceAcknowledged: true at package time must not leak into the fresh report: a --force
+        // acknowledgement covers only the run that gave it, never a later publish's decision.
         var packaged = await CreatePackager(inspector).CreatePackageAsync(
-            manifest, stagingResult, CancellationToken.None, cliVersion: "1.2.3-test");
+            manifest, stagingResult, CancellationToken.None, forceAcknowledged: true, cliVersion: "1.2.3-test");
         manifest.Apps[0].Source!.Sha256 = packaged.ContentSha256;
 
-        var artifacts = await PackageMetadataReader.ReadAndVerifyAsync(
+        var verification = await PackageMetadataReader.ReadAndVerifyAsync(
             _outputDirectory,
             new AppIdentity("Contoso.Tool", "macos", "arm64"),
             manifest,
@@ -193,7 +195,10 @@ public sealed class MacOsPackagerTests
             "1.2.3-test",
             CancellationToken.None);
 
-        Assert.AreEqual(packaged.ContentSha256, artifacts.Metadata.ContentSha256);
+        Assert.AreEqual(packaged.ContentSha256, verification.Artifacts.Metadata.ContentSha256);
+        Assert.IsFalse(
+            verification.FreshReport.ForceAcknowledged,
+            "The fresh report must not inherit the saved metadata's ForceAcknowledged flag.");
     }
 
     [TestMethod]
