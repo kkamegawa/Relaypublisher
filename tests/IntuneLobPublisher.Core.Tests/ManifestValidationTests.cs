@@ -533,6 +533,24 @@ public sealed class ManifestValidationTests
     }
 
     [TestMethod]
+    public void Validate_MacOsPrimaryBundleIdSetButIncludedAppsMissing_ReportsOnlyTheIncludedAppsError()
+    {
+        // The PrimaryBundleId match rule must not add a second, less relevant "must match" error on
+        // top of the real root cause when IncludedApps itself is missing.
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidMacOsApp();
+        app.Detection!.PrimaryBundleId = "com.contoso.tool";
+        app.Detection.IncludedApps = null;
+        manifest.Apps = [app];
+
+        var result = _validator.Validate(manifest);
+
+        Assert.IsFalse(result.IsValid);
+        Assert.IsTrue(result.Errors.Any(e => e.ErrorMessage.Contains("IncludedApps is required", StringComparison.OrdinalIgnoreCase)));
+        Assert.IsFalse(result.Errors.Any(e => e.ErrorMessage.Contains("must match", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [TestMethod]
     public void Validate_MacOsDuplicateBundleIds_Fails()
     {
         var manifest = TestManifests.CreateValid();

@@ -424,8 +424,10 @@ internal sealed class DetectionManifestValidator : AbstractValidator<DetectionMa
         RuleFor(d => d.PrimaryBundleId)
             .Must((d, primaryBundleId) => primaryBundleId is null
                 || string.IsNullOrWhiteSpace(primaryBundleId)
-                || d.IncludedApps is not null && MacOsBundleSelector.FindMatchingIndexes(primaryBundleId, d.IncludedApps).Count == 1)
-            .When(_ => isMacOs)
+                || MacOsBundleSelector.FindMatchingIndexes(primaryBundleId, d.IncludedApps!).Count == 1)
+            // Only meaningful once IncludedApps itself is present - otherwise this would add a
+            // second, less relevant "must match" error on top of the real root cause reported above.
+            .When(d => isMacOs && d.IncludedApps is not null)
             .WithMessage(d => BuildPrimaryBundleError(d));
     }
 
