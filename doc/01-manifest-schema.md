@@ -193,6 +193,8 @@ Apps:
       IncludedApps:
         - BundleId: com.contoso.tool
           BundleVersion: 1.2.3
+          # AppType: lob の場合は BundleBuildVersion(CFBundleVersion)も必須。
+          # AppType: pkg では省略可で、指定しても Graph mapping では使用しない。
 
     # 任意。AppType: pkg のみ(§5.4.2 参照)
     Scripts:
@@ -217,10 +219,14 @@ Apps:
 
 validation ルール:
 
-- `IncludedApps` は 1 件以上必須。先頭要素(`PrimaryBundleId` 指定時は一致した entry、§5.4.3)がレポート表示に使われる。
+- `IncludedApps` は 1〜500 件必須。`BundleId` は Ordinal・大文字小文字区別で重複不可とする。先頭要素
+  (`PrimaryBundleId` 指定時は一致した entry、§5.4.3)がレポート表示に使われる。500 件は Graph の
+  `macOSPkgApp.includedApps` 上限に合わせる。
 - `AppType: pkg` の app に `Intent: uninstall` があれば fail。
 - `AppType: lob` の場合、top-level `Icon` を必須とする。
 - `AppType: lob` または `Platform: windows` の app entry に `Scripts` があれば fail(§5.4.2)。
+- `AppType: lob` の各 `IncludedApps` entry は `BundleBuildVersion`(`CFBundleVersion`)を必須とする。
+  `AppType: pkg` では任意で、指定されても Graph mapping と PKG inspection の version 比較では使用しない。
 - `Detection.PrimaryBundleId`(任意)は `IncludedApps` のちょうど 1 entry に一致(完全一致または `<値>.` 前置一致)
   しなければ fail。`Platform: windows` の app entry に指定すれば fail(§5.4.3)。
 
@@ -287,7 +293,7 @@ publish 時の挙動:
 
 macOS PKG は 1 つの pkg に複数の app bundle を含むことがある(例: Global Secure Access クライアントが
 Microsoft AutoUpdate を同梱)。既定では `IncludedApps` の**先頭要素**が Graph の `primaryBundleId` /
-`primaryBundleVersion`(`AppType: lob` では top-level `buildNumber` / `versionNumber`)になり、検出・
+`primaryBundleVersion`(`AppType: lob` では top-level `bundleId` / `buildNumber` / `versionNumber`)になり、検出・
 レポートに使われる。任意の `Detection.PrimaryBundleId` で、先頭以外の entry を primary に指定できる。
 
 ```yaml
@@ -297,6 +303,7 @@ Detection:
   IncludedApps:
     - BundleId: com.microsoft.globalsecureaccess.client # 例示。実際の値は実機で確認する
       BundleVersion: 1.2.3
+      # AppType: lob の場合は BundleBuildVersion(CFBundleVersion)も必須。
 ```
 
 **マッチ規則**: `entry.BundleId == PrimaryBundleId` または `entry.BundleId` が `PrimaryBundleId + "."` で
@@ -308,12 +315,16 @@ validation ルール(`validate` / `package` / `publish` はすべて、Graph 呼
 - 省略時は現行どおり `IncludedApps[0]` が primary。挙動・`inputHash` とも変更なし。
 - `Platform: windows` の app entry に指定すれば fail。
 - 空文字・空白のみであれば fail。
+- `IncludedApps` は 1〜500 件、`BundleId` は Ordinal・大文字小文字区別で重複不可とする。
 - 上記マッチ規則で `IncludedApps` に一致する entry が **0 件** なら fail(候補の BundleId 一覧をエラーに含める)。
 - 一致する entry が **2 件以上**(prefix の曖昧一致)なら fail(より長い/完全な bundle id の指定を促す)。
 - `IgnoreAppVersion` とは独立に併用可能。`PrimaryBundleId` は「どの app を primary にするか」、
   `IgnoreAppVersion` は「primary のバージョンを検出に使うか」という別軸の設定。
-- `AppType: lob`(`childApps`)にも同じ意味論を適用する。一致した entry は `childApps` の先頭へ、
-  対応する `bundleId`/`buildNumber`/`versionNumber` が top-level フィールドへ反映される。
+- `AppType: lob` の各 entry は `BundleBuildVersion`(`CFBundleVersion`)が必須。`AppType: pkg` では任意で、
+  指定されても Graph mapping と PKG inspection の version 比較では使用しない。
+- `AppType: lob`(`childApps`)にも同じ primary 意味論を適用する。一致した entry は `childApps` の先頭へ並べ、
+  選択した `bundleId` を top-level `bundleId`、`BundleVersion`(`CFBundleShortVersionString`)を `buildNumber`、
+  `BundleBuildVersion`(`CFBundleVersion`)を `versionNumber` に反映する。各 child entry も同じ対応で生成する。
 
 **同梱 updater の除外**: `IncludedApps` に**書かないことで除外する**。Microsoft Learn の
 [Add an Unmanaged macOS PKG App to Microsoft Intune](https://learn.microsoft.com/intune/app-management/deployment/add-unmanaged-pkg-macos#step-4-%E2%80%93-detection-rules)
@@ -321,34 +332,51 @@ validation ルール(`validate` / `package` / `publish` はすべて、Graph 呼
 インストールされなければ install status が success を報告しないことを明記している。既知 updater(例:
 `com.microsoft.autoupdate2`)を自動判定して除外する仕組みは対象外(下記)。
 
-**pkg 実体の検査(package / publish フェーズ)**: manifest だけでは pkg に実際に何が同梱されているか
-分からない。pkg をダウンロードするフェーズ(`package` / `publish`。source がローカルで読める場合は
-`validate` でも)で、pkg(xar アーカイブ)の TOC にある `Distribution` / `PackageInfo` XML から
-`<bundle id="..." CFBundleShortVersionString="...">` を読み取り、同梱 bundle の一覧を検査する
-(payload の展開や `pkgutil` への依存なし、.NET 標準ライブラリで xar ヘッダ + zlib 圧縮 TOC を parse する)。
+**pkg 実体の検査(package / publish フェーズ)**: `validate` は schema、manifest 内の重複・件数、selector、path
+などの静的検証だけを行い、source を download しない。今回 `filePath` source は追加しない。PKG を取得する
+`package` フェーズで、宣言された source SHA256 を検証して一致した直後に inspection を一度行い、`publish` では
+artifact の実ファイルを再ハッシュしてから再 inspection する。
 
-検査の結果、次のいずれかに該当すれば warning とする。
+PKG(xar アーカイブ)の inspection は XAR header、compressed TOC、TOC が指す heap entry を bounded reader で読む。
+TOC の `Distribution` / `PackageInfo` entry 本体から `<bundle id="..." CFBundleShortVersionString="..."
+CFBundleVersion="...">` を読み取り、同梱 bundle 一覧(bundle id + version)を検査する。Payload(cpio.gz)の展開や
+`pkgutil` への依存は不要で、.NET 標準ライブラリだけを使用する。compressed TOC は 16 MiB、decompressed TOC は
+64 MiB、1 heap entry は 16 MiB、bundle は 4,096 件、XML depth は 64 を上限とする。DTD/外部 entity は禁止する。
+未知の compression、header/offset/length の不整合、切り詰め、展開・XMLエラー、上限超過は hard fail とし、
+`--force` でも回避できない。
+
+検査の結果、次のいずれかに該当すれば semantic warning とする。
 
 | 条件 | 挙動 |
 |---|---|
 | pkg 内に複数 bundle があり `PrimaryBundleId` 省略 | warning: 検出した bundle 一覧と、先頭要素で検出される旨を表示 |
 | `IncludedApps` / `PrimaryBundleId` の bundle id が pkg 実体に存在しない | warning: 取り違え・typo の可能性を表示 |
-| `PrimaryBundleId` 指定済みで一致 bundle が pkg 内にも存在 | 警告なし |
+| manifest の `BundleVersion` と `CFBundleShortVersionString` が不一致 | warning: stale な検出値の可能性を表示 |
+| `AppType: lob`で `BundleBuildVersion` と `CFBundleVersion` が不一致 | warning: stale な build 値の可能性を表示 |
+| `PrimaryBundleId` 指定済みで一致 bundle が pkg 実体にも存在 | 警告なし |
+
+`IgnoreAppVersion` は Graph で version detection を無視する指定であり、manifest と PKG 実体の version mismatch
+warning を抑止しない。検査結果には content SHA256、inspector version、検出 bundle、selector で解決した primary、
+warning code、`force` 使用有無を記録する。source URL、token、署名付き URL は記録しない。
 
 | 実行環境 | 挙動 |
 |---|---|
 | 対話実行(TTY) | warning 表示後、続行確認を求める。拒否時は exit code 非 0 で中断 |
-| `--force` 指定時 | 確認せず warning ログのみで続行(CI 等の非対話実行を妨げない) |
+| `package --force` / `publish --force` | semantic warning のみ確認せず warning ログで続行。hard fail は回避不可 |
 | `--force` なしの非対話環境(TTY なし) | 安全側に倒して fail し、`--force` の付与を促すメッセージを出す |
 
-**hash 互換性**(§6.20 Categories と同じ契約): `Detection.PrimaryBundleId` は nullable な `string?`
-(既定値なし)とする。`InputHashCalculator` の canonical JSON は null property を落とすため、
-`PrimaryBundleId` を宣言していない既存 manifest の `inputHash` はこの変更の前後で byte 単位で不変。
-指定すると `inputHash` が変わり、次の `package` / `publish` で再 package / 再 upload が発生する
-(macOS PKG は最大 8 GB)— detection 修正のための republish として意図どおりの挙動。`ManifestLoader` は
-`IgnoreUnmatchedProperties()` のため、新旧 CLI を交互に実行すると `inputHash` が振動して毎回 upload が
-発生する。`PrimaryBundleId` を使い始めたら CI と手元の CLI バージョンを揃えること。`SchemaVersion` は
-`"1.0"` のまま(additive optional field)。
+`publish` は全対象 entry の static validation、artifact の存在、期待 SHA256 と package metadata の SHA256 の一致、
+XAR inspection、semantic warning の承認、tenant 検証を全件完了してから Graph の create/upload/PATCH/assignment を開始する。
+1 件でも hard fail または未承認 warning があれば Graph mutation は 0 件とする。package の inspection report が欠落・古い・
+content SHA256 と一致しない場合は report を信頼せず、publish 前に実ファイルを再ハッシュして再 inspection する。
+
+**hash 互換性**(§6.20 Categories と同じ契約): `Detection.PrimaryBundleId` と `BundleBuildVersion` は nullable・
+既定値なしとする。`InputHashCalculator` の canonical JSON は null property を落とすため、これらを宣言していない
+既存 pkg manifest の `inputHash` はこの変更の前後で byte 単位で不変。`BundleBuildVersion` は lob で指定すると
+hash が変わり、pkg で指定しても値は Graph mapping に使用しない。`PrimaryBundleId` を指定すると hash が変わり、
+次の `package` / `publish` で再 package / 再 upload が発生する(detection 修正のための意図的な republish)。
+`ManifestLoader` は `IgnoreUnmatchedProperties()` のため、新旧 CLI を交互に実行すると `inputHash` が振動して毎回
+upload が発生する。新フィールドを使い始めたら CI と手元の CLI バージョンを揃えること。`SchemaVersion` は `"1.0"` のまま。
 
 対象外:
 
@@ -356,6 +384,7 @@ validation ルール(`validate` / `package` / `publish` はすべて、Graph 呼
 - pkg から bundle を自動抽出して manifest を自動生成すること。
 - `IncludedApps` の暗黙フィルタ(除外は常に「書かない」ことで行う)。
 - manifest ファイル自体の並べ替え(並べ替えは Graph payload 生成時のみ)。
+- PKG payload(cpio.gz)の展開・実ファイルの検証(TOC の宣言情報のみを信頼する)。
 
 ### 5.5 Assignment schema
 
@@ -406,8 +435,8 @@ macOS:
 | manifest | Graph | 備考 |
 |---|---|---|
 | `MinimumOSVersion: "14.0"` | `minimumSupportedOperatingSystem` | boolean flag の複合型。v1.0 は `v13_0` までしか無く、macOS 14/15/26 のフラグは beta 専用。`AppType: lob`(v1.0)で 14 以降を指定すると fail する |
-| `Detection.IncludedApps`(`AppType: pkg`) | `includedApps`(`macOSIncludedApp`: `bundleId` + `bundleVersion`) | 先頭要素(`PrimaryBundleId` 指定時は一致した entry、§5.4.3)の値がそのまま `primaryBundleId` / `primaryBundleVersion` になり、payload では先頭へ並べ替えられる |
-| `Detection.IncludedApps`(`AppType: lob`) | `childApps`(`macOSLobChildApp`: `bundleId` + `buildNumber` + `versionNumber`)。先頭要素(`PrimaryBundleId` 指定時は一致した entry)が top-level `buildNumber` / `versionNumber` にもなり、payload では先頭へ並べ替えられる | `pkg` の `includedApps` とはフィールド名・形が異なる点に注意 |
+| `Detection.IncludedApps`(`AppType: pkg`) | `includedApps`(`macOSIncludedApp`: `bundleId` + `bundleVersion`) | 選択した先頭要素(`PrimaryBundleId` 指定時は一致した entry、§5.4.3)の `BundleId` / `BundleVersion` が `primaryBundleId` / `primaryBundleVersion` になり、payload では先頭へ並べ替えられる。`BundleBuildVersion` は省略可で、指定しても無視する |
+| `Detection.IncludedApps`(`AppType: lob`) | `childApps`(`macOSLobChildApp`: `bundleId` + `buildNumber` + `versionNumber`) | 選択した先頭要素(`PrimaryBundleId` 指定時は一致した entry)を先頭へ並べ替える。選択 entry の `BundleId` は top-level `bundleId`、`BundleVersion`(`CFBundleShortVersionString`)は `buildNumber`、必須の `BundleBuildVersion`(`CFBundleVersion`)は `versionNumber` にも設定する。`pkg` の `includedApps` とはフィールド名・形が異なる点に注意 |
 
 ### 5.8 Categories(Intune app category / GitHub #99)
 

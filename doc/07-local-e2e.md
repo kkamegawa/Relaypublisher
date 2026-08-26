@@ -14,6 +14,8 @@ Run the commands from the repository root. The local workflow requires:
 - A valid manifest whose repository files and package sources are available locally.
 - A test Microsoft Entra tenant, Intune permission, and assignment group.
 - A Windows machine or runner for generating Windows `.intunewin` packages.
+- A deterministic macOS XAR fixture for parser/CLI checks, plus a disposable real `.pkg` source for tenant verification.
+- A protected manual-run environment with an approval gate, an expected-tenant value, and an audit trail for `--force`.
 
 The repository sample manifests are reference material rather than guaranteed E2E fixtures, with one exception: the PowerShell macOS manifests under `samples/manifests/Microsoft/Microsoft.PowerShell/7.6.4/` and `7.6.5/` (`powershell-macos-arm64.yaml` / `-x64.yaml`, four files total) point at real, publicly downloadable packages and run `plan` -> `validate` -> `package` unmodified. The other samples intentionally fail validation, or refer to package sources that do not resolve, to document schema shapes or real-world constraints rather than to be run as-is. See [samples/manifests/README.md](../samples/manifests/README.md) for which sample is which before assuming a failure is a bug. Use an organization-specific test manifest with real package inputs for anything beyond a quick local smoke test.
 
@@ -255,7 +257,7 @@ dotnet run --configuration Release --project $CliProject -- `
   validate --manifest-list manifest-list.json
 ```
 
-Fix all validation errors before packaging. Validation includes manifest schema, path safety, file-backed assets, and identity/display-name uniqueness for the selected set.
+Fix all validation errors before packaging. Validation includes manifest schema, path safety, file-backed assets, and identity/display-name uniqueness for the selected set. It is schema/static validation only for package contents: it does not download a source or inspect the PKG/XAR.
 
 ### 4.4 Package
 
@@ -266,7 +268,7 @@ dotnet run --configuration Release --project $CliProject -- `
   package --manifest-list manifest-list.json --output ./out
 ```
 
-The command downloads external files, verifies their SHA-256 values, stages repository files, and generates package metadata.
+The command downloads external files, verifies their SHA-256 values, stages repository files, and generates package metadata. For macOS `.pkg` entries, SHA verification completes before XAR inspection; the inspection report records the detected bundle IDs/versions, selected primary, source SHA, manifest identity, and exact CLI version. Semantic warnings use the TTY/non-TTY/`--force` policy described below; hard errors cannot be forced.
 
 A macOS-only manifest can use the normal `package` command on macOS/Linux because macOS packaging has no Windows packaging tool step:
 
@@ -314,12 +316,14 @@ dotnet run --configuration Release --project $CliProject -- `
   --dry-run
 ```
 
-Check the selected app identity, existing app resolution, package version, input hash, category plan, assignment plan, tenant, and platform-specific mapping errors.
+Check the selected app identity, existing app resolution, package version, input hash, category plan, assignment plan, tenant, platform-specific mapping errors, and the primary bundle inspection result. `publish --dry-run` rehashes and re-inspects staged macOS packages and preflights every selected entry before reporting the plan.
+
+For an interactive semantic warning, review the detected bundle list and answer `[y/N]`. For a non-interactive run, the same warning fails unless the protected command explicitly supplies `--force`. `--force` acknowledges semantic differences only; it cannot bypass a malformed archive, an ambiguous primary, a checksum mismatch, a stale/tampered artifact, or a tenant/Graph safety error.
 
 If the manifest declares `Categories`, the dry-run also reads the tenant category catalog and the app's
 current categories, then prints a `Category plan for app <id>: N add, N keep, N remove` block (a new app uses
 the placeholder id `(new app)`). This is the only point where a category name that does not exist in the
-tenant is detected - `validate` never contacts Graph. Nothing is written during the dry-run.
+tenant is detected - `validate` never contacts Graph. Nothing is written during the dry-run, including when a warning is rejected or a hard error is found in a later manifest entry.
 
 ### 4.6 Publish to the test tenant
 
@@ -348,6 +352,8 @@ dotnet run --configuration Release --project $CliProject -- `
 ```
 
 Verify the app in the Intune admin center, including its display name, management metadata in `notes`, committed content, detection rules, assignments, and - when the manifest declares `Categories` - the app's categories. Keep `publish-result.json` out of public artifacts if it contains operational details.
+
+Before the first Graph write, the command rehashes and re-inspects every staged macOS `.pkg` and completes the full selected set's preflight. It never trusts a package report without checking the current bytes. If an artifact is stale or tampered, replace it by rerunning `package` with the same manifest list and pinned CLI; do not edit the report. A warning rejection or hard error in any entry must leave Graph unchanged for the batch.
 
 Relaypublisher checks the app's `publishingState` before deciding whether the content hash permits a
 skip. An app in `processing` is polled until `published`; an app in `notPublished` reuses its sole
@@ -396,6 +402,17 @@ To exercise the category flow end to end on a disposable test tenant:
 6. Delete the throwaway categories from the tenant afterwards. Relaypublisher never deletes a category
    resource itself.
 
+### 4.7. Primary bundle acceptance run
+
+Run this as a protected, manually approved E2E against a disposable tenant. Keep the deterministic XAR fixture in automated tests; use a real `.pkg` source here to verify the complete source-to-device path.
+
+1. Use one fixture/manifest pair that contains a selected application bundle and a second application bundle. Run `validate` and confirm it performs only static checks. Run `package` and verify that source SHA validation happens before XAR inspection, and that the report records the detected IDs, versions, selected primary, manifest identity, and CLI version.
+2. Run `publish --dry-run` with a TTY, reject the semantic warning, and confirm that no Graph write occurs. Repeat without a TTY and confirm it fails unless `--force` is supplied. Repeat with the protected `--force` approval and confirm that the warning is recorded while hard errors still fail.
+3. Publish both `AppType: pkg` and `AppType: lob` variants. Read the Graph resources back and verify that the selected primary is first in `includedApps`/`childApps`; for `lob`, verify `BundleVersion` -> `buildNumber`, `BundleBuildVersion` -> `versionNumber`, and the top-level primary bundle fields.
+4. Assign each app to the disposable test group, wait for a managed macOS device check-in, and verify the device reports the selected bundle and expected version. This is the device-detection portion of the E2E and cannot be replaced by a Graph payload read-back.
+5. Rerun the unchanged publish and verify idempotency: no second app, no duplicate content, and no changed primary. Change only `PrimaryBundleId`, repackage, publish, and verify the primary order and device detection change as intended.
+6. Replace one staged `.pkg` byte or its report, rerun `publish`, and verify stale/tampered preflight failure with zero Graph writes. Restore the artifact and rerun successfully.
+
 ## 5. Safe rerun and cleanup
 
 - `plan`, `validate`, and `package --stage-only` can be rerun safely.
@@ -403,8 +420,9 @@ To exercise the category flow end to end on a disposable test tenant:
 - `publish --dry-run` can be rerun without writing to Intune.
 - A real publish is designed to converge, but content activation cannot be undone by the tool.
 - Category `$ref` add/remove is idempotent, so an interrupted category synchronization converges on the next run.
+- A stale or tampered package artifact is never repaired by editing metadata; rerun `package` with the same manifest list and exact CLI version.
 - For an intentional rollback, package the previous manifest version and use `--allow-downgrade` explicitly.
-- Remove local `out`, `manifest-list.json`, and `publish-result.json` after the test when they are no longer needed. Never commit package output, tokens, or signed download URLs.
+- After the protected E2E, remove the test app, content versions, assignments, and disposable categories from the tenant. Remove local `out`, `manifest-list.json`, and `publish-result.json` after the test when they are no longer needed. Never commit package output, tokens, or signed download URLs.
 
 If the package artifact came from CI instead of a local `package` run, confirm that the downloaded artifact contains the same manifest entries and `package-metadata.json` files before running `publish`.
 

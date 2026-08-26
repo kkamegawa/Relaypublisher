@@ -118,3 +118,35 @@
   - **今後の注意**: 将来 pkg introspection(xar TOC 検査)を実装した際、検査結果から「未知の bundle」を
     自動的に `IncludedApps` へ追記・除外するような自動化は行わないこと。あくまで警告 + 人間の確認
     (`--force` で上書き可)に留め、manifest の内容を上書きしない、という本決定の前提を維持する。
+
+## 2026-08-26: #112 primary bundle 機能の実装契約と stacked PR の境界
+
+- **決定**: `validate` は manifest schema と静的な repository 制約だけを検証し、source の download や
+  PKG 内容の検査は行わない。`package` は source byte 列の SHA-256 を検証してから XAR を検査し、検出した
+  bundle ID/version、selected primary、manifest identity、source SHA、CLI version を artifact report に保存する。
+- **決定**: `publish` は package report を信頼するだけにせず、staging 済み macOS `.pkg` を再 hash・再検査し、
+  manifest、metadata、report、CLI version の整合性を確認する。選択された全 entry の preflight が終わるまで
+  Graph write を開始しない。warning 拒否、hard error、stale/tampered artifact のいずれも batch の Graph write
+  を 0 件にする。
+- **決定**: semantic warning は TTY では `[y/N]` の確認、非対話環境では `--force` が無い限り fail とする。
+  `--force` は未列挙 bundle、package に存在しない declared primary、primary 未指定時の複数 bundleなどの
+  semantic difference だけを確認する。曖昧な primary、破損/XAR parse error、未対応 archive、SHA mismatch、
+  metadata/report 不整合、tenant/Graph safety error は hard error とし、`--force` で回避できない。
+- **決定**: `AppType: lob` は `BundleVersion` を Graph `buildNumber`、`BundleBuildVersion` を Graph `versionNumber`
+  に対応させ、selected primary を top-level bundle field と `childApps[0]` に反映する。`pkg`/`lob` の Graph
+  payload を read-back する protected manual E2E と、managed macOS device の detection 確認を受入条件とする。
+
+### Stacked implementation PRs
+
+1. **Layer 1 - manifest contract and payload mapping**: nullable `PrimaryBundleId`、LOB の
+   `BundleBuildVersion`、static validation、canonical hash compatibility、primary selection/reordering、pkg/lob
+   mapping と unit tests。
+2. **Layer 2 - package inspection and operator acknowledgement**: secure XAR/XML inspector、source SHA-first
+   package flow、inspection report、semantic warning/hard-error classification、TTY `[y/N]`、non-TTY failure、
+   `--force`、deterministic XAR fixture と CLI integration tests。
+3. **Layer 3 - publish preflight and operational verification**: artifact rehash/reinspection、all-entry preflight
+   before Graph writes、stale/tamper detection、exact CLI pinning in CI, protected manual E2E, Graph read-back,
+   device detection, idempotency, primary change, rejected-preflight no-write, and cleanup.
+
+各 layer は前段の branch/PR を親とする stacked PR とし、後段は前段が提供する report/schema 契約を変更せずに
+利用する。実装完了条件は deterministic test、CI build/test、protected manual E2E の全てを満たすこととする。

@@ -23,7 +23,7 @@
 | `contoso-tool-windows-arm64.yaml` | E2E 実行可能 | 通る | 通る(上記と同様) | |
 | `contoso-tool-macos-arm64.yaml` | 参照専用(schema 例) | 通る | **落ちる** — `Source` が架空の Azure Blob account(`contosopackages`)と、全ゼロのプレースホルダ `Sha256` を指している | [doc/01-manifest-schema.md §5.3](../../doc/01-manifest-schema.md) の `azureBlob` の形を示すためのもの。解決される想定ではない |
 | `apple-container-macos-arm64.yaml` | 参照専用(意図的な失敗) | **落ちる** — `Detection.IncludedApps` が空 | — | Apple Container の PKG は `.app` バンドルを一切インストールしないため、架空の bundleId を捏造しない限り `IncludedApps` を実値で埋められない。Intune の macOS 検出における実際の制約を記録したもの。ファイル冒頭のコメントと [doc/01-manifest-schema.md §5.4](../../doc/01-manifest-schema.md) を参照 |
-| `global-secure-access-macos-arm64.yaml` | 参照専用(schema 例) | 通る | **落ちる** — `contoso-tool-macos-arm64.yaml` と同様、架空の Azure Blob account を `Source` に指定 | 複数 app を同梱する pkg に対する `Detection.PrimaryBundleId`(§5.4.3)を示す。Microsoft AutoUpdate は意図的に `IncludedApps` に含めていない — ファイル冒頭のコメント参照 |
+| `global-secure-access-macos-arm64.yaml` | 参照専用(schema 例) | 通る | **落ちる** — `contoso-tool-macos-arm64.yaml` と同様、架空の Azure Blob account を `Source` に指定 | 複数 app を同梱する pkg に対する完全一致の `Detection.PrimaryBundleId`(§5.4.3)を示す。Microsoft AutoUpdate は意図的に `IncludedApps` に含めていない — ファイル冒頭のコメント参照 |
 
 ## PowerShell サンプルが E2E fixture として成立する理由
 
@@ -33,6 +33,9 @@ PowerShell の macOS PKG にはそれがあります。インストーラが `/A
 
 - `BundleId`: `com.microsoft.powershell`
 - `BundleVersion`: リリースバージョン(例: `7.6.5`)
+
+`AppType: lob` では、すべての `IncludedApps` entry に `BundleBuildVersion`(`CFBundleVersion`)も必須です。
+`AppType: pkg` では省略でき、pkg の Graph mapping では無視されます。
 
 (根拠: PowerShell/PowerShell リポジトリの `tools/packaging/packaging.psm1` の `New-MacOSLauncher` / `Get-MacOSPackageIdentifierInfo`、および `packaging.strings.psd1` の `MacOSLauncherPlistTemplate`。) 実機の Mac にインストール後、次のコマンドで自分で確認できます。
 
@@ -99,10 +102,12 @@ macOS PKG は 1 つの pkg に複数の app bundle を含むことがありま�
 `IncludedApps` の先頭要素をそのまま使うため、MAU が先頭に来る(または manifest 編集で並び順が入れ替わる)と
 バージョン判定が updater に対して行われてしまいます。
 
-`Detection.PrimaryBundleId` を使うと、bundle id(完全一致 または `com.microsoft.globalsecureaccess` の
-ようなセグメント境界の前置一致 — `com.microsoft.globalsecureaccess.client` に一致)で、どの
-`IncludedApps` entry を primary にするか固定できます。省略すれば現行どおり先頭要素が primary のままで
-`inputHash` も変わりません。マッチ規則と validation の詳細は
+`Detection.PrimaryBundleId` を使うと、bundle id(完全一致またはセグメント境界の前置一致)で、どの
+`IncludedApps` entry を primary にするか固定できます。selector はちょうど 1 件に一致する必要があり、
+`com.microsoft.globalsecureaccess.client` と `.agent` の両方に一致する広い prefix は validation error です。
+このサンプルは完全一致の `com.microsoft.globalsecureaccess.client` を使っています。省略すれば現行どおり
+先頭要素が primary のままで `inputHash` も変わりません。`IncludedApps` は一意な BundleId を 1〜500 件指定できます。
+マッチ規則と validation の詳細は
 [doc/01-manifest-schema.md §5.4.3](../../doc/01-manifest-schema.md) を参照してください。
 
 同梱 updater を検出対象から外すのは「`IncludedApps` に書かないこと」で行います — 別途の除外リスト機構は
@@ -110,12 +115,13 @@ macOS PKG は 1 つの pkg に複数の app bundle を含むことがありま�
 する app のみを列挙すべきこと、列挙した app がインストールされていない場合は install status が success を
 報告しないことを明記しています。
 
-manifest だけでは `.pkg` が実際に何を同梱しているか分からないため、設計では `package`/`publish` 時に
-ダウンロードした pkg の中身(xar の table of contents)を検査し、`PrimaryBundleId` 未指定で複数 bundle が
-見つかった場合や、指定した bundle id が pkg 内に見つからない場合に警告することも定めています。対話実行時は
-続行確認を求め、`--force` を指定すると確認せず続行するため CI を妨げません。この検査と確認プロンプトは
-[doc/issues/issue-022-macos-primary-bundle-selection.md](../../doc/issues/issue-022-macos-primary-bundle-selection.md)
-のスコープであり、まだ実装されていません — このサンプルは manifest の形だけを示しています。
+manifest だけでは `.pkg` が実際に何を同梱しているか分からないため、`validate` は schema 専用とし、source の download や
+`filePath` source は扱いません。`package` は宣言された SHA-256 を検証してから bounded な XAR TOC/heap entry を検査し、
+`publish` は Graph mutation 前に全 artifact を再ハッシュ・再検査します。XAR 破損・未対応 compression・サイズ上限・XML安全性違反・
+hash 不一致は hard fail で、`--force` でも回避できません。bundle/version の意味上の warning だけが `--force` で承認可能です。
+warning は batch 全体でまとめて確認し、inspection metadata に検出 bundle、選択 primary、warning code、content SHA-256、
+force 使用有無を記録します。詳細は
+[doc/issues/issue-022-macos-primary-bundle-selection.md](../../doc/issues/issue-022-macos-primary-bundle-selection.md)を参照してください。
 
 ## PowerShell サンプルを E2E で実行する
 

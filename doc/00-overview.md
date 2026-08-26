@@ -351,12 +351,16 @@ Intune の macOS PKG 配布には 2 種類あり、制約が異なる。
 
 **既定は `macOSPkgApp`(unmanaged PKG)** とし、manifest の `AppType` で `lob` に切り替え可能とする。
 
-検出は **`IncludedApps`(bundleId + version のリスト)** で行う。manifest に必須フィールドとして定義する(schema は `01-manifest-schema.md` 参照)。既定では**先頭要素**が Graph の `primaryBundleId`(pkg)/ 先頭 `childApps` エントリ(lob)として検出・レポートに使われる。pkg が複数の app bundle を同梱する場合の primary 選択は §6.21 を参照。
+検出は **`IncludedApps`(bundleId + version のリスト)** で行う。manifest に必須フィールドとして定義する(schema は `01-manifest-schema.md` 参照)。
+`IncludedApps` は 1〜500 件、`BundleId` は重複不可とする。既定では**先頭要素**が Graph の `primaryBundleId`(pkg)/先頭
+`childApps` エントリ(lob)として検出・レポートに使われる。pkg が複数の app bundle を同梱する場合の primary 選択は §6.21 を参照。
 
 validation ルール:
 
 - `AppType: pkg` の app に `Intent: uninstall` の assignment があれば fail。
 - `AppType: lob` の場合は Icon(ロゴ)を必須とし、2 GB 超の PKG を fail とする。
+- `AppType: lob` の各 `IncludedApps` entry は `BundleBuildVersion`(`CFBundleVersion`)を必須とする。`BundleVersion` は
+  `CFBundleShortVersionString`として `buildNumber`、`BundleBuildVersion` は `versionNumber` にマッピングする。
 
 **Graph API バージョン**: `macOSPkgApp` は **beta 専用**(v1.0 に存在しない)。そのため `AppType: pkg` の app に
 関するすべての Graph 呼び出し ― 作成・更新、content upload(contentVersions/files/commit)、notes /
@@ -525,32 +529,58 @@ Intune の app category は tenant 共有の `mobileAppCategory` リソースで
 macOS PKG(`macOSPkgApp` / `macOSLobApp`)は 1 つの pkg に複数の app bundle を含むことがある。例えば
 Microsoft Global Secure Access クライアントの pkg は Microsoft AutoUpdate(MAU)を同梱する。Intune は
 `includedApps`(pkg)/ `childApps`(lob)の**先頭要素**を検出・レポートの primary(`primaryBundleId` /
-`primaryBundleVersion`、または top-level `buildNumber` / `versionNumber`)として使うため、同梱 updater が
-先頭に来る、または manifest 編集で順序が入れ替わると、意図しない app のバージョンで検出が行われる。
+`primaryBundleVersion`、または top-level `bundleId` / `buildNumber` / `versionNumber`)として使うため、
+同梱 updater が先頭に来る、または manifest 編集で順序が入れ替わると、意図しない app のバージョンで検出が
+行われる。
 
 - manifest に任意の `Detection.PrimaryBundleId`(文字列、schema は `01-manifest-schema.md` §5.4.3)を追加し、
   `IncludedApps` の中から primary にする entry を明示できるようにする。**省略時は現行どおり先頭要素**が
   primary(挙動・`inputHash` とも変更なし)。
-- マッチは **完全一致 または セグメント境界の前置一致**(`entry.BundleId == 値` または
+- マッチは **完全一致またはセグメント境界の前置一致**(`entry.BundleId == 値` または
   `entry.BundleId` が `値 + "."` で始まる、Ordinal・大文字小文字区別)とする。ちょうど 1 件に一致する必要があり、
   0 件・複数件一致は validation error とする(6.7 の「Graph 呼び出し前に fail」原則に従う)。一致した entry は
   Graph payload 上で先頭に並べ替える(manifest ファイル自体は書き換えない)。`AppType: lob` にも同じ意味論を
   適用し、childApps の並べ替え・top-level フィールドの選定に使う。
+- `Detection.IncludedApps` は 1〜500 件とし、`BundleId` は Ordinal・大文字小文字区別で重複不可とする。500 件は
+  Microsoft Graph の `macOSPkgApp.includedApps` の上限に合わせる。`PrimaryBundleId` の prefix が複数の entry に
+  一致する場合も曖昧一致として fail する。
+- `IncludedApps[].BundleVersion` は `CFBundleShortVersionString` を表し、pkg では Graph の
+  `bundleVersion`、lob では `buildNumber` にマッピングする。`AppType: lob` では
+  `IncludedApps[].BundleBuildVersion`(`CFBundleVersion`)を必須とし、Graph の `versionNumber` にマッピングする。
+  `AppType: pkg` では `BundleBuildVersion` を省略でき、指定されても Graph mapping と pkg 検査の version 比較では
+  使用しない。新フィールドは nullable・初期値なしで追加し、既存 pkg manifest の省略時の hash を変えない。
 - **同梱 updater の除外は「`IncludedApps` に書かない」ことで行う**(Microsoft Learn の
   add-unmanaged-pkg-macos ガイダンスに従う)。暗黙のブロックリストや自動フィルタは持たない(スコープ外)。
-- **pkg 実体の中身は manifest だけでは分からない**ため、pkg のダウンロード時(`package` / `publish` フェーズ、
-  ローカル参照可能なら `validate` でも)に xar TOC の `Distribution` / `PackageInfo` XML から同梱 bundle
-  一覧を検査する(payload の展開や `pkgutil` への依存なし、.NET 標準ライブラリで xar ヘッダ + zlib 圧縮 TOC を
-  parse する)。検査の結果、次の場合は warning を出す。
-  - pkg 内に複数 bundle があり `PrimaryBundleId` が省略されている。
-  - `IncludedApps` / `PrimaryBundleId` に指定した bundle id が pkg 実体に存在しない(取り違え・typo 検知)。
-- 警告時は **対話実行(TTY)では続行確認を求め**、拒否時は fail する。**`--force` 指定時は確認せず warning
-  ログのみで続行**し、CI 等の非対話実行を妨げない。`--force` なしの非対話環境では安全側に倒して fail し、
-  `--force` の付与を促す。
-- hash 互換性は §6.20(Categories)と同じ契約: `Detection.PrimaryBundleId` は nullable な `string?`(既定値なし)
-  とし、省略している既存 manifest の `inputHash` はバイト単位で不変。指定すると `inputHash` が変わり
-  再 package / 再 upload が発生する(detection 修正のための意図的な republish)。新旧 CLI が混在すると
-  hash が振動する注意点も 6.20 と同様にドキュメントで明示する。
+- `validate` は schema、manifest 内の重複・件数、selector、path などの静的検証だけを行い、source の download、PKG
+  の SHA256 計算、XAR inspection は行わない。今回 `filePath` source は追加しない。PKG の実体検査は `package` の
+  download + SHA256 検証直後に一度行う。
+- **PKG inspection** は XAR の header、compressed TOC、TOC が指す heap entry を bounded reader で読む。TOC に記録された
+  `Distribution` / `PackageInfo` XML の entry 本体を必要な範囲だけ読み、payload(cpio.gz)は展開しない。
+  .NET 標準ライブラリだけを使用し、`pkgutil`へ依存しない。上限は compressed TOC 16 MiB、decompressed TOC 64 MiB、
+  1 heap entry 16 MiB、bundle 4,096 件、XML depth 64 とする。DTD/外部 entity は禁止する。未知の compression、
+  header/offset/length の不整合、切り詰め、展開・XMLエラー、上限超過は hard fail とし、`--force` でも回避できない。
+- package は source の期待 SHA256 を検証して一致した後に限り inspection を実行する。検査結果には検査した content SHA256、
+  inspector version、検出 bundle(`bundleId`、`CFBundleShortVersionString`、取得できる場合は `CFBundleVersion`)、
+  selector で解決した primary、warning code、`force` 使用有無を記録する。source URL、token、署名付き URL は記録しない。
+- `IncludedApps`/`PrimaryBundleId` の bundle 不在、PKG 内の複数 bundle で primary 省略、manifest の version と実体の
+  `CFBundleShortVersionString`/(`AppType: lob`では)`CFBundleVersion` の不一致は semantic warning とする。
+  `IgnoreAppVersion` は Graph の version detection を無視する指定であり、manifest と実体の不一致 warning を抑止しない。
+- semantic warning のみ `--force` で承認できる。対話(TTY)では警告をまとめて表示して一度だけ確認し、拒否時は fail。
+  非対話環境で `--force` なしの場合も fail とする。`package --force` は警告と force 使用を metadata に記録し、
+  `publish --force` はその metadata を信頼せず、実ファイルを再ハッシュ・再 inspection した今回の batch にだけ適用する。
+- `publish` は全対象 entry の static validation、artifact の存在、期待 SHA256 と metadata SHA256 の一致、XAR inspection、
+  semantic warning の承認、tenant 検証を**全件完了してから** Graph の create/upload/PATCH/assignment を開始する。1 件でも
+  hard fail または未承認 warning があれば Graph mutation は 0 件とする。package 済み inspection report が古い、欠落している、
+  または SHA256 が一致しない場合は publish 前に再 inspection する。
+
+実装は、依存関係を保った次の 3 層の stacked PR に分割する。
+
+1. **Manifest contract / mapper**: `PrimaryBundleId`、`BundleBuildVersion`、重複・500件上限・exact/segment prefix の
+   validation、nullable hash compatibility、pkg/lob Graph payload mapping と単体テスト。download や Graph mutation は追加しない。
+2. **Bounded PKG inspection / package artifact**: SHA256 後の XAR heap-entry reader、上限・XML安全性、semantic warning、
+   inspection metadata の生成、`package` の `--force` と fixture/CLI integration test。Graph mutation は追加しない。
+3. **Publish preflight / operation**: 全件 preflight、publish 時の再ハッシュ・再 inspection、TTY/非TTY の `--force`、Graph mutation
+   境界、CI の明示的 CLI version と fake Graph/実テナント E2E。各 PR は直前の層に積み上げる。
 - 対象外: 既知 updater の bundle id を判定する組み込みリスト、pkg からの bundle 自動抽出による manifest 自動生成、
   `IncludedApps` の暗黙フィルタ(常に「書かない」ことで除外する)。
 

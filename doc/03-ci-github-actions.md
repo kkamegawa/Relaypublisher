@@ -38,6 +38,12 @@
 - 実 URL / tenant id / feed URL を YAML に直書きしない(AGENTS.md 禁止事項)。secret 経由で渡す。
   GitHub Packages の URL だけは認証なしで公開されている既知 URL なので直書きしてよい。
 - secret 由来の値をシェル内で導出した場合は `::add-mask::` でマスクしてからでないと使わない。
+- 利用者向け publish workflow で使う `relaypublisher` は、Validate / Package / Publish の全 job で同じ
+  exact version を `RELAYPUBLISHER_VERSION` として固定する。version なしの `dotnet tool install` は使用しない。
+- PKG の semantic warning を承認する `forceWarnings` は `workflow_dispatch` の boolean input(既定 `false`)だけで
+ 受け付ける。true の実行は required reviewers を設定した protected `production-force` environment に入り、
+  warning 用の `--force` だけを条件付きで追加する。parser error、checksum、metadata、tenant mismatch には
+  `--force` を適用しない。
 
 ## 11b. CI workflow (PR build / test validation)
 
@@ -73,14 +79,21 @@
 - `concurrency` で publish を直列化する(並走による app 二重作成防止)。
 - `fetch-depth: 0` で checkout し、`plan --base-ref` で changed manifest を確定して `manifest-list.json` を artifact 化する。後続 job は changed を再計算しない。
 - `permissions` は job 単位で最小化する。PR で動く job に `id-token: write` を付けない。
-- CI 実行時の CLI 呼び出しは `relaypublisher` コマンドに統一し、各 job で `dotnet tool install --global relaypublisher` を実行する。
+- CI 実行時の CLI 呼び出しは `relaypublisher` コマンドに統一し、各 job で
+  `dotnet tool install --global relaypublisher --version "$RELAYPUBLISHER_VERSION"` を実行する。
 - source provider が使う secrets(GitHub PAT 等)は package job に環境変数で渡す。fork からの PR には secrets が渡らないため、認証が必要な download を含む manifest は PR では dry-run に留める。
 - `.intunewin` 生成のみ Windows runner が必要。publish は Graph REST 呼び出しだけなので ubuntu で動かす。
 - `workflow_dispatch` の `dryRun` input を publish 実行判定に使う。
+- `package` は source SHA256 検証後に macOS PKG inspection を行い、package file と
+  `package-metadata.json`(content SHA256、input hash、CLI/inspector version、bundle result、warning code)を
+  同一 artifact に含める。`publish` は source を再取得せず artifact を再ハッシュ・再検査し、全件 preflight 完了
+  後にだけ Graph write を開始する。
 
 ### Package artifact handoff
 
-Windows の package job は manifest が参照する installer input を download し、repository file を staging し、checksum を検証して、`./out` に最終 package を生成する。このディレクトリを `intunewin-packages` artifact として upload する。publish job は `publish` の前に同じ artifact を download する必要があり、manifest set を再構築または再計算しない。
+Windows の package job は manifest が参照する installer input を download し、repository file を staging し、checksum を検証して、`./out` に最終 package を生成する。macOS の package も source SHA256 の後に PKG inspection を行い、同じ出力ディレクトリへ `package-metadata.json` を書く。このディレクトリを `intunewin-packages` artifact として upload する。artifact 内 metadata の `contentSha256`、`inputHash`、`cliVersion`、`inspection` は package file と一緒に保存する。
+
+publish job は `publish` の前に同じ artifact を download する必要があり、manifest set を再構築または再計算しない。`publish` は package file を再ハッシュし、metadata の content SHA256 と比較したうえで、source を再取得せず同じ PKG を再検査する。複数 manifest の検査、metadata 整合性、warning acknowledgement は Graph の app resolve/upload/PATCH より前に全件完了させる。
 
 ```yaml
 - uses: actions/download-artifact@v4
@@ -140,6 +153,11 @@ on:
       dryRun:
         type: boolean
         default: true
+      forceWarnings:
+        description: "Acknowledge semantic PKG inspection warnings (requires production-force approval)."
+        required: false
+        type: boolean
+        default: false
       manifests:
         description: "Explicit manifest paths (space separated). Empty = all manifests."
         required: false
@@ -150,6 +168,10 @@ concurrency:
   cancel-in-progress: false
 
 permissions: {}
+
+env:
+  # Pin this value to the released CLI used by all three jobs and manual E2E.
+  RELAYPUBLISHER_VERSION: "1.2.3"
 
 jobs:
   validate:
@@ -169,7 +191,7 @@ jobs:
 
       - run: dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
 
-      - run: dotnet tool install --global relaypublisher
+      - run: dotnet tool install --global relaypublisher --version "$RELAYPUBLISHER_VERSION"
 
       # changed detection をここで一度だけ確定する。
       # PR: merge-base / push: event.before / dispatch: 明示指定または全件
@@ -227,7 +249,7 @@ jobs:
           dotnet-version: "10.0.x"
 
       - shell: pwsh
-        run: dotnet tool install --global relaypublisher
+        run: dotnet tool install --global relaypublisher --version $env:RELAYPUBLISHER_VERSION
 
       - uses: actions/download-artifact@v4
         with:
@@ -261,7 +283,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    environment: production
+    # production-force is a separately protected environment with required reviewers.
+    environment: ${{ inputs.forceWarnings == true && 'production-force' || 'production' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -269,7 +292,7 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - run: dotnet tool install --global relaypublisher
+      - run: dotnet tool install --global relaypublisher --version "$RELAYPUBLISHER_VERSION"
 
       - name: Azure login
         uses: azure/login@v2
@@ -287,11 +310,16 @@ jobs:
           name: intunewin-packages
           path: ./out
 
-      - run: >
-          relaypublisher publish
-          --manifest-list manifest-list.json
-          --package-dir ./out
-          --expected-tenant "${{ secrets.AZURE_TENANT_ID }}"
+      - name: Publish after artifact preflight
+        shell: bash
+        env:
+          FORCE_WARNINGS: ${{ inputs.forceWarnings }}
+        run: |
+          ARGS=(publish --manifest-list manifest-list.json --package-dir ./out --expected-tenant "${{ secrets.AZURE_TENANT_ID }}")
+          if [[ "$FORCE_WARNINGS" == "true" ]]; then
+            ARGS+=(--force)
+          fi
+          relaypublisher "${ARGS[@]}"
 ```
 
 補足:
@@ -299,6 +327,27 @@ jobs:
 - `github.event.before` はブランチ新規作成や force push 直後に zero SHA になる。CLI 側で全件 fallback する。
 - federated credential の subject claim は `repo:<owner>/<repo>:environment:production` に限定する(`00-overview.md` 6.5)。
 - 誤テナント防止のため publish は `--expected-tenant` を必須運用とする。
+- `forceWarnings: true` の実行は手動 dispatch に限定し、`production-force` environment の required reviewers
+  が承認した場合だけ `--force` を渡す。semantic warning 以外の failure は常に停止する。
+- `package-metadata.json` の CLI version と実行時 CLI version が異なる場合は publish を開始しない。artifact の
+  content SHA256 は実体から再計算し、inspection 結果も再取得した実体から検証する。
+
+### Protected manual E2E (Intune publish)
+
+CI の build/test だけでは Graph payload、PKG の検出、artifact handoff を保証できないため、別 workflow の
+`workflow_dispatch` で protected `intune-e2e` environment を使用する。対象は disposable tenant と専用の
+テストグループに限定し、`--expected-tenant` を必須にする。production environment の credential は流用しない。
+
+受入シナリオ:
+
+- deterministic XAR fixture と実際の macOS PKG の両方で bundle inspection を実行し、Windows/Ubuntu runner の
+  結果が一致することを確認する。
+- pkg と lob の create、update、同一artifactの idempotent rerun を実行し、Graph GETで selected primary、
+  `includedApps` / `childApps`、LOB top-level `bundleId`、`buildNumber`、`versionNumber` を確認する。
+- 複数bundle warningの拒否、`forceWarnings`承認、checksum改ざん、metadata/CLI version不一致、malformed XAR、
+  後段manifestのpreflight拒否を確認し、いずれもGraph writeが発生しないことを確認する。
+- E2E成功後は作成したapp、content、assignment、test groupを専用cleanup手順で削除し、削除失敗をworkflow失敗
+  として残す。fork PR、通常PR、pushからはこのworkflowを起動しない。
 
 ## 12a. NuGet global tool release workflow
 

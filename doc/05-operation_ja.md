@@ -344,6 +344,17 @@ Windows packaging は `publish` に必要な `.intunewin` を生成します。m
 
 CI では package job が package directory を `intunewin-packages` artifact として upload します。publish job はこの artifact を download して、download 先のディレクトリを `--package-dir` に渡します。また、`plan` が生成した同じ `manifest-list.json` を再利用します。
 
+macOS `.pkg` の packaging は次の順序で行います。
+
+1. source を download し、download した byte 列と manifest の `Source.Sha256` を照合する。
+2. staging 済み XAR archive を検査し、宣言された application bundle ID と version を記録する。
+3. 検査結果と `Detection.IncludedApps` / `Detection.PrimaryBundleId` を照合する。
+4. source SHA と使用した CLI の正確な version を含む package metadata と検査 report を書き出す。
+
+この検査は `validate` では行いません。`validate` は schema およびその他の静的な repository check だけを行い、source の download や package 内容の検査は行いません。credential が必要な source は `validate` ではなく `package` で検証されます。
+
+publish job は private source を再 download しません。Graph への write を行う前に、`publish` は staging 済みの全 macOS `.pkg` を再 hash し、XAR 内容を再検査し、結果を manifest、package metadata、検査 report と照合します。その後、選択された**全 entry**について preflight を完了させます。operator が拒否した warning、hard error、古い report、SHA mismatch のいずれかがあれば、最初の Graph write より前に batch 全体を停止します。package job と publish job は同じ正確な CLI version を使用し、両 job で `relaypublisher --version` を記録・確認します。
+
 GitHub Actions:
 
 ```yaml
@@ -402,6 +413,24 @@ macOS 対応(doc/00-overview.md §6.13)には `AppType` によって Graph・運
   まま)。スクリプト本文は決定的 inputHash に含まれないため、スクリプトを編集して `publish` を再実行しても
   (数 GB になり得る)`.pkg` の再アップロードは発生しない。
 
+### 4b.1. Primary bundle の検査と warning policy
+
+`Detection.PrimaryBundleId` は任意です。省略時は従来どおり `IncludedApps` の先頭 entry が宣言上の primary です。指定時は ordinal の完全一致または segment boundary の prefix 一致で manifest entry を 1 件選択し、その entry を payload の先頭へ移動します。manifest file 自体は変更しません。
+
+XAR 検査は package 内容に対する semantic check です。`IncludedApps` を書き換えたり、updater を自動削除したりしません。次の条件は semantic warning であり、`--force` で確認済みとして続行できます。
+
+| 条件 | 既定動作 |
+|---|---|
+| package が複数の application bundle を含み、`PrimaryBundleId` が省略されている | 検出 bundle 一覧と、宣言上の先頭 entry が使われることを表示する。 |
+| 宣言した `PrimaryBundleId` が package に存在しない | 検出 bundle 一覧を表示し、operator の確認を要求する。 |
+| package に `IncludedApps` へ列挙されていない application bundle がある | 未列挙 bundle を表示し、operator の確認を要求する。 |
+
+対話的な TTY では semantic warning ごとに `[y/N]` を表示し、既定値は停止です。非対話環境では `--force` が無い限り fail します。`--force` は確認済みであることを記録し、これらの semantic warning だけを回避します。schema error、primary の曖昧な選択、XAR entry の欠落・破損、未対応 archive、source SHA mismatch、古い/改ざんされた artifact、Graph/tenant safety check は回避できません。
+
+`PrimaryBundleId` が検出 bundle に 2 件以上一致する場合は選択が曖昧なため hard error です。使用可能な application bundle が 0 件の場合や、XAR/XML を安全に parse できない場合も hard error です。manifest または source を修正して `package` を再実行し、report を手編集しないでください。
+
+`AppType: lob` では、`BundleVersion` が Graph の `buildNumber` に対応する short bundle version、`BundleBuildVersion` が `versionNumber` に対応する build version です。package が `CFBundleShortVersionString` と `CFBundleVersion` を区別している場合は両方を正しく更新し、既定で同じ値を両 field にコピーしないでください。選択した primary は LOB の top-level bundle field にも設定し、`childApps` の先頭にします。
+
 ## 4c. 既存 app を新しいバージョンに更新する
 
 app identity は `PackageIdentifier + Platform + Architecture` であり、バージョンを含まない
@@ -418,8 +447,9 @@ Intune の supersedence 関係を設定したりはしない。
 3. `Source` の版数依存フィールド(`Tag`、`AssetName`、`BlobName`、`Destination` など)を新しいリリースに合わせて
    更新する。`Sha256` は記憶や以前の manifest からではなく、新しいリリースの公表チェックサムから取得する —
    `package` は実際にアセットをダウンロードして照合し、不一致なら失敗する。
-4. macOS のみ: `Detection.IncludedApps[].BundleVersion` を新リリースの bundle version に更新する。これを旧値の
-   ままにすると、更新後も Intune の検出ルールが旧バージョンを探し続けるため、新しい content が publish されても
+4. macOS のみ: `Detection.IncludedApps[].BundleVersion` を新リリースの short bundle version に更新する。
+   `AppType: lob` で package の `CFBundleVersion` が変わる場合は `BundleBuildVersion` も更新する。どちらかが
+   古いままだと、更新後も Intune の検出ルールが旧バージョンを探し続けるため、新しい content が publish されても
    既存管理下のデバイスが「未インストール/未更新」と判定されることがある。
 5. Windows のみ: `SetupFile`、`RepositoryFiles`、検出スクリプトの中に版数依存の参照が残っていないか確認する。
 6. バージョンを上げる際に `PackageIdentifier`・`Platform`・`Architecture`・`DisplayName` を変更しない。
@@ -533,6 +563,8 @@ Apps:
 - [ ] `AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、Azure login 用の `AZURE_SUBSCRIPTION_ID` を protected CI configuration に保存している。
 - [ ] expected tenant を保護し、`publish --expected-tenant <tenant-id>` に渡している。
 - [ ] Federated credential の issuer、subject、audience が CI token と完全一致している。
+- [ ] `plan`、`validate`、`package`、`publish` のすべてで同じ正確な Relaypublisher CLI version を pin し、各 job が `relaypublisher --version` を log に出している。
+- [ ] semantic PKG warning は、protected workflow が明示的に `--force` を渡さない限り非対話 job で fail する。`--force` で hard error を回避していない。
 
 ### GitHub Actions
 
@@ -542,6 +574,7 @@ Apps:
 - [ ] GitHub federated credential に issuer `https://token.actions.githubusercontent.com/`、subject `repo:<owner>/<repo>:environment:production`、audience `api://AzureADTokenExchange` を設定する。
 - [ ] `githubRelease` を使う manifest では `Auth.SecretName` の secret（例: `GH_RELEASE_PAT`）を package job だけに渡す。
 - [ ] `azureBlob` を使う場合は package job に OIDC login と storage reader role を設定する。
+- [ ] publish job が pin された package job の artifact を使用し、再 hash・再検査を行い、Graph write 前に全 entry の preflight を完了する。
 
 ### Azure Pipelines
 
@@ -552,6 +585,7 @@ Apps:
 - [ ] sample が使う protected variable group に `AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、`AZURE_SUBSCRIPTION_ID`、expected tenant を登録する。
 - [ ] `githubRelease` を使う場合は `Auth.SecretName` の secret（例: `GH_RELEASE_PAT`）を package job だけに map する。
 - [ ] `azureBlob` を使う場合は package job が authorized service connection と storage reader role を使うことを確認する。
+- [ ] publish job が pin された package job の artifact を使用し、再 hash・再検査を行い、Graph write 前に全 entry の preflight を完了する。
 
 ### Relaypublisher release pipeline
 
@@ -571,10 +605,13 @@ Apps:
 
 ## 7. Production checklist
 
-- Full repository で `validate` が成功している。
+- Full repository で静的 schema / repository check としての `validate` が成功している。`validate` を PKG 内容検査とは見なしていない。
 - `plan` output を `manifest-list.json` として保存し、後続 job で再利用している。
 - Package job が changed manifests を再計算していない。
+- すべての macOS package source SHA を XAR 検査前に検証し、publish ごとに staging artifact を再 hash・再検査している。
+- 選択された全 entry が最初の Graph write 前に preflight を完了し、warning の拒否または hard error が Graph を変更していない。
 - Publish job が protected environment と serialized execution で実行される。
 - `publish` が常に `--expected-tenant` を使っている。
+- すべての job で CLI version が同一に pin され、job log と package metadata から確認できる。
 - GitHub release token などの source provider secrets は、必要な job にだけ渡している。
 - Authorization header、token、signed package URI、secret value を log や artifact に出していない。

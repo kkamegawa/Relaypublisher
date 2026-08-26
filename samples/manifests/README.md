@@ -23,7 +23,7 @@ schema shape or constraint rather than a version-upgrade lifecycle.
 | `contoso-tool-windows-arm64.yaml` | E2E-runnable | passes | passes (same as above) | |
 | `contoso-tool-macos-arm64.yaml` | Reference-only (schema example) | passes | **fails** — `Source` points at a fictitious Azure Blob account (`contosopackages`) with a placeholder all-zero `Sha256` | Shows the `azureBlob` shape from [doc/01-manifest-schema.md §5.3](../../doc/01-manifest-schema.md); not meant to resolve |
 | `apple-container-macos-arm64.yaml` | Reference-only (intentional failure) | **fails** — `Detection.IncludedApps` is empty | n/a | The Apple Container PKG installs no `.app` bundle, so `IncludedApps` cannot be populated with real values without fabricating a bundle ID. Documents a real Intune macOS-detection limitation; see the comments at the top of the file and [doc/01-manifest-schema.md §5.4](../../doc/01-manifest-schema.md) |
-| `global-secure-access-macos-arm64.yaml` | Reference-only (schema example) | passes | **fails** — `Source` points at a fictitious Azure Blob account, same as `contoso-tool-macos-arm64.yaml` | Shows `Detection.PrimaryBundleId` (§5.4.3) for a pkg that bundles more than one app; Microsoft AutoUpdate is deliberately left out of `IncludedApps` — see the comments at the top of the file |
+| `global-secure-access-macos-arm64.yaml` | Reference-only (schema example) | passes | **fails** — `Source` points at a fictitious Azure Blob account, same as `contoso-tool-macos-arm64.yaml` | Shows an exact `Detection.PrimaryBundleId` (§5.4.3) for a pkg that bundles more than one app; Microsoft AutoUpdate is deliberately left out of `IncludedApps` — see the comments at the top of the file |
 
 ## Why the PowerShell samples work as an E2E fixture
 
@@ -33,6 +33,9 @@ PowerShell's macOS PKG does: its installer places `PowerShell.app` under `/Appli
 
 - `BundleId`: `com.microsoft.powershell`
 - `BundleVersion`: the release version (e.g. `7.6.5`)
+
+`AppType: lob` additionally requires `BundleBuildVersion` (`CFBundleVersion`) for every `IncludedApps` entry;
+`AppType: pkg` may omit it, and Relaypublisher ignores it for the pkg Graph mapping.
 
 (Source: PowerShell/PowerShell `tools/packaging/packaging.psm1`, `New-MacOSLauncher` / `Get-MacOSPackageIdentifierInfo`, and the `MacOSLauncherPlistTemplate` in `packaging.strings.psd1`.) You can confirm this yourself on a Mac after installing the package:
 
@@ -100,21 +103,25 @@ entry is listed first — if MAU ends up first (or a manifest edit reorders the 
 runs against the updater instead of the client.
 
 `Detection.PrimaryBundleId` lets you pin which `IncludedApps` entry is primary by bundle ID (exact match
-or a segment-boundary prefix, e.g. `com.microsoft.globalsecureaccess` matches
-`com.microsoft.globalsecureaccess.client`). Omitting it keeps today's behavior (first entry wins) with no
-change to `inputHash`. See [doc/01-manifest-schema.md §5.4.3](../../doc/01-manifest-schema.md) for the
-full matching and validation rules.
+or a segment-boundary prefix). The selector must match exactly one entry; a broad prefix that matches both
+`com.microsoft.globalsecureaccess.client` and `.agent` is rejected. This sample therefore uses the exact
+`com.microsoft.globalsecureaccess.client` value. Omitting the selector keeps today's behavior (first entry wins)
+with no change to `inputHash`. `IncludedApps` accepts 1-500 unique bundle IDs. See
+[doc/01-manifest-schema.md §5.4.3](../../doc/01-manifest-schema.md) for the full rules.
 
 Excluding a bundled updater from detection is done by **not listing it** in `IncludedApps` — there is no
 separate exclude-list mechanism. Microsoft's own guidance for unmanaged PKG apps says `includedApps`
 should contain only the apps the PKG actually installs, and that an app listed there but not installed
 prevents install status from reporting success.
 
-Because the manifest alone cannot tell you what a `.pkg` actually bundles, the design also calls for
-inspecting the downloaded pkg (its xar table of contents) during `package`/`publish` and warning when it
-contains multiple bundles with `PrimaryBundleId` unset, or when a listed bundle ID isn't found inside the
-pkg. In an interactive run this prompts for confirmation; `--force` skips the prompt so CI is not blocked.
-This inspection and prompt are part of [doc/issues/issue-022-macos-primary-bundle-selection.md](../../doc/issues/issue-022-macos-primary-bundle-selection.md) and are not implemented yet — this sample documents the manifest shape only.
+Because the manifest alone cannot tell you what a `.pkg` actually bundles, `validate` remains schema-only and
+does not download a source or use a `filePath` source. `package` verifies the declared SHA-256 first and then
+inspects bounded XAR TOC/heap entries. `publish` re-hashes and re-inspects every artifact before any Graph
+mutation. Corrupt/unsupported XAR, size-limit, XML-security, and hash failures are hard failures; only
+semantic bundle/version warnings can be acknowledged with `--force`. Warnings are aggregated for the whole
+batch, and the inspection metadata records detected bundles, selected primary, warning codes, content SHA-256,
+and whether force was used. See
+[doc/issues/issue-022-macos-primary-bundle-selection.md](../../doc/issues/issue-022-macos-primary-bundle-selection.md).
 
 ## Running the PowerShell sample end to end
 

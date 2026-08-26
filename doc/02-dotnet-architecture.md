@@ -377,6 +377,123 @@ payload から完全に分離する。
 additive optional field `categoryOutcome`(`applied` / `unchanged` / `not-requested` / null)だけを追加し、
 既存 field の名前・型・順序は変更しない。
 
+### 9.9 macOS PKG bundle inspector
+
+macOS の PKG 検査は Graph payload mapper から分離し、どの runner でも同じ結果になる pure な境界にする。
+source provider が取得したファイルは、まず manifest の `Source.Sha256` と照合し、**checksum が成功した後にだけ**
+inspector へ渡す。検査は source URL、認証情報、SAS URL を結果やログへコピーしない。
+
+```csharp
+public interface IPkgBundleInspector
+{
+    Task<PkgBundleInspectionResult> InspectAsync(
+        Stream pkg,
+        CancellationToken cancellationToken);
+}
+
+public sealed record PkgBundleInspectionResult(
+    string InspectorVersion,
+    IReadOnlyList<PkgBundleIdentity> Bundles);
+
+public sealed record PkgBundleIdentity(
+    string BundleId,
+    string? BundleVersion,
+    string? BundleBuildVersion,
+    string SourceEntry);
+
+public sealed record PkgInspectionReport(
+    PkgBundleInspectionResult Inspection,
+    string? SelectedPrimaryBundleId,
+    IReadOnlyList<PkgInspectionWarning> Warnings,
+    bool ForceAcknowledged);
+
+public sealed record PkgInspectionWarning(
+    PkgInspectionWarningCode Code,
+    string? BundleId,
+    string? Detail);
+
+public enum PkgInspectionWarningCode
+{
+    MultipleBundlesWithoutExplicitPrimary,
+    ManifestBundleNotFound,
+    ManifestBundleVersionMismatch
+}
+```
+
+`IPkgBundleInspector` は XAR の header、圧縮 TOC、TOC が指す `Distribution` / `PackageInfo` の entry を読み、
+`CFBundleIdentifier`、`CFBundleShortVersionString`、`CFBundleVersion`を抽出する。TOC の文字列検索だけでは
+file body を検査できないため、heap offset と長さを検証して必要な entry を展開する。payload 全体の展開や
+macOS の `pkgutil` への依存は持たない。
+
+`IPkgBundleInspector` は archive facts（bundle 一覧と inspector version）だけを返し、manifest 依存の判定は別の
+`MacOsPkgInspectionPolicy` が `PkgBundleInspectionReport` にまとめる。これにより同じ XAR fixtureを parser の
+unit test、manifestとの突合 test、CLI の preflight test で再利用できる。
+
+検査の上限は実装で固定し、XAR header、offset/length の checked arithmetic、TOC/XML の最大バイト数、XML の
+深さ・要素数、bundle 一覧の最大件数、cancellation を検証する。header/offset の不整合、truncated archive、
+未対応 compression、invalid UTF-8/XML、DTD/外部 entity、必要な `Distribution` / `PackageInfo` を読めない場合は
+**hard error** とし、`--force` で回避できない。重複する bundle ID、曖昧な `PrimaryBundleId`、metadata の不正、
+artifact の checksum 不一致も hard error とする。
+
+manifest との突合で発生する `MultipleBundlesWithoutExplicitPrimary`、`ManifestBundleNotFound`、
+`ManifestBundleVersionMismatch` は semantic warning として扱う。`IgnoreAppVersion: true` の場合、version mismatch
+は検出判定上の warning にはせず、観測結果として report に残す。warning は TTY の確認または明示的な `--force` で
+のみ承認できる。
+
+### 9.10 package metadata と artifact trust
+
+`package` は source の SHA256 検証後に PKG を検査し、結果を `package-metadata.json` に保存する。metadata は
+次の additive schema を持つ。既存 Windows metadata では `inspection` を省略できるが、macOS artifact では
+`contentSha256`、`cliVersion`、`inspection` を必須とする。
+
+```json
+{
+  "metadataSchemaVersion": 2,
+  "packageIdentifier": "Contoso.Tool",
+  "platform": "macos",
+  "architecture": "arm64",
+  "inputHash": "<sha256>",
+  "contentFile": "macos-arm64/contoso.pkg",
+  "contentSha256": "<sha256>",
+  "cliVersion": "1.2.3",
+  "inspection": {
+    "inspectorVersion": "1",
+    "bundles": [
+      {
+        "bundleId": "com.contoso.tool",
+        "bundleVersion": "1.2.3",
+        "bundleBuildVersion": "123",
+        "sourceEntry": "PackageInfo"
+      }
+    ],
+    "selectedPrimaryBundleId": "com.contoso.tool",
+    "warnings": [],
+    "forceAcknowledged": false
+  }
+}
+```
+
+`contentSha256` は metadata の宣言値であり、publish の信頼根拠だけにはしない。`publish` は artifact を読み、
+実ファイルを再ハッシュし、保存された `contentSha256` と一致することを確認してから、**source を再ダウンロード
+せずに**同じ artifact を `IPkgBundleInspector` で再検査する。検査結果（bundle 一覧、selected primary、warning、
+inspector/CLI version）が保存結果と一致しない、または metadata schema を解釈できない場合は Graph write 前に fail。
+
+複数 manifest を publish する場合、全 artifact の checksum・metadata・PKG inspection・manifest の primary 選択を
+先に preflight する。全件の preflight と warning acknowledgement が成功するまで、app resolve、content upload、
+PATCH、assignment を一件も実行しない。これにより後続 manifest の拒否で先行 manifest だけが更新される部分適用を防ぐ。
+
+### 9.11 macOS Graph payload mapping
+
+primary の選択結果は manifest のファイル順を変更せず、payload の順序と top-level field にだけ反映する。
+
+- `AppType: pkg` (`macOSPkgApp`): selected entry を `includedApps[0]`、`primaryBundleId`、
+  `primaryBundleVersion` に反映する。
+- `AppType: lob` (`macOSLobApp`): selected entry を `childApps[0]`、**top-level `bundleId`**、
+  `buildNumber`、`versionNumber` に反映する。top-level `bundleId` は必ず selected primary の bundle ID とする。
+- LOB の version は二つの manifest 値を混同しない。`BundleVersion` は `CFBundleShortVersionString` / Graph
+  `buildNumber`、`BundleBuildVersion` は `CFBundleVersion` / Graph `versionNumber` に対応し、LOB では両方を
+  検証する。PKG の `bundleVersion` と同じ値を機械的に `versionNumber` へ複製しない。
+
 ---
 
 
@@ -462,6 +579,42 @@ public sealed class AssignmentManifest
 
 
 ## 11. Implementation phases
+
+### Issue #112 の stacked implementation boundary
+
+Issue #112 / PR #113 の実装は、レビュー可能な機能単位で次の順に積み上げる。各 PR は前段の branch を
+base とし、前段のテストと設計契約を壊さないことを merge 条件にする。後段の CLI/CI 変更を先に入れて、
+未対応の PKG を warning 無視で publish できる期間を作らない。
+
+1. **Foundation: manifest / selector / Graph mapping**
+   - nullable な `Detection.PrimaryBundleId` と LOB 用 `BundleBuildVersion` を manifest model、loader、validator、
+     canonical input hash に追加する。
+   - exact または segment-boundary prefix の一意選択、未指定時の `IncludedApps[0]` 互換を実装する。
+   - pkg の `primaryBundleId` / `primaryBundleVersion` と、LOB の `childApps[0]` / top-level `bundleId` /
+     `buildNumber` / `versionNumber` を同じ selected primary から生成する。LOB の `BundleVersion` と
+     `BundleBuildVersion` は別フィールドとして検証する。
+   - payload mapping、validation、pinned input-hash、既存 manifest の回帰テストを完了する。
+
+2. **Secure PKG inspector / artifact integrity**
+   - `IPkgBundleInspector` と XAR parser を追加し、source SHA256 検証後にだけ inspection を実行する。
+   - deterministic resource limits、hard error と semantic warning の分類、TTY/`--force` とは独立した parser
+     failure の fail-closed 契約を実装する。
+   - `package-metadata.json` に metadata schema version、CLI version、content SHA256、inspection result、
+     inspector version、warning code、force acknowledgement を記録する。
+   - publish は source を再取得せず artifact を再ハッシュ・再検査し、全件 preflight が完了するまで Graph write
+     を開始しない。metadata tamper、checksum mismatch、inspection result mismatch は hard error とする。
+
+3. **CLI / CI / E2E operations**
+   - package/publish の warning presentation、TTY prompt、非対話時の fail、semantic warning のみを対象とする
+     `--force` を実装する。
+   - GitHub Actions / Azure Pipelines は CLI version を固定し、force は手動実行の protected environment approval
+     がある場合だけ条件付きで渡す。package artifact と inspection report は job/stage 間でそのまま handoff する。
+   - fake Graph contract、Windows/Ubuntu CLI integration、deterministic XAR fixture、protected manual tenant E2E を
+     追加する。E2E は create/update/idempotent rerun、warning refusal、tampered artifact、LOB payload read-back、
+     tenant guard を含め、成功後は作成物を cleanup する。
+
+前段 PR が提供しない型・metadata・CLI optionを後段 PRで暗黙に追加しない。仕様変更が必要な場合は、先にこの
+設計と `doc/00-overview.md` / `doc/01-manifest-schema.md` の正本を更新してからstackを組み直す。
 
 ### テスト実行環境
 
@@ -595,10 +748,29 @@ Tasks:
 
 - Download PKG.
 - Verify SHA256.
+- After the source SHA256 succeeds, inspect the PKG with `IPkgBundleInspector` and persist the result in
+  `package-metadata.json`.
+- At publish time, rehash the artifact and re-inspect it without downloading the source again. Compare both results with
+  package metadata before any Graph call.
 - Map manifest to `macOSPkgApp`(既定)または `macOSLobApp`(`AppType: lob`)。
-- Map `Detection.IncludedApps`(bundleId + version リスト)to `includedApps`。
+- Map `Detection.IncludedApps`(bundleId + version リスト)to `includedApps` / `childApps` and move the selected primary
+  to the first payload entry without changing the manifest file.
+- For `AppType: lob`, set top-level `bundleId` from the selected primary. Map `BundleVersion` to `buildNumber` and
+  `BundleBuildVersion` to `versionNumber`; do not copy one value into both fields.
 - Enforce app type constraints(pkg: uninstall intent 不可 / lob: 署名必須・2 GB・Icon 必須)。
-- Apply assignments.
+- Run all selected macOS artifacts through preflight before resolving apps or applying assignments. A hard error stops
+  immediately; semantic warnings require TTY confirmation or `--force`.
+
+Acceptance criteria:
+
+- A source checksum mismatch, truncated/malformed XAR, unsupported compression, invalid metadata, artifact rehash
+  mismatch, or report mismatch fails with zero Graph writes and cannot be bypassed by `--force`.
+- Package and publish use the same content SHA256 and inspector version; publish never re-downloads a source.
+- A multi-entry publish that is declined on a later item performs no Graph write for earlier items.
+- The Graph payload contains the selected primary in the documented pkg/LOB fields, including LOB top-level `bundleId`
+  and separate `buildNumber` / `versionNumber` values.
+- A successful inspection report contains only bundle identities, warning codes, hashes, and tool versions; it never
+  contains source credentials or signed URLs.
 
 ### Phase 9: GitHub Actions workflow
 
@@ -608,11 +780,21 @@ Tasks:
 - main: validate + package + publish.
 - `concurrency` group で publish を直列化。
 - `fetch-depth: 0` + `plan --base-ref` で changed を確定し、`manifest-list.json` を artifact で後続 job に渡す。
+- Pin one exact `relaypublisher` CLI version for validate, package, publish, and manual E2E; record that version in the
+  package metadata and fail if a handoff uses a different version.
 - Permissions は job 単位で最小化(PR に `id-token: write` を付けない)。
 - Package job に source provider 用 secrets を環境変数で渡す(fork PR には secrets が来ない点を明記)。
 - Use OIDC.
 - Use Windows runner for `.intunewin` generation(publish は REST のみなので ubuntu で可)。
 - Use protected environment for production.
+- `workflow_dispatch` の `forceWarnings` は既定 false とし、true のときだけ protected `production-force`
+  environment の required reviewers を通過した場合に semantic warning 用 `--force` を渡す。push/PR や hard error
+  に対して force を有効にする経路は設けない。
+- Upload `manifest-list.json`、package files、`package-metadata.json`、inspection report を同じ run の artifact
+  として handoff し、publish job で changed set を再計算せず、source を再ダウンロードしない（artifact 自体の
+  rehash/reinspection は必須）。
+- Add a protected manual E2E workflow for a disposable tenant. It must exercise real Graph create/update/read-back and
+  cleanup, but it must never run for fork PRs or use production credentials.
 
 ### Phase 10: Azure Pipelines support
 
@@ -622,5 +804,13 @@ Tasks:
 - Use Azure Resource Manager service connection with workload identity federation.
 - Production environment に Exclusive Lock check を設定。
 - Reuse same .NET CLI.
+- Pin one exact `relaypublisher` version in all stages; the version is a pipeline parameter or repository variable, not
+  an unbounded global-tool install.
+- Add a manual boolean `forceWarnings` parameter(default false). When true, require the protected `production-force`
+  environment approval before passing `--force`; normal CI uses protected `production` and never passes it.
+- Publish the manifest list and package/metadata artifacts from Validate/Package to Publish without recalculating the
+  changed set. Publish performs artifact rehash and PKG reinspection before any Graph write.
+- Add a protected manual E2E stage against a disposable tenant with tenant-id guard, Graph read-back, idempotent rerun,
+  and cleanup. Keep tenant credentials and source-provider secrets out of PR validation.
 
 ---

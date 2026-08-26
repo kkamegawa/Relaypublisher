@@ -292,6 +292,20 @@ If publish reports missing package metadata:
 
 ## 6a. macOS-Specific Failures
 
+### Primary bundle inspection and package artifact failures
+
+`validate` does not download a package or inspect its XAR contents. A failure that appears only during `package` or `publish` is therefore expected for a source-backed semantic check.
+
+- **A semantic warning asks for `[y/N]`**: review the detected bundle IDs and versions. Enter `y` only when the manifest's declared primary and included bundle list are intentional. The default `N` stops before any Graph write. In CI or another non-interactive process, the same warning fails unless the protected job explicitly supplies `--force`.
+- **`--force` does not continue past the error**: this is expected for hard errors. `--force` acknowledges only semantic differences such as an unlisted bundle, a missing declared primary in the package, or multiple package bundles when no primary selector was declared. It cannot bypass an ambiguous selector, an empty or malformed XAR, unsupported compression, XML safety/size limits, a source SHA mismatch, a stale/tampered artifact, or tenant/Graph safety checks.
+- **`PrimaryBundleId` is ambiguous**: an exact or segment-boundary prefix match resolved to more than one bundle. Make the selector exact or narrow it until one bundle is selected. Do not use `--force`; the payload cannot safely choose a primary.
+- **The declared primary is absent from the package**: inspect the detected bundle list in the warning. If the source is wrong or the manifest is stale, correct it and rerun `package`. If the difference is intentional, rerun the same artifact with `--force` only after reviewing the resulting detection behavior.
+- **`package` reports a source SHA mismatch**: discard the staged file and package again from the intended release. Do not edit `package-metadata.json` or the inspection report to match an unexpected file.
+- **`publish` reports a stale or tampered package artifact**: the publish job rehashes and re-inspects the staged `.pkg`; it does not trust the package report alone. Re-download/repackage with the exact same `manifest-list.json` and pinned CLI version, then replace the artifact. A stale report, changed file, metadata identity mismatch, or report/CLI version mismatch must produce zero Graph writes.
+- **The XAR/XML parser fails**: treat a truncated archive, invalid offsets, unsupported compression, malformed XML, external entity/DTD usage, or an extraction limit as a hard error. Obtain a complete package from the source and rerun `package`; `--force` is intentionally ineffective.
+- **`AppType: lob` version read-back differs**: `BundleVersion` maps to Graph `buildNumber` and `BundleBuildVersion` maps to Graph `versionNumber`. Update both manifest values when the package distinguishes `CFBundleShortVersionString` and `CFBundleVersion`, then repackage so the report is regenerated.
+- **A later entry failed after an earlier warning**: with the final preflight contract, all selected entries are checked before any Graph write. If a log shows a Graph write before a rejected warning or hard error, the CLI version is too old for this contract; pin and rerun the same manifest list with the current CLI.
+
 - **`UnsupportedMacOsVersionException` mentioning "no known macOS minimum-operating-system mapping"**:
   `Requirements.MinimumOSVersion` is not one of the values `MacOsMinimumOperatingSystemTable` recognizes
   (`10.13`-`13.0`, or `14`/`14.0`/`15`/`15.0`/`26`/`26.0` for `AppType: pkg` only). This mapping only runs during

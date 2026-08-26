@@ -347,6 +347,17 @@ Windows packaging produces the `.intunewin` output required by `publish`. macOS 
 
 In CI, the package job uploads the package directory as the `intunewin-packages` artifact. The publish job must download that artifact and pass the downloaded directory to `--package-dir`; it must also reuse the exact `manifest-list.json` produced by `plan`.
 
+For a macOS `.pkg`, packaging follows this order:
+
+1. Download the source and verify the manifest `Source.Sha256` against the downloaded bytes.
+2. Inspect the staged XAR archive and record the declared application bundle IDs and versions.
+3. Compare the inspection result with `Detection.IncludedApps` and `Detection.PrimaryBundleId`.
+4. Write package metadata and the inspection report, including the source SHA and exact CLI version used.
+
+The inspection is not performed by `validate`. `validate` performs schema and other static repository checks only; it does not download a source or inspect package contents. A package source that requires credentials is therefore exercised by `package`, not by `validate`.
+
+The publish job must not redownload a private source. Before it contacts Graph for a write, `publish` rehashes every staged macOS `.pkg`, re-inspects its XAR contents, and compares the result with the manifest, package metadata, and inspection report. It then completes this preflight for **every selected entry**. A warning rejected by the operator, a hard error, a stale report, or any SHA mismatch stops the batch before the first Graph write. The package and publish jobs must use the same exact CLI version; record and verify it with `relaypublisher --version` in both jobs.
+
 GitHub Actions:
 
 ```yaml
@@ -408,6 +419,24 @@ characteristics:
   the app still shows "success". Script content is not part of the deterministic inputHash, so editing a
   script and re-running `publish` updates it without re-uploading the (possibly multi-GB) `.pkg`.
 
+### 4b.1. Primary bundle inspection and warning policy
+
+`Detection.PrimaryBundleId` is optional. When it is omitted, the first `IncludedApps` entry remains the declared primary. When it is present, an ordinal exact match or a segment-boundary prefix match must select one manifest entry; payload mapping moves that entry to the first position without changing the manifest file.
+
+The XAR inspection is a semantic check of the package contents. It does not rewrite `IncludedApps` or automatically remove an updater. The following conditions are semantic warnings and can be acknowledged with `--force`:
+
+| Condition | Default behavior |
+|---|---|
+| The package declares multiple application bundles while `PrimaryBundleId` is omitted | Show the detected bundle list and explain that the first declared entry is used. |
+| The declared `PrimaryBundleId` is absent from the package | Show the detected bundle list and require operator confirmation. |
+| The package contains an application bundle that is not listed in `IncludedApps` | Show the unlisted bundle and require operator confirmation. |
+
+In an interactive TTY, each semantic warning is followed by a `[y/N]` confirmation; the default is to stop. In a non-interactive environment, the command fails unless `--force` is supplied. `--force` records the acknowledgement and bypasses only these semantic warnings. It never bypasses a schema error, an ambiguous primary selection, a missing or malformed XAR entry, an unsupported archive, a source SHA mismatch, a stale/tampered artifact, or a Graph/tenant safety check.
+
+If `PrimaryBundleId` matches more than one discovered bundle, the selection is ambiguous and is a hard error. If the archive contains no usable application bundle, or its XAR/XML cannot be safely parsed, it is also a hard error. Fix the manifest or source and rerun `package`; do not edit the report by hand.
+
+For `AppType: lob`, `BundleVersion` supplies the short bundle version used for Graph `buildNumber`, while `BundleBuildVersion` supplies the build version used for Graph `versionNumber`. Keep both values aligned with the bundle metadata when the package distinguishes `CFBundleShortVersionString` and `CFBundleVersion`; do not copy one value into both fields by default. The selected primary is also mapped to the top-level LOB bundle fields and is first in `childApps`.
+
 ## 4c. Updating an Existing App to a New Version
 
 App identity is `PackageIdentifier + Platform + Architecture` and does not include the version
@@ -426,10 +455,11 @@ Steps:
 3. Update the version-dependent `Source` fields for the new release (for example `Tag`, `AssetName`,
    `BlobName`, `Destination`). Take `Sha256` from the new release's published checksum, not from memory
    or a previous manifest - `package` downloads the asset and fails if it does not match.
-4. macOS only: update `Detection.IncludedApps[].BundleVersion` to the new release's bundle version. If
-   this is left at the old value, Intune's detection rule keeps checking for the previous version after
-   the update, which can make already-managed devices report as not installed/not up to date even though
-   the new content was published.
+4. macOS only: update `Detection.IncludedApps[].BundleVersion` to the new release's short bundle version. For
+   `AppType: lob`, update `BundleBuildVersion` as well when the package's `CFBundleVersion` changes. If either
+   value is left stale, Intune's detection rule can keep checking for the previous version after the update,
+   which can make already-managed devices report as not installed/not up to date even though the new content
+   was published.
 5. Windows only: check `SetupFile`, `RepositoryFiles`, and any detection script for version references
    that also need to change.
 6. Do not change `PackageIdentifier`, `Platform`, `Architecture`, or `DisplayName` when bumping a
@@ -547,6 +577,8 @@ This section covers the *consumer* workflows that publish Intune apps. Relaypubl
 - [ ] `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and (for Azure login) `AZURE_SUBSCRIPTION_ID` are stored in protected CI configuration.
 - [ ] The expected tenant value is protected and passed to `publish --expected-tenant <tenant-id>`.
 - [ ] The federated credential issuer, subject, and audience exactly match the CI token.
+- [ ] The exact same Relaypublisher CLI version is pinned in `plan`, `validate`, `package`, and `publish`; each job logs `relaypublisher --version`.
+- [ ] Semantic PKG warnings fail non-interactive jobs unless the protected workflow explicitly supplies `--force`; `--force` is not used to bypass hard errors.
 
 ### GitHub Actions
 
@@ -556,6 +588,7 @@ This section covers the *consumer* workflows that publish Intune apps. Relaypubl
 - [ ] Configure the GitHub federated credential with issuer `https://token.actions.githubusercontent.com/`, subject `repo:<owner>/<repo>:environment:production`, and audience `api://AzureADTokenExchange`.
 - [ ] If a manifest uses `githubRelease`, add the secret named by `Auth.SecretName` (for example `GH_RELEASE_PAT`) and map it only to the package job.
 - [ ] If a manifest uses `azureBlob`, allow OIDC login and the storage reader role on the package job.
+- [ ] The publish job consumes the package artifact produced by the pinned package job, rehashes/re-inspects it, and runs all-entry preflight before any Graph write.
 
 ### Azure Pipelines
 
@@ -566,6 +599,7 @@ This section covers the *consumer* workflows that publish Intune apps. Relaypubl
 - [ ] Add the protected variable group used by the sample, including `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, and the expected tenant value.
 - [ ] If a manifest uses `githubRelease`, map the secret named by `Auth.SecretName` (for example `GH_RELEASE_PAT`) only to the package job.
 - [ ] If a manifest uses `azureBlob`, ensure the package job uses the authorized service connection and has the storage reader role.
+- [ ] The publish job consumes the package artifact produced by the pinned package job, rehashes/re-inspects it, and runs all-entry preflight before any Graph write.
 
 ### Relaypublisher release pipeline
 
@@ -586,10 +620,13 @@ This applies to the Relaypublisher repository itself, not to consumer repositori
 
 ## 7. Production Checklist
 
-- `validate` passes for the full repository.
+- `validate` passes for the full repository's static schema and repository checks; it is not treated as a PKG-content inspection.
 - `plan` output is stored as `manifest-list.json` and reused by later jobs.
 - The package job does not recompute changed manifests.
+- Every macOS package source SHA is verified before XAR inspection, and every publish rehashes/re-inspects the staged artifact.
+- All selected entries complete preflight before the first Graph write; a rejected warning or hard error leaves Graph unchanged.
 - The publish job runs with a protected environment and serialized execution.
 - `publish` always uses `--expected-tenant`.
+- The CLI version is pinned identically across all jobs and the version is visible in the job log and package metadata.
 - GitHub release tokens and other source provider secrets are passed only to jobs that need them.
 - No authorization header, token, signed package URI, or secret value is written to logs or artifacts.

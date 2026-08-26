@@ -2,44 +2,37 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
-## 2026-08-26: macOS PKG detection primary bundle の指定 — 設計ドキュメントフェーズ
+## 2026-08-26: macOS PKG detection primary bundle — final design and implementation split
 
-**ブランチ**: `docs/112-macos-primary-bundle-selection`
+**対応 Issue / PR**: [#112](https://github.com/kkamegawa/Relaypublisher/issues/112) / [#113](https://github.com/kkamegawa/Relaypublisher/pull/113)
 
-**対応 Issue**: [#112](https://github.com/kkamegawa/Relaypublisher/issues/112)
+このエントリは、設計レビュー後に確定した実装契約を記録します。`validate` は manifest schema と静的な
+repository check のみを行い、source download や PKG 内容検査は行いません。`package` は source byte 列の
+SHA-256 を検証してから XAR を検査し、bundle ID/version、selected primary、manifest identity、source SHA、
+CLI version を report に保存します。`publish` は package report を信頼するだけにせず、staging 済み `.pkg`
+を再 hash・再検査し、選択された全 entry の preflight が終わるまで Graph write を開始しません。
 
-**背景**: ユーザーから、Intune で管理する macOS PKG(Global Secure Access クライアントを例示)が
-Microsoft AutoUpdate を同梱しており、Intune の `includedApps` 先頭要素によるバージョン検出が同梱
-updater に対して行われてしまう懸念が指摘された。調査の結果、現行の Relaypublisher 設計・実装
-(`IncludedApps[0]` を暗黙の primary とする)にはこれへの対応が存在しないことを確認し、設計ドキュメント
-フェーズ(YAML schema 設計・issue・サンプル・draft PR まで、実装は別フェーズ)として着手した。
+semantic warning は TTY では `[y/N]`、非対話環境では `--force` が無い限り fail とします。`--force` は
+semantic difference の確認だけを行い、曖昧な primary、破損/XAR parse error、未対応 archive、SHA mismatch、
+stale/tampered artifact、metadata/report 不整合、tenant/Graph safety error は回避できません。warning の拒否
+または hard error は batch の Graph write を 0 件にします。
 
-**設計判断(ユーザーとの協議で確定)**:
+`AppType: lob` では `BundleVersion` を Graph `buildNumber`、`BundleBuildVersion` を `versionNumber` に対応させ、
+selected primary を top-level bundle field と `childApps[0]` に反映します。
 
-| 項目 | 決定 |
-|---|---|
-| primary の選択手段 | 任意の `Detection.PrimaryBundleId`(完全一致 または セグメント境界の前置一致) |
-| 同梱 updater の除外 | `IncludedApps` に書かないことで除外(除外リスト機構は持たない) |
-| 複数 bundle 検出時の挙動 | pkg 実体をダウンロード時に検査(xar TOC)し、複数 bundle や bundle id 不一致を warning + 対話確認 |
-| CI 阻害の回避 | `--force` オプションで確認をスキップし警告のみで続行 |
-| hash 互換性 | nullable `string?`(初期値なし)、issue-021 の `Categories` と同じ契約 |
+### Stacked implementation PRs
 
-### 実施内容
+1. **Layer 1 — manifest contract and payload mapping**: nullable `PrimaryBundleId`、LOB の `BundleBuildVersion`、
+   static validation、canonical hash compatibility、primary selection/reordering、pkg/lob mapping と unit test。
+2. **Layer 2 — package inspection and operator acknowledgement**: secure XAR/XML inspector、source SHA-first
+   package flow、inspection report、semantic warning/hard-error 分類、TTY `[y/N]`、non-TTY failure、`--force`、
+   deterministic XAR fixture と CLI integration test。
+3. **Layer 3 — publish preflight and operational verification**: artifact rehash/reinspection、Graph write 前の
+   all-entry preflight、stale/tamper detection、CI の exact CLI pin、protected manual E2E、Graph read-back、device
+   detection、idempotency、primary change、rejected-preflight no-write、cleanup。
 
-1. **[doc/00-overview.md](doc/00-overview.md) §6.21 新設**: primary bundle 選定の設計判断を追記(§6.13 から
-   参照を追加)。
-2. **[AGENTS.md](../AGENTS.md)** の不変条件(macOS 検出の記述)を更新。
-3. **[doc/01-manifest-schema.md](doc/01-manifest-schema.md)**: §5.3 例、§5.4 validation ルール、
-   新設 §5.4.3(フィールド定義・マッチ規則・pkg introspection・warning/`--force` の挙動表・hash 互換性)、
-   §5.7 mapping 表を更新。
-4. **[doc/issues/issue-022-macos-primary-bundle-selection.md](issues/issue-022-macos-primary-bundle-selection.md)** を新規作成(確定仕様、実装フェーズのスコープ、対象外)。
-5. **[samples/manifests/global-secure-access-macos-arm64.yaml](../samples/manifests/global-secure-access-macos-arm64.yaml)** を新規作成(Reference-only、`PrimaryBundleId` の使用例)。
-6. **[samples/manifests/README.md](../samples/manifests/README.md) / [README_ja.md](../samples/manifests/README_ja.md)** に表の新行と「Primary bundle selection」節を追加。
-7. **[doc/adr.md](adr.md)** に、除外リスト方式を採らず明示選択 + 非列挙ガイダンスとした判断根拠を記録。
-
-実装(`src/` の変更: manifest model、validator、`MacOsAppPayloadMapper`、pkg introspection、CLI の
-確認プロンプト・`--force`)は本フェーズのスコープ外とし、issue #112 のスコープ更新または新規 issue で
-別途着手する。
+各 layer は前段の branch/PR を親とする stacked PR とし、後段は前段の report/schema 契約を利用します。完了条件は
+deterministic test、CI build/test、protected manual E2E のすべてを満たすことです。
 
 ## 2026-08-24: GitHub Actions CI/CD の設計と実装 (public 化前提)
 

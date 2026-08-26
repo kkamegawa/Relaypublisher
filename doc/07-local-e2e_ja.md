@@ -14,6 +14,8 @@
 - repository file と package source が利用できる有効な manifest。
 - テスト用 Microsoft Entra tenant、Intune 権限、assignment group。
 - Windows の `.intunewin` を生成するための Windows マシンまたは runner。
+- parser/CLI check 用の決定的な macOS XAR fixture と、tenant 検証用の破棄可能な実 `.pkg` source。
+- approval gate、expected-tenant、`--force` の audit trail を備えた protected manual-run environment。
 
 リポジトリの sample manifest は、必ずしも E2E 実行できる fixture ではなく、参照用です。ただし例外が 1 つあります: `samples/manifests/Microsoft/Microsoft.PowerShell/7.6.4/` と `7.6.5/` 配下の PowerShell macOS manifest(`powershell-macos-arm64.yaml` / `-x64.yaml`、合計 4 ファイル)は実在する、公開ダウンロード可能な package を指しており、無編集で `plan` → `validate` → `package` が通ります。それ以外の sample は、schema の形や実世界の制約を記録するために、意図的に validation で失敗する、または解決できない package source を参照しています。どのサンプルがどちらかは、失敗をバグと判断する前に [samples/manifests/README_ja.md](../samples/manifests/README_ja.md) を確認してください。手早いローカルの動作確認を超える用途には、実在する package input を持つ組織用のテスト manifest を使用してください。
 
@@ -254,7 +256,7 @@ dotnet run --configuration Release --project $CliProject -- `
   validate --manifest-list manifest-list.json
 ```
 
-package の前にすべての validation error を修正します。validation では manifest schema、path safety、file-backed asset、選択された集合における identity と display name の uniqueness を確認します。
+package の前にすべての validation error を修正します。validation では manifest schema、path safety、file-backed asset、選択された集合における identity と display name の uniqueness を確認します。package 内容については schema/static validation だけであり、source の download や PKG/XAR の検査は行いません。
 
 ### 4.4 package
 
@@ -265,7 +267,7 @@ dotnet run --configuration Release --project $CliProject -- `
   package --manifest-list manifest-list.json --output ./out
 ```
 
-このコマンドは外部ファイルを download し、SHA-256 を検証し、repository file を staging し、package metadata を生成します。
+このコマンドは外部ファイルを download し、SHA-256 を検証し、repository file を staging し、package metadata を生成します。macOS `.pkg` entry では SHA 検証を XAR 検査より先に行います。検査 report には検出 bundle ID/version、選択した primary、source SHA、manifest identity、正確な CLI version を記録します。semantic warning は下記の TTY/non-TTY/`--force` policy に従い、hard error は force できません。
 
 macOS app だけを含む manifest であれば、macOS/Linux でも通常の `package` を実行できます。macOS の packaging には Windows packaging tool の工程がないためです。
 
@@ -313,12 +315,14 @@ dotnet run --configuration Release --project $CliProject -- `
   --dry-run
 ```
 
-選択された app identity、既存 app の照合、package version、input hash、category plan、assignment plan、tenant、platform 固有の mapping error を確認します。
+選択された app identity、既存 app の照合、package version、input hash、category plan、assignment plan、tenant、platform 固有の mapping error、primary bundle 検査結果を確認します。`publish --dry-run` は staging 済み macOS package を再 hash・再検査し、結果を表示する前に選択された全 entry の preflight を完了します。
+
+対話的な semantic warning では検出 bundle 一覧を確認して `[y/N]` に回答します。非対話実行では protected command が明示的に `--force` を指定しない限り同じ warning で fail します。`--force` は semantic difference だけを確認するもので、破損 archive、曖昧な primary、checksum mismatch、古い/改ざんされた artifact、tenant/Graph safety error は回避できません。
 
 manifest が `Categories` を宣言している場合、dry-run は tenant の category catalog と app の現在の category も
 read し、`Category plan for app <id>: N add, N keep, N remove` のブロックを表示します(新規 app は placeholder ID
 `(new app)`)。tenant に存在しない category 名を検出できるのはここだけです — `validate` は Graph に接続しません。
-dry-run では何も書き込まれません。
+後続 entry で warning 拒否や hard error が発生した場合も含め、dry-run では何も書き込まれません。
 
 ### 4.6 テスト tenant へ publish
 
@@ -347,6 +351,8 @@ dotnet run --configuration Release --project $CliProject -- `
 ```
 
 Intune admin center で display name、`notes` の management metadata、committed content、detection rule、assignment、および manifest が `Categories` を宣言している場合は app の category を確認します。運用上の情報を含む場合があるため、`publish-result.json` を公開 artifact に含めないでください。
+
+最初の Graph write より前に、command は staging 済みの全 macOS `.pkg` を再 hash・再検査し、選択された全 entry の preflight を完了します。package report だけを信頼せず、現在の byte 列を必ず照合します。artifact が古い、または改ざんされている場合は、同じ manifest list と pin された CLI で `package` を rerun して置き換え、report を手編集しないでください。どの entry で warning を拒否しても、hard error でも、batch の Graph write は 0 件でなければなりません。
 
 Relaypublisher は content hash で skip を判断する前に app の `publishingState` を確認します。
 `processing` の app は `published` になるまで polling し、`notPublished` の app は中断した単一 content version を
@@ -393,6 +399,17 @@ activate されないため、app を削除・再作成しないでください�
    (`"categoryOutcome":"not-requested"`)。
 6. 終わったら使い捨ての category を tenant から削除する。Relaypublisher は category リソース自体を削除しない。
 
+### 4.7. Primary bundle acceptance run
+
+破棄可能な tenant に対する protected な手動承認 E2E として実行します。決定的 XAR fixture は自動 test に残し、ここでは source から device までの経路を確認するため実 `.pkg` source を使います。
+
+1. 選択する application bundle と2つ目の application bundleを含む fixture/manifest の組を使用します。`validate` が静的 check のみを行うことを確認します。`package` では source SHA 検証が XAR 検査より先に行われ、report に検出 ID、version、selected primary、manifest identity、CLI version が記録されることを確認します。
+2. TTY で `publish --dry-run` を実行し、semantic warning を拒否して Graph write が無いことを確認します。TTY なしでも実行し、`--force` が無い限り fail することを確認します。protected な `--force` 承認で再実行し、warning は記録されるが hard error は依然 fail することを確認します。
+3. `AppType: pkg` と `AppType: lob` の両 variant を publish します。Graph resource を read-back し、selected primary が `includedApps`/`childApps` の先頭であることを確認します。`lob` では `BundleVersion` → `buildNumber`、`BundleBuildVersion` → `versionNumber`、top-level primary bundle field も確認します。
+4. 各 app を破棄可能な test group に assignment し、managed macOS device の check-in を待ち、selected bundle と期待した version が device から report されることを確認します。これは Graph payload read-back では代替できない device-detection E2E です。
+5. 変更なしで publish を再実行し、idempotency を確認します。2つ目の app、重複 content、primary の不要な変更が無いことを確認します。`PrimaryBundleId` だけを変更して再package・publishし、primary の順序と device detection が意図どおり変わることを確認します。
+6. staging 済み `.pkg` の byte または report を変更して `publish` を実行し、stale/tampered preflight が Graph write 0 件で fail することを確認します。artifact を戻して成功するまで rerun します。
+
 ## 5. 安全な再実行と cleanup
 
 - `plan`、`validate`、`package --stage-only` は安全に再実行できます。
@@ -400,8 +417,9 @@ activate されないため、app を削除・再作成しないでください�
 - `publish --dry-run` は Intune に書き込まずに再実行できます。
 - 実際の publish は収束するように設計されていますが、content activation を tool で取り消すことはできません。
 - category の `$ref` add/remove は冪等なので、途中で中断した category 同期は次回実行で収束します。
+- stale または改ざんされた package artifact は metadata を編集して修復せず、同じ manifest list と正確な CLI version で `package` を再実行します。
 - 意図した rollback では、以前の manifest version を package 化し、明示的に `--allow-downgrade` を指定します。
-- 不要になったら、ローカルの `out`、`manifest-list.json`、`publish-result.json` を削除します。package output、token、signed download URL は commit しないでください。
+- protected E2E の後は、tenant の test app、content version、assignment、使い捨て category を削除します。不要になったら、ローカルの `out`、`manifest-list.json`、`publish-result.json` も削除します。package output、token、signed download URL は commit しないでください。
 
 CI 由来の package artifact を使う場合は、`publish` 前に download 済み artifact に同じ manifest entry と `package-metadata.json` が含まれていることを確認します。
 
