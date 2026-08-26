@@ -2,6 +2,34 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-08-26: macOS PKG primary bundle — Layer 3 (publish preflight / CLI force gate / CI pin)
+
+**対応 Issue / PR**: [#116](https://github.com/kkamegawa/Relaypublisher/issues/116)(親: [#112](https://github.com/kkamegawa/Relaypublisher/issues/112))
+
+Layer 1(#114 / PR #117)・Layer 2(#115 / PR #118)に続く最終層。2 本の stacked PR で実装した。
+
+- **PR A — `feature/116-publish-preflight-force`**(base: `feature/115-macos-pkg-inspector`):
+  - `publish` に全 entry・zero-Graph-write の preflight(`PublishPreflight`)を追加。macOS entry は
+    `PackageMetadataReader.ReadAndVerifyAsync` で source 再ハッシュ・XAR 再検査・CLI version pin 照合まで行い、
+    windows entry は既存どおり存在・identity 照合のみ(`intuneWinSha256` は非決定的なため hash gate に使わない)。
+  - `package` / `publish` に `--force` を追加。semantic warning は TTY で `[y/N]`、非対話では `--force` が
+    無ければ fail。`package` は未確認 warning のある entry の `package-metadata.json` を削除して fail-closed。
+  - tenant 検証を `GraphAuthenticationHandler.EnsureTenantVerifiedAsync` として明示化し、Graph mutation 前の
+    preflight ステップにした(従来は最初の Graph GET の副作用だった)。
+  - `PublishResultEntry` に追加のみの `warningCodes` / `forceAcknowledged` field を追加。
+  - `MacOsPkgInspectionPolicy` に未実装だった `NoBundlesDetected` warning を追加。
+  - Release build: 0 warnings, 0 errors。789 tests passed(既存 762 + 新規 27)。`git diff --check` passed。
+- **PR B — `feature/116-ci-e2e-integration`**(base: PR A の branch):
+  - `workflows/github-actions/publish-intune-apps.yml` / `workflows/azure-pipelines/azure-pipelines.yml`
+    (参照サンプル)を doc/03・doc/04 の目標 YAML と一致させ、`RELAYPUBLISHER_VERSION` pin、
+    `forceWarnings` input/parameter、`production-force` protected environment 分岐を追加。
+  - `doc/adr.md` / `doc/05〜07` を Layer 3 の実装内容に合わせて更新。
+  - **未反映**: `.github/workflows/ci.yml` への `macos-pkg-fixtures` job 追加と、新規
+    `.github/workflows/intune-e2e.yml`(protected manual E2E)は、このセッションのツール権限で
+    `.github/` への書き込みがブロックされていたため、YAML 本文をユーザーへ直接送付するに留めた。
+    リポジトリへの反映(コピー・commit・`intune-e2e` environment の作成・disposable tenant 設定)は
+    ユーザー側の別途対応が必要。
+
 ## 2026-08-26: macOS PKG detection primary bundle — final design and implementation split
 
 **対応 Issue / PR**: [#112](https://github.com/kkamegawa/Relaypublisher/issues/112) / [#113](https://github.com/kkamegawa/Relaypublisher/pull/113)

@@ -20,6 +20,11 @@ on:
       dryRun:
         type: boolean
         default: true
+      forceWarnings:
+        description: "Acknowledge semantic PKG inspection warnings (requires production-force approval)."
+        required: false
+        type: boolean
+        default: false
       manifests:
         description: "Explicit manifest paths (space separated). Empty = all manifests."
         required: false
@@ -30,6 +35,10 @@ concurrency:
   cancel-in-progress: false
 
 permissions: {}
+
+env:
+  # Pin this value to the released CLI used by all three jobs and manual E2E.
+  RELAYPUBLISHER_VERSION: "1.2.3"
 
 jobs:
   validate:
@@ -49,9 +58,7 @@ jobs:
 
       - run: dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
 
-      - run: |
-          dotnet tool install --global relaypublisher
-          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+      - run: dotnet tool install --global relaypublisher --version "$RELAYPUBLISHER_VERSION"
 
       # changed detection をここで一度だけ確定する。
       # PR: merge-base / push: event.before / dispatch: 明示指定または全件
@@ -109,9 +116,7 @@ jobs:
           dotnet-version: "10.0.x"
 
       - shell: pwsh
-        run: |
-          dotnet tool install --global relaypublisher
-          Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.dotnet\tools"
+        run: dotnet tool install --global relaypublisher --version $env:RELAYPUBLISHER_VERSION
 
       - uses: actions/download-artifact@v4
         with:
@@ -145,7 +150,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    environment: production
+    # production-force is a separately protected environment with required reviewers.
+    environment: ${{ inputs.forceWarnings == true && 'production-force' || 'production' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -153,9 +159,7 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - run: |
-          dotnet tool install --global relaypublisher
-          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+      - run: dotnet tool install --global relaypublisher --version "$RELAYPUBLISHER_VERSION"
 
       - name: Azure login
         uses: azure/login@v2
@@ -173,8 +177,13 @@ jobs:
           name: intunewin-packages
           path: ./out
 
-      - run: >
-          relaypublisher publish
-          --manifest-list manifest-list.json
-          --package-dir ./out
-          --expected-tenant "${{ secrets.AZURE_TENANT_ID }}"
+      - name: Publish after artifact preflight
+        shell: bash
+        env:
+          FORCE_WARNINGS: ${{ inputs.forceWarnings }}
+        run: |
+          ARGS=(publish --manifest-list manifest-list.json --package-dir ./out --expected-tenant "${{ secrets.AZURE_TENANT_ID }}")
+          if [[ "$FORCE_WARNINGS" == "true" ]]; then
+            ARGS+=(--force)
+          fi
+          relaypublisher "${ARGS[@]}"

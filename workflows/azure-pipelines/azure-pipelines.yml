@@ -1,6 +1,22 @@
 # Reference sample for doc/04-ci-azure-pipelines.md.
 # Copy this file to the repository root (or wherever the pipeline definition is configured)
 # and follow doc/05-operation.md §6 to set up the variable group / service connection / Exclusive Lock check.
+parameters:
+  - name: relaypublisherVersion
+    type: string
+    default: '1.2.3'
+  - name: forceWarnings
+    displayName: 'Acknowledge semantic PKG inspection warnings'
+    type: boolean
+    default: false
+
+variables:
+  # production-force must have required reviewers; production retains the normal approval policy.
+  ${{ if eq(parameters.forceWarnings, true) }}:
+    publishEnvironment: production-force
+  ${{ else }}:
+    publishEnvironment: production
+
 trigger:
   branches:
     include:
@@ -33,9 +49,7 @@ stages:
               version: 10.0.x
           - script: dotnet build IntuneLobPublisher.slnx --configuration Release
           - script: dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
-          - script: |
-              dotnet tool install --global relaypublisher
-              echo "##vso[task.prependpath]$HOME/.dotnet/tools"
+          - script: dotnet tool install --global relaypublisher --version '${{ parameters.relaypublisherVersion }}'
           # changed detection をここで一度だけ確定する
           - script: >
               relaypublisher plan
@@ -63,9 +77,7 @@ stages:
             inputs:
               packageType: sdk
               version: 10.0.x
-          - pwsh: |
-              dotnet tool install --global relaypublisher
-              Write-Host "##vso[task.prependpath]$env:USERPROFILE\.dotnet\tools"
+          - script: dotnet tool install --global relaypublisher --version '${{ parameters.relaypublisherVersion }}'
           - download: current
             artifact: manifest-list
           # AzureCLI@2 establishes the workload-identity CLI session used by DefaultAzureCredential
@@ -90,7 +102,7 @@ stages:
     jobs:
       # production environment に Exclusive Lock check を設定して直列化すること
       - deployment: PublishToIntune
-        environment: production
+        environment: $(publishEnvironment)
         pool:
           vmImage: ubuntu-latest
         strategy:
@@ -112,10 +124,12 @@ stages:
                     scriptType: bash
                     scriptLocation: inlineScript
                     inlineScript: |
-                      dotnet tool install --global relaypublisher
-                      echo "##vso[task.prependpath]$HOME/.dotnet/tools"
-                      export PATH="$HOME/.dotnet/tools:$PATH"
-                      relaypublisher publish \
+                      dotnet tool install --global relaypublisher --version '${{ parameters.relaypublisherVersion }}'
+                      args=(publish \
                         --manifest-list '$(Pipeline.Workspace)/manifest-list/manifest-list.json' \
                         --package-dir '$(Pipeline.Workspace)/intunewin-packages' \
-                        --expected-tenant '<tenant-id>'
+                        --expected-tenant '<tenant-id>')
+                      if [ '${{ parameters.forceWarnings }}' = 'True' ]; then
+                        args+=(--force)
+                      fi
+                      relaypublisher "${args[@]}"

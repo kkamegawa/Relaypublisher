@@ -410,6 +410,8 @@ activate されないため、app を削除・再作成しないでください�
 5. 変更なしで publish を再実行し、idempotency を確認します。2つ目の app、重複 content、primary の不要な変更が無いことを確認します。`PrimaryBundleId` だけを変更して再package・publishし、primary の順序と device detection が意図どおり変わることを確認します。
 6. staging 済み `.pkg` の byte または report を変更して `publish` を実行し、stale/tampered preflight が Graph write 0 件で fail することを確認します。artifact を戻して成功するまで rerun します。
 
+この手順は、protected `intune-e2e` environment で gate された `workflow_dispatch` 専用 workflow として自動化する想定です(`doc/03-ci-github-actions.md` の "Protected manual E2E (Intune publish)" 参照)。手順4の device check-in だけは workflow が完全には自動化できず、人間による out-of-band 確認が必要です。
+
 ## 5. 安全な再実行と cleanup
 
 - `plan`、`validate`、`package --stage-only` は安全に再実行できます。

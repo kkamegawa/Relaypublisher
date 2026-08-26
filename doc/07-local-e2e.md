@@ -413,6 +413,8 @@ Run this as a protected, manually approved E2E against a disposable tenant. Keep
 5. Rerun the unchanged publish and verify idempotency: no second app, no duplicate content, and no changed primary. Change only `PrimaryBundleId`, repackage, publish, and verify the primary order and device detection change as intended.
 6. Replace one staged `.pkg` byte or its report, rerun `publish`, and verify stale/tampered preflight failure with zero Graph writes. Restore the artifact and rerun successfully.
 
+This runbook is designed to be automated as a `workflow_dispatch`-only workflow gated by a protected `intune-e2e` environment (doc/03-ci-github-actions.md "Protected manual E2E (Intune publish)"); step 4's device check-in is the one step that workflow cannot fully automate and still requires a human to confirm out of band.
+
 ## 5. Safe rerun and cleanup
 
 - `plan`, `validate`, and `package --stage-only` can be rerun safely.

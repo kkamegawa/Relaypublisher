@@ -424,6 +424,7 @@ XAR 検査は package 内容に対する semantic check です。`IncludedApps` 
 | package が複数の application bundle を含み、`PrimaryBundleId` が省略されている | 検出 bundle 一覧と、宣言上の先頭 entry が使われることを表示する。 |
 | 宣言した `PrimaryBundleId` が package に存在しない | 検出 bundle 一覧を表示し、operator の確認を要求する。 |
 | package に `IncludedApps` へ列挙されていない application bundle がある | 未列挙 bundle を表示し、operator の確認を要求する。 |
+| package の metadata が application bundle を 1 件も宣言していない | bundle が検出されなかったことを表示し、operator の確認を要求する。XAR metadata の parse 自体は成功しているが `.app` bundle が 0 件だった状態であり、parse 失敗とは異なる。 |
 
 対話的な TTY では semantic warning ごとに `[y/N]` を表示し、既定値は停止です。非対話環境では `--force` が無い限り fail します。`--force` は確認済みであることを記録し、これらの semantic warning だけを回避します。schema error、primary の曖昧な選択、XAR entry の欠落・破損、未対応 archive、source SHA mismatch、古い/改ざんされた artifact、Graph/tenant safety check は回避できません。
 

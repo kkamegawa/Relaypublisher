@@ -430,6 +430,7 @@ The XAR inspection is a semantic check of the package contents. It does not rewr
 | The package declares multiple application bundles while `PrimaryBundleId` is omitted | Show the detected bundle list and explain that the first declared entry is used. |
 | The declared `PrimaryBundleId` is absent from the package | Show the detected bundle list and require operator confirmation. |
 | The package contains an application bundle that is not listed in `IncludedApps` | Show the unlisted bundle and require operator confirmation. |
+| The package's metadata declares no application bundle at all | Show that no bundle was detected and require operator confirmation; this differs from a parse failure - the XAR metadata parsed successfully but named zero `.app` bundles. |
 
 In an interactive TTY, each semantic warning is followed by a `[y/N]` confirmation; the default is to stop. In a non-interactive environment, the command fails unless `--force` is supplied. `--force` records the acknowledgement and bypasses only these semantic warnings. It never bypasses a schema error, an ambiguous primary selection, a missing or malformed XAR entry, an unsupported archive, a source SHA mismatch, a stale/tampered artifact, or a Graph/tenant safety check.
 

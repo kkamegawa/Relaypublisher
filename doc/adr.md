@@ -150,3 +150,27 @@
 
 各 layer は前段の branch/PR を親とする stacked PR とし、後段は前段が提供する report/schema 契約を変更せずに
 利用する。実装完了条件は deterministic test、CI build/test、protected manual E2E の全てを満たすこととする。
+
+## 2026-08-26: Layer 3 実装時に確定した 3 点(#116)
+
+- **決定**: `PackageMetadataReader.ReadAndVerifyAsync`(manifest-aware overload)が再構築する
+  `PkgInspectionReport` は、artifact metadata に保存済みの `ForceAcknowledged` を引き継がず、常に
+  `false` を返す。呼び出し元(`PublishPreflight`)が、その publish 実行の `--force`/TTY 確認結果だけで
+  warning を判定する。
+  - **理由**: 上記 2026-08-26 の決定(「`publish --force` の承認はその実行の batch にだけ有効で、過去の
+    report の force 記録を再利用しない」)を実装で満たすには、比較対象の report 自体が過去の
+    `ForceAcknowledged` を運ばないようにする必要がある。旧実装のまま `metadata.Inspection.ForceAcknowledged`
+    を fresh report の再構築に渡すと、`package --force` で書かれた metadata がある限り、その後の
+    `publish`(force なし)が常に「既に acknowledged」として通ってしまい、決定と矛盾する。
+  - **今後の注意**: `PkgInspectionReport` の等価性比較(`PackageMetadataReader.InspectionReportsEqual`)から
+    `ForceAcknowledged` を除外したのも同じ理由。この2箇所を戻すと上記の矛盾が再発する。
+- **決定**: `MacOsPkgInspectionPolicy` に `PkgInspectionWarningCode.NoBundlesDetected`(検出 bundle 0件)を
+  追加する。
+  - **理由**: `doc/00-overview.md` の semantic warning 表に「検出 bundle が 0 件」が既に記載されていたが
+    Layer 2 の実装では未実装だった。Layer 3 の preflight が全 warning を集約して一度に確認を求める都合上、
+    表に記載済みの条件が抜けていると preflight の網羅性が設計と食い違う。
+- **決定**: `package` が semantic warning を提示し、TTY で拒否 / 非対話で `--force` 無しの場合、当該 entry の
+  `package-metadata.json` を削除して fail-closed にする。
+  - **理由**: warning 未確認のまま `package-metadata.json` を残すと、次の `publish` がそれをそのまま信頼して
+    しまう経路が残る。metadata を削除すれば `publish` は「metadata が存在しない」という既存の hard error
+    (`PackageMetadataReader.ReadAsync`)で確実に止まり、新しい特別分岐を `publish` 側に増やさずに済む。
