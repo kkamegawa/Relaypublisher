@@ -96,6 +96,49 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  macos-pkg-fixtures:
+    name: macOS PKG inspection fixtures (${{ matrix.os }})
+    # Credential-free coverage for the macOS PKG primary-bundle feature (issue #116): the deterministic
+    # XAR fixtures in these test classes need no external tenant, so they run in every PR/push and
+    # verify the inspector, warning policy and publish preflight agree byte-for-byte across runners
+    # (doc/03-ci-github-actions.md "Protected manual E2E" acceptance scenario 1).
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Build
+        run: dotnet build IntuneLobPublisher.slnx --configuration Release
+
+      - name: Test macOS PKG inspection, warning policy and publish preflight
+        run: >
+          dotnet test IntuneLobPublisher.slnx
+          --configuration Release
+          --no-build
+          --filter "FullyQualifiedName~XarPkgBundleInspector|FullyQualifiedName~MacOsPkgInspectionPolicy|FullyQualifiedName~MacOsPackager|FullyQualifiedName~PublishPreflight|FullyQualifiedName~SemanticWarningGate|FullyQualifiedName~PublishCommandPreflight"
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory ./test-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: macos-pkg-fixture-results-${{ matrix.os }}
+          path: ./test-results
+          if-no-files-found: warn
+          retention-days: 7
+
   single-file:
     name: single-file app (${{ matrix.rid }})
     runs-on: ubuntu-latest

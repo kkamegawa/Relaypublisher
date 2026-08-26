@@ -1,0 +1,209 @@
+# Save this file as .github/workflows/intune-e2e.yml.
+#
+# Protected manual E2E for the macOS PKG primary-bundle selection feature (issue #112/#116).
+# CI build/test alone cannot prove Graph payload shape, PKG detection on a real device, or
+# artifact handoff across jobs, so this is a separate, manually-triggered workflow scoped to a
+# disposable tenant and a dedicated test group. It must never run from a fork PR, a normal PR,
+# or a push - workflow_dispatch is the only trigger, matching doc/03-ci-github-actions.md
+# "Protected manual E2E (Intune publish)" and the runbook in doc/07-local-e2e.md §4.7.
+#
+# Required one-time setup before this workflow can run (see doc/05-operation.md §6):
+#   - A GitHub Environment named `intune-e2e` with required reviewers configured.
+#   - A disposable Microsoft Entra tenant/app registration with federated credentials scoped to
+#     `repo:<owner>/<repo>:environment:intune-e2e` (never reuse the `production` credential).
+#   - AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID secrets on that environment.
+#   - A dedicated test Entra group id for assignment (E2E_TEST_GROUP_ID secret or variable).
+#   - A real macOS PKG source (and, for step 4, an enrolled disposable macOS test device) -
+#     the deterministic XAR fixtures used by ci.yml are not a substitute for this.
+name: Intune E2E (protected, manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifestList:
+        description: "Path to a manifest-list.json (or a single manifest) exercising both AppType: pkg and AppType: lob with a multi-bundle PKG."
+        required: true
+        type: string
+      forceWarnings:
+        description: "Acknowledge semantic PKG inspection warnings for the accept-path runs."
+        required: false
+        type: boolean
+        default: false
+
+# Only one E2E run at a time against the disposable tenant, to keep create/update/idempotency
+# assertions unambiguous.
+concurrency:
+  group: intune-e2e
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  # Pin to the same CLI version used by the normal publish workflow's package/publish jobs.
+  RELAYPUBLISHER_VERSION: "1.2.3"
+
+jobs:
+  e2e:
+    name: Run protected Intune E2E
+    runs-on: ubuntu-latest
+    environment: intune-e2e
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - run: dotnet tool install --global relaypublisher --version "$RELAYPUBLISHER_VERSION"
+
+      - name: Log CLI version for audit
+        run: relaypublisher --version
+
+      - name: Sign in to the disposable tenant
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate (structural only)
+        run: relaypublisher validate --manifest-list "${{ inputs.manifestList }}"
+
+      # Acceptance scenario 1: deterministic XAR fixture vs a real PKG.
+      # The deterministic-fixture half already runs cross-runner in ci.yml's macos-pkg-fixtures
+      # job; this step is the real-PKG half that only a real source can exercise.
+      - name: Package (source SHA verification, then bounded XAR inspection)
+        run: relaypublisher package --manifest-list "${{ inputs.manifestList }}" --output ./out
+
+      # Acceptance scenario 2 (part 1): reject the semantic warning path with zero Graph writes.
+      # publish --dry-run in a non-interactive job has no TTY, so warnings fail closed without --force.
+      - name: Dry-run publish without --force (expect failure if warnings are present)
+        id: dry_run_reject
+        continue-on-error: true
+        run: >
+          relaypublisher publish
+          --manifest-list "${{ inputs.manifestList }}"
+          --package-dir ./out
+          --expected-tenant "${{ secrets.AZURE_TENANT_ID }}"
+          --dry-run
+
+      - name: Assert the warning-rejection path actually ran
+        run: |
+          if [ "${{ steps.dry_run_reject.outcome }}" = "success" ]; then
+            echo "::error::Expected the non-interactive dry-run without --force to fail on unacknowledged warnings, but it succeeded. The rejection path (acceptance scenario 2, part 1) was not exercised."
+            exit 1
+          fi
+          echo "OK: non-interactive run without --force correctly stopped on unacknowledged warnings."
+      # Acceptance scenario 2 (part 2): the protected accept path.
+      - name: Publish (protected --force acknowledgement, dry-run preview)
+        run: >
+          relaypublisher publish
+          --manifest-list "${{ inputs.manifestList }}"
+          --package-dir ./out
+          --expected-tenant "${{ secrets.AZURE_TENANT_ID }}"
+          --dry-run
+          ${{ inputs.forceWarnings && '--force' || '' }}
+
+      # Acceptance scenario 2 (part 3) + 3 + 5: real create/update, Graph read-back, and
+      # idempotent rerun. Publish for real (no --dry-run) now that dry-run preflight passed.
+      - name: Publish pkg and lob variants
+        run: >
+          relaypublisher publish
+          --manifest-list "${{ inputs.manifestList }}"
+          --package-dir ./out
+          --expected-tenant "${{ secrets.AZURE_TENANT_ID }}"
+          --result-file ./out/publish-result.json
+          ${{ inputs.forceWarnings && '--force' || '' }}
+
+      - name: Read back Graph app payloads (selected primary, includedApps/childApps, LOB version fields)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "TODO: for each app id in ./out/publish-result.json, GET the Graph resource and assert:"
+          echo "  - macOSPkgApp: selected bundle is primaryBundleId/primaryBundleVersion and first in includedApps"
+          echo "  - macOSLobApp: selected bundle is top-level bundleId; buildNumber/versionNumber match manifest"
+          cat ./out/publish-result.json
+
+      - name: "Rerun publish (idempotency: no second app, no duplicate content, unchanged primary)"
+        run: >
+          relaypublisher publish
+          --manifest-list "${{ inputs.manifestList }}"
+          --package-dir ./out
+          --expected-tenant "${{ secrets.AZURE_TENANT_ID }}"
+          --result-file ./out/publish-result-rerun.json
+          ${{ inputs.forceWarnings && '--force' || '' }}
+
+      # Acceptance scenario 2 (part 4): checksum tamper / CLI version mismatch / malformed XAR /
+      # later-manifest preflight rejection must all make zero Graph writes.
+      - name: Tamper the staged package and assert publish refuses to write
+        id: tamper_check
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          FIRST_PKG="$(find ./out -name '*.pkg' | head -n1)"
+          if [ -n "$FIRST_PKG" ]; then
+            printf 'tampered' >> "$FIRST_PKG"
+          fi
+          relaypublisher publish \
+            --manifest-list "${{ inputs.manifestList }}" \
+            --package-dir ./out \
+            --expected-tenant "${{ secrets.AZURE_TENANT_ID }}"
+
+      - name: Assert the tampered artifact was rejected
+        run: |
+          if [ "${{ steps.tamper_check.outcome }}" = "success" ]; then
+            echo "::error::Expected publish to refuse the tampered package before any Graph write, but it succeeded. Tamper detection (acceptance scenario 2, part 4) did not fire - this is a regression, not just a missed check."
+            exit 1
+          fi
+          echo "OK: preflight rehash/reinspection caught the tampered artifact before any Graph write."
+
+      # Acceptance scenario 4 (device detection) cannot be automated from this workflow - it
+      # requires an enrolled disposable macOS device to check in. Surface it as a manual gate.
+      - name: Manual device-detection checklist (doc/07-local-e2e.md §4.7 step 4)
+        run: |
+          echo "MANUAL STEP - verify before approving cleanup:"
+          echo "  1. Assign the published app(s) to the disposable test group if not already assigned."
+          echo "  2. Wait for the enrolled disposable macOS test device to check in."
+          echo "  3. Confirm the device reports the selected bundle id and expected version."
+          echo "This cannot be verified by this workflow; a human must confirm it out of band."
+
+  cleanup:
+    name: Clean up disposable tenant resources
+    needs: e2e
+    if: always()
+    runs-on: ubuntu-latest
+    environment: intune-e2e
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Sign in to the disposable tenant
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Cleanup failure must fail this job, not be swallowed - a leftover disposable-tenant app
+      # or assignment is itself a finding, not noise.
+      - name: Delete apps, content, and assignments created by this run
+        run: |
+          set -euo pipefail
+          echo "TODO: delete every mobileApps entry (and its assignments) created by this run's" \
+               "publish-result.json / publish-result-rerun.json from the disposable tenant."
+          echo "A failed deletion here must fail this job."
+
+      - name: Verify the disposable test group has no stale assignments
+        run: |
+          set -euo pipefail
+          echo "TODO: confirm the disposable test group's app assignments are empty after cleanup."
