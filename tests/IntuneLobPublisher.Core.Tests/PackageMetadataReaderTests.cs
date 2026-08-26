@@ -137,4 +137,28 @@ public sealed class PackageMetadataReaderTests
 
         StringAssert.Contains(exception.Message, "Re-run the package command");
     }
+
+    [TestMethod]
+    public async Task ReadAndVerifyAsync_ManifestAwareOverload_NonMacOsIdentity_ThrowsInsteadOfNullFreshReport()
+    {
+        // The manifest-aware overload only exists to reconstruct a macOS inspection report; for any
+        // other platform there is no such report to build, so it must fail fast rather than hand back
+        // a PackageVerification whose non-nullable FreshReport is silently null.
+        WriteEntry(CreateMetadata(), Identity);
+        var manifest = TestManifests.CreateValid();
+        var app = manifest.Apps[0];
+        var inspector = new ThrowingPkgBundleInspector();
+
+        var exception = await Assert.ThrowsExactlyAsync<ArgumentException>(() => PackageMetadataReader.ReadAndVerifyAsync(
+            _packageDirectory, Identity, manifest, app, inspector, expectedCliVersion: null, CancellationToken.None));
+
+        StringAssert.Contains(exception.Message, "macOS");
+        Assert.AreEqual("identity", exception.ParamName);
+    }
+
+    private sealed class ThrowingPkgBundleInspector : IPkgBundleInspector
+    {
+        public Task<PkgBundleInspectionResult> InspectAsync(Stream pkg, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("The non-macOS short-circuit must return before the inspector is ever invoked.");
+    }
 }

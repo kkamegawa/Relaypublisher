@@ -65,6 +65,12 @@ public static class PackageMetadataReader
     /// - the caller (the publish preflight) is responsible for deciding whether this run's <c>--force</c>
     /// covers the returned warnings.
     /// </summary>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="identity"/> is not a macOS identity. This overload only exists to reconstruct a
+    /// macOS inspection report; a non-macOS platform has no such report to build, so it fails fast
+    /// instead of returning a <see cref="PackageVerification"/> whose non-nullable
+    /// <see cref="PackageVerification.FreshReport"/> would otherwise be null.
+    /// </exception>
     public static async Task<PackageVerification> ReadAndVerifyAsync(
         string packageDirectory,
         AppIdentity identity,
@@ -82,7 +88,15 @@ public static class PackageMetadataReader
             inspector,
             expectedCliVersion,
             cancellationToken).ConfigureAwait(false);
-        return new PackageVerification(artifacts, freshReport!);
+        if (freshReport is null)
+        {
+            throw new ArgumentException(
+                $"The manifest-aware ReadAndVerifyAsync overload only supports macOS artifacts; " +
+                $"'{identity.Platform}' is not macOS.",
+                nameof(identity));
+        }
+
+        return new PackageVerification(artifacts, freshReport);
     }
 
     private static async Task<(PackageArtifacts Artifacts, PkgInspectionReport? FreshReport)> ReadAndVerifyCoreAsync(

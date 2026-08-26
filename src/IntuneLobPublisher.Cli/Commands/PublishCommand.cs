@@ -276,7 +276,9 @@ internal static class PublishCommand
             "Semantic PKG inspection warnings were not acknowledged.",
             CategoryOutcome: null,
             WarningCodes: [.. entry.Warnings.Select(w => w.Code.ToString())],
-            ForceAcknowledged: false);
+            // null, not false: false means an interactive [y/N] accepted the warnings (see
+            // PublishResultEntry.ForceAcknowledged), which did not happen on this aborted path.
+            ForceAcknowledged: null);
 
     /// <param name="VerifiedArtifacts">Set by preflight (issue #116) once every entry has been re-verified; null before that point.</param>
     /// <param name="Warnings">This entry's macOS semantic PKG inspection warnings, set by preflight; empty for every other platform or before preflight runs.</param>

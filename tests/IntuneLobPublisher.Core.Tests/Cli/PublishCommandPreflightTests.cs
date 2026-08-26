@@ -141,6 +141,9 @@ public sealed class PublishCommandPreflightTests
         Assert.HasCount(1, result.AbortResultEntries);
         CollectionAssert.Contains(result.AbortResultEntries[0].WarningCodes, "MultipleBundlesWithoutExplicitPrimary");
         Assert.IsNull(result.WarningsAcknowledgedViaForce);
+        // null, not false: false would misleadingly read as "an interactive [y/N] accepted this",
+        // which did not happen - the warning was declined.
+        Assert.IsNull(result.AbortResultEntries[0].ForceAcknowledged);
     }
 
     [TestMethod]
