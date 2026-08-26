@@ -191,7 +191,9 @@ jobs:
 
       - run: dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
 
-      - run: dotnet tool install --global relaypublisher --version "$RELAYPUBLISHER_VERSION"
+      - run: |
+          dotnet tool install --global relaypublisher --version "$RELAYPUBLISHER_VERSION"
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       # changed detection をここで一度だけ確定する。
       # PR: merge-base / push: event.before / dispatch: 明示指定または全件
@@ -249,7 +251,9 @@ jobs:
           dotnet-version: "10.0.x"
 
       - shell: pwsh
-        run: dotnet tool install --global relaypublisher --version $env:RELAYPUBLISHER_VERSION
+        run: |
+          dotnet tool install --global relaypublisher --version $env:RELAYPUBLISHER_VERSION
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.dotnet\tools"
 
       - uses: actions/download-artifact@v4
         with:
@@ -292,7 +296,9 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - run: dotnet tool install --global relaypublisher --version "$RELAYPUBLISHER_VERSION"
+      - run: |
+          dotnet tool install --global relaypublisher --version "$RELAYPUBLISHER_VERSION"
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Azure login
         uses: azure/login@v2

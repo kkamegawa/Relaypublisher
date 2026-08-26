@@ -111,7 +111,9 @@ stages:
               version: 10.0.x
           - script: dotnet build IntuneLobPublisher.slnx --configuration Release
           - script: dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
-          - script: dotnet tool install --global relaypublisher --version '${{ parameters.relaypublisherVersion }}'
+          - script: |
+              dotnet tool install --global relaypublisher --version '${{ parameters.relaypublisherVersion }}'
+              echo "##vso[task.prependpath]$HOME/.dotnet/tools"
           # changed detection をここで一度だけ確定する
           - script: >
               relaypublisher plan
@@ -139,7 +141,9 @@ stages:
             inputs:
               packageType: sdk
               version: 10.0.x
-          - script: dotnet tool install --global relaypublisher --version '${{ parameters.relaypublisherVersion }}'
+          - pwsh: |
+              dotnet tool install --global relaypublisher --version '${{ parameters.relaypublisherVersion }}'
+              Write-Host "##vso[task.prependpath]$env:USERPROFILE\.dotnet\tools"
           - download: current
             artifact: manifest-list
           # AzureCLI@2 establishes the workload-identity CLI session used by DefaultAzureCredential
@@ -187,6 +191,8 @@ stages:
                     scriptLocation: inlineScript
                     inlineScript: |
                       dotnet tool install --global relaypublisher --version '${{ parameters.relaypublisherVersion }}'
+                      echo "##vso[task.prependpath]$HOME/.dotnet/tools"
+                      export PATH="$HOME/.dotnet/tools:$PATH"
                       args=(publish \
                         --manifest-list '$(Pipeline.Workspace)/manifest-list/manifest-list.json' \
                         --package-dir '$(Pipeline.Workspace)/intunewin-packages' \

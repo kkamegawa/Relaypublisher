@@ -59,7 +59,9 @@ jobs:
         with:
           global-json-file: global.json
 
-      - run: dotnet tool install --global relaypublisher --version "$RELAYPUBLISHER_VERSION"
+      - run: |
+          dotnet tool install --global relaypublisher --version "$RELAYPUBLISHER_VERSION"
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Log CLI version for audit
         run: relaypublisher --version
