@@ -18,6 +18,10 @@ namespace IntuneLobPublisher.Core.Packaging;
 /// <param name="IntuneWinSha256">Windows only: SHA256 of the generated <c>.intunewin</c>. Informational only - the file is encrypted with a random key per run, so this hash is not deterministic.</param>
 /// <param name="ContentFile">macOS only: the staged <c>.pkg</c> file's path, relative to this file's directory.</param>
 /// <param name="ContentSha256">macOS only: SHA256 of the staged (plaintext) <c>.pkg</c> file.</param>
+/// <param name="ContentSize">macOS only: exact byte length of the staged (plaintext) <c>.pkg</c> file.</param>
+/// <param name="CliVersion">macOS only: version of the CLI that produced the artifact.</param>
+/// <param name="Inspection">macOS only: bounded XAR inspection report for the artifact.</param>
+/// <param name="MetadataSchemaVersion">Additive metadata schema version. Windows metadata may omit it.</param>
 public sealed record PackageMetadata(
     string PackageIdentifier,
     string? PackageVersion,
@@ -29,7 +33,11 @@ public sealed record PackageMetadata(
     string? IntuneWinSha256,
     DateTimeOffset GeneratedUtc,
     string? ContentFile = null,
-    string? ContentSha256 = null);
+    string? ContentSha256 = null,
+    long? ContentSize = null,
+    string? CliVersion = null,
+    PkgInspectionReport? Inspection = null,
+    int? MetadataSchemaVersion = null);
 
 public sealed record PackageToolMetadata(
     string Name,

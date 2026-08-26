@@ -37,6 +37,7 @@ services.AddSingleton<IIntuneWinToolResolver, IntuneWinToolResolver>();
 services.AddSingleton<IProcessRunner, ProcessRunner>();
 services.AddSingleton<IIntuneWinPackager, IntuneWinPackager>();
 services.AddSingleton<IMacOsStagingService, MacOsStagingService>();
+services.AddSingleton<IPkgBundleInspector, PkgBundleInspector>();
 services.AddSingleton<IMacOsPackager, MacOsPackager>();
 services.AddSingleton<IGitDiffRunner, GitDiffRunner>();
 services.AddSingleton<PlanService>();

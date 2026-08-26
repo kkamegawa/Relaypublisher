@@ -9,6 +9,12 @@ public static class ChecksumVerifier
     public static async Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken)
     {
         await using var stream = File.OpenRead(path);
+        return await ComputeSha256Async(stream, cancellationToken).ConfigureAwait(false);
+    }
+
+    public static async Task<string> ComputeSha256Async(Stream stream, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
         var hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
         return Convert.ToHexStringLower(hash);
     }
