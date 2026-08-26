@@ -19,10 +19,18 @@ public sealed class DetectionManifest
 
     /// <summary>
     /// macOS only: bundleId + version list Intune uses to detect the app (Graph <c>includedApps</c> /
-    /// <c>childApps</c>). At least one entry is required; the first entry is also used for report display
-    /// and, for <c>AppType: pkg</c>, as the app's <c>primaryBundleId</c> / <c>primaryBundleVersion</c>.
+    /// <c>childApps</c>). At least one entry is required. The first entry is used as the primary bundle
+    /// unless <see cref="PrimaryBundleId"/> selects another entry.
     /// </summary>
     public List<IncludedAppManifest>? IncludedApps { get; set; }
+
+    /// <summary>
+    /// macOS only: optional bundle identifier used to select the primary entry from
+    /// <see cref="IncludedApps"/>. Matching is ordinal and case-sensitive: an exact match or a
+    /// segment-boundary prefix match (the selected value followed by <c>.</c>) is required to resolve
+    /// exactly one entry. When omitted, the first entry remains primary.
+    /// </summary>
+    public string? PrimaryBundleId { get; set; }
 
     /// <summary>
     /// macOS only: when true, the app's version is not used to detect whether it is installed
@@ -37,6 +45,9 @@ public sealed class IncludedAppManifest
     /// <summary>The app's CFBundleIdentifier.</summary>
     public string? BundleId { get; set; }
 
-    /// <summary>The app's CFBundleShortVersion.</summary>
+    /// <summary>The app's CFBundleShortVersionString.</summary>
     public string? BundleVersion { get; set; }
+
+    /// <summary>The app's CFBundleVersion. Required for macOS <c>AppType: lob</c>; optional for <c>pkg</c>.</summary>
+    public string? BundleBuildVersion { get; set; }
 }

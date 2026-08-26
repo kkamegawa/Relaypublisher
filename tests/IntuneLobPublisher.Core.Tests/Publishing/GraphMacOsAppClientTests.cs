@@ -56,9 +56,10 @@ public sealed class GraphMacOsAppClientTests
         Publisher = "Contoso Ltd.",
         FileName = "contoso-tool-arm64.pkg",
         MinimumSupportedOperatingSystem = new MacOsMinimumOperatingSystemPayload { V13_0 = true },
+        BundleId = "com.contoso.tool",
         BuildNumber = "1.2.3",
-        VersionNumber = "1.2.3",
-        ChildApps = [new MacOsLobChildAppPayload { BundleId = "com.contoso.tool", BuildNumber = "1.2.3", VersionNumber = "1.2.3" }],
+        VersionNumber = "1234",
+        ChildApps = [new MacOsLobChildAppPayload { BundleId = "com.contoso.tool", BuildNumber = "1.2.3", VersionNumber = "1234" }],
     };
 
     [TestMethod]

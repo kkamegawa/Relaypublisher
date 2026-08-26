@@ -458,6 +458,134 @@ public sealed class ManifestValidationTests
     }
 
     [TestMethod]
+    [DataRow("com.contoso.helper")]
+    [DataRow("com.contoso")]
+    public void Validate_MacOsPrimaryBundleUniqueExactOrSegmentPrefix_Passes(string primaryBundleId)
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidMacOsApp();
+        app.Detection!.PrimaryBundleId = primaryBundleId;
+        app.Detection.IncludedApps =
+        [
+            new IncludedAppManifest { BundleId = "com.example.tool", BundleVersion = "1.0" },
+            new IncludedAppManifest { BundleId = "com.contoso.helper", BundleVersion = "2.0" },
+        ];
+        manifest.Apps = [app];
+
+        var result = _validator.Validate(manifest);
+
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => e.ErrorMessage)));
+    }
+
+    [TestMethod]
+    [DataRow("com.contoso.missing")]
+    [DataRow("COM.CONTOSO.HELPER")]
+    [DataRow("com.contoso.help")]
+    public void Validate_MacOsPrimaryBundleWithoutOrdinalSegmentMatch_Fails(string primaryBundleId)
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidMacOsApp();
+        app.Detection!.PrimaryBundleId = primaryBundleId;
+        app.Detection.IncludedApps =
+        [new IncludedAppManifest { BundleId = "com.contoso.helper", BundleVersion = "2.0" }];
+        manifest.Apps = [app];
+
+        AssertInvalid(manifest, "did not match");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsPrimaryBundleWithMultipleSegmentMatches_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidMacOsApp();
+        app.Detection!.PrimaryBundleId = "com.contoso";
+        app.Detection.IncludedApps =
+        [
+            new IncludedAppManifest { BundleId = "com.contoso.client", BundleVersion = "1.0" },
+            new IncludedAppManifest { BundleId = "com.contoso.agent", BundleVersion = "1.0" },
+        ];
+        manifest.Apps = [app];
+
+        AssertInvalid(manifest, "matched more than one");
+    }
+
+    [TestMethod]
+    [DataRow("")]
+    [DataRow(" ")]
+    [DataRow("\t")]
+    public void Validate_MacOsPrimaryBundleBlank_Fails(string primaryBundleId)
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidMacOsApp();
+        app.Detection!.PrimaryBundleId = primaryBundleId;
+        manifest.Apps = [app];
+
+        AssertInvalid(manifest, "must not be empty or whitespace");
+    }
+
+    [TestMethod]
+    public void Validate_WindowsPrimaryBundleId_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Detection!.PrimaryBundleId = "com.contoso.tool";
+
+        AssertInvalid(manifest, "PrimaryBundleId must not be set");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsDuplicateBundleIds_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidMacOsApp();
+        app.Detection!.IncludedApps =
+        [
+            new IncludedAppManifest { BundleId = "com.contoso.tool", BundleVersion = "1.0" },
+            new IncludedAppManifest { BundleId = "com.contoso.tool", BundleVersion = "2.0" },
+        ];
+        manifest.Apps = [app];
+
+        AssertInvalid(manifest, "duplicate BundleId");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsMoreThanFiveHundredIncludedApps_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidMacOsApp();
+        app.Detection!.IncludedApps = Enumerable.Range(0, 501)
+            .Select(index => new IncludedAppManifest { BundleId = $"com.contoso.app{index}", BundleVersion = "1.0" })
+            .ToList();
+        manifest.Apps = [app];
+
+        AssertInvalid(manifest, "at most 500");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsLobMissingBundleBuildVersion_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Icon = "assets/icons/tool.png";
+        var app = TestManifests.CreateValidMacOsApp(appType: "lob");
+        app.Detection!.IncludedApps![0].BundleBuildVersion = null;
+        manifest.Apps = [app];
+
+        AssertInvalid(manifest, "BundleBuildVersion is required");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsPkgWithBundleBuildVersion_Passes()
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidMacOsApp();
+        app.Detection!.IncludedApps![0].BundleBuildVersion = "1234";
+        manifest.Apps = [app];
+
+        var result = _validator.Validate(manifest);
+
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => e.ErrorMessage)));
+    }
+
+    [TestMethod]
     public void Validate_MacOsAppWithWindowsPackage_Fails()
     {
         var manifest = TestManifests.CreateValid();

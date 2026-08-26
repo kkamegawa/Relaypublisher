@@ -99,6 +99,9 @@ public sealed class InputHashCalculatorTests
     private const string PinnedInputHashWithoutCategories =
         "379fc955db9c86bb41719a6a1cc930eb8ea50b8c52914d649c53c9a609fd452d";
 
+    private const string PinnedMacOsManifestHashWithoutPrimaryOrBuildVersion =
+        "da1a7db42a48516926d78942e5f352e6e60532431b60e521904aa4ea25a59a33";
+
     [TestMethod]
     public void ComputeManifestHash_ManifestWithoutCategories_MatchesThePinnedValue()
     {
@@ -128,6 +131,43 @@ public sealed class InputHashCalculatorTests
             withCategories, _stagingDirectory, CancellationToken.None);
 
         Assert.AreNotEqual(PinnedInputHashWithoutCategories, after);
+    }
+
+    [TestMethod]
+    public void ComputeManifestHash_MacOsOptionalPrimaryFieldsOmitted_MatchesPinnedValue()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidMacOsApp()];
+
+        Assert.AreEqual(
+            PinnedMacOsManifestHashWithoutPrimaryOrBuildVersion,
+            InputHashCalculator.ComputeManifestHash(manifest));
+    }
+
+    [TestMethod]
+    public void ComputeManifestHash_AddingMacOsPrimaryBundleId_ChangesHash()
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidMacOsApp();
+        app.Detection!.PrimaryBundleId = "com.contoso.tool";
+        manifest.Apps = [app];
+
+        Assert.AreNotEqual(
+            PinnedMacOsManifestHashWithoutPrimaryOrBuildVersion,
+            InputHashCalculator.ComputeManifestHash(manifest));
+    }
+
+    [TestMethod]
+    public void ComputeManifestHash_AddingMacOsBundleBuildVersion_ChangesHash()
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidMacOsApp();
+        app.Detection!.IncludedApps![0].BundleBuildVersion = "1234";
+        manifest.Apps = [app];
+
+        Assert.AreNotEqual(
+            PinnedMacOsManifestHashWithoutPrimaryOrBuildVersion,
+            InputHashCalculator.ComputeManifestHash(manifest));
     }
 
     [TestMethod]

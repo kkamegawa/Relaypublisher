@@ -110,7 +110,12 @@ internal static class TestManifests
             {
                 IncludedApps =
                 [
-                    new IncludedAppManifest { BundleId = "com.contoso.tool", BundleVersion = "1.2.3" },
+                    new IncludedAppManifest
+                    {
+                        BundleId = "com.contoso.tool",
+                        BundleVersion = "1.2.3",
+                        BundleBuildVersion = appType == "lob" ? "1234" : null,
+                    },
                 ],
             },
             Assignments =

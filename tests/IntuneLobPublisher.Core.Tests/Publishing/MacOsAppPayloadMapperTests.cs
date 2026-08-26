@@ -61,6 +61,34 @@ public sealed class MacOsAppPayloadMapperTests
     }
 
     [TestMethod]
+    public void Map_Pkg_ExplicitPrimaryIsFirstWithoutMutatingManifestOrder()
+    {
+        var manifest = CreateManifest(appType: "pkg");
+        var app = manifest.Apps[0];
+        app.Detection!.PrimaryBundleId = "com.contoso.tool";
+        app.Detection.IncludedApps =
+        [
+            new IncludedAppManifest { BundleId = "com.contoso.helper", BundleVersion = "1.0.0" },
+            new IncludedAppManifest { BundleId = "com.contoso.tool", BundleVersion = "1.2.3", BundleBuildVersion = "999" },
+            new IncludedAppManifest { BundleId = "com.contoso.agent", BundleVersion = "1.1.0" },
+        ];
+
+        var payload = (MacOsPkgAppPayload)MacOsAppPayloadMapper.Map(manifest, app, iconBytes: null);
+
+        Assert.AreEqual("com.contoso.tool", payload.PrimaryBundleId);
+        Assert.AreEqual("1.2.3", payload.PrimaryBundleVersion);
+        CollectionAssert.AreEqual(
+            new[] { "com.contoso.tool", "com.contoso.helper", "com.contoso.agent" },
+            payload.IncludedApps.Select(item => item.BundleId).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "com.contoso.helper", "com.contoso.tool", "com.contoso.agent" },
+            app.Detection.IncludedApps.Select(item => item.BundleId).ToArray());
+        var json = JsonSerializer.Serialize(payload);
+        StringAssert.DoesNotMatch(json, new System.Text.RegularExpressions.Regex("999"),
+            "BundleBuildVersion is not part of the macOSPkgApp wire contract.");
+    }
+
+    [TestMethod]
     public void Map_Lob_ReturnsLobPayloadWithChildAppsShapeDifferentFromPkg()
     {
         var manifest = CreateManifest(appType: "lob");
@@ -71,13 +99,43 @@ public sealed class MacOsAppPayloadMapperTests
 
         var payload = (MacOsLobAppPayload)MacOsAppPayloadMapper.Map(manifest, app, iconBytes: null);
 
+        Assert.AreEqual("com.contoso.tool", payload.BundleId);
         Assert.AreEqual("1.2.3", payload.BuildNumber);
-        Assert.AreEqual("1.2.3", payload.VersionNumber);
+        Assert.AreEqual("1234", payload.VersionNumber);
         Assert.HasCount(1, payload.ChildApps);
         Assert.AreEqual("com.contoso.tool", payload.ChildApps[0].BundleId);
         Assert.AreEqual("1.2.3", payload.ChildApps[0].BuildNumber);
-        Assert.AreEqual("1.2.3", payload.ChildApps[0].VersionNumber);
+        Assert.AreEqual("1234", payload.ChildApps[0].VersionNumber);
         Assert.AreEqual("#microsoft.graph.macOSLobApp", payload.ODataType);
+    }
+
+    [TestMethod]
+    public void Map_Lob_ExplicitPrimaryMapsIndependentVersionsAndStableChildOrder()
+    {
+        var manifest = CreateManifest(appType: "lob");
+        var app = manifest.Apps[0];
+        app.Requirements!.MinimumOSVersion = "13.0";
+        app.Detection!.PrimaryBundleId = "com.contoso.tool";
+        app.Detection.IncludedApps =
+        [
+            new IncludedAppManifest { BundleId = "com.contoso.helper", BundleVersion = "1.0", BundleBuildVersion = "100" },
+            new IncludedAppManifest { BundleId = "com.contoso.tool", BundleVersion = "2.0", BundleBuildVersion = "205" },
+            new IncludedAppManifest { BundleId = "com.contoso.agent", BundleVersion = "1.5", BundleBuildVersion = "150" },
+        ];
+
+        var payload = (MacOsLobAppPayload)MacOsAppPayloadMapper.Map(manifest, app, iconBytes: null);
+
+        Assert.AreEqual("com.contoso.tool", payload.BundleId);
+        Assert.AreEqual("2.0", payload.BuildNumber);
+        Assert.AreEqual("205", payload.VersionNumber);
+        CollectionAssert.AreEqual(
+            new[] { "com.contoso.tool", "com.contoso.helper", "com.contoso.agent" },
+            payload.ChildApps.Select(item => item.BundleId).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "205", "100", "150" }, payload.ChildApps.Select(item => item.VersionNumber).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "com.contoso.helper", "com.contoso.tool", "com.contoso.agent" },
+            app.Detection.IncludedApps.Select(item => item.BundleId).ToArray());
     }
 
     [TestMethod]

@@ -44,7 +44,7 @@ public static class MacOsAppPayloadMapper
         string? notes = null)
     {
         var target = ResolveTarget(app);
-        var includedApps = app.Detection!.IncludedApps!;
+        var includedApps = MacOsBundleSelector.ProjectPrimaryFirst(app.Detection!);
         var primary = includedApps[0];
         var minimumSupportedOperatingSystem = MacOsMinimumOperatingSystemTable.Map(app.Requirements!.MinimumOSVersion!, target.UseBeta);
 
@@ -88,13 +88,16 @@ public static class MacOsAppPayloadMapper
             MinimumSupportedOperatingSystem = minimumSupportedOperatingSystem,
             IgnoreVersionDetection = app.Detection.IgnoreAppVersion ?? false,
             Notes = notes,
-            // macOSLobApp has no separate "primary bundle" concept; the first IncludedApps entry
-            // stands in for both the top-level build/version numbers and the childApps list
-            // (doc/01-manifest-schema.md §5.4: "the first entry is used for report display").
+            BundleId = primary.BundleId!,
             BuildNumber = primary.BundleVersion!,
-            VersionNumber = primary.BundleVersion!,
+            VersionNumber = primary.BundleBuildVersion!,
             ChildApps = includedApps
-                .Select(a => new MacOsLobChildAppPayload { BundleId = a.BundleId!, BuildNumber = a.BundleVersion!, VersionNumber = a.BundleVersion! })
+                .Select(a => new MacOsLobChildAppPayload
+                {
+                    BundleId = a.BundleId!,
+                    BuildNumber = a.BundleVersion!,
+                    VersionNumber = a.BundleBuildVersion!,
+                })
                 .ToList(),
         };
     }

@@ -129,7 +129,7 @@ internal sealed class AppManifestValidator : AbstractValidator<AppManifest>
 
         RuleFor(a => a.Detection)
             .NotNull()
-            .SetValidator(a => new DetectionManifestValidator(a.Platform)!);
+            .SetValidator(a => new DetectionManifestValidator(a.Platform, a.AppType)!);
 
         RuleFor(a => a.Requirements)
             .NotNull()
@@ -356,12 +356,13 @@ internal sealed class InstallManifestValidator : AbstractValidator<InstallManife
 /// </summary>
 internal sealed class DetectionManifestValidator : AbstractValidator<DetectionManifest>
 {
-    public DetectionManifestValidator(string? platform)
+    public DetectionManifestValidator(string? platform, string? appType)
     {
         RuleLevelCascadeMode = CascadeMode.Stop;
 
         var isWindows = platform == "windows";
         var isMacOs = platform == "macos";
+        var isMacOsLob = isMacOs && appType == "lob";
 
         // A single Must (rather than NotEmpty().Must().When(..., CurrentValidator)) so the empty-check
         // itself is also conditional: With ApplyConditionTo.CurrentValidator the When would only gate
@@ -387,18 +388,69 @@ internal sealed class DetectionManifestValidator : AbstractValidator<DetectionMa
             .When(_ => isMacOs)
             .WithMessage("Detection.ScriptFile must not be set for Platform 'macos'.");
 
+        RuleFor(d => d.PrimaryBundleId)
+            .Null()
+            .When(_ => isWindows)
+            .WithMessage("Detection.PrimaryBundleId must not be set for Platform 'windows'.");
+
+        RuleFor(d => d.PrimaryBundleId)
+            .Must(value => value is null || !string.IsNullOrWhiteSpace(value))
+            .When(_ => isMacOs)
+            .WithMessage("Detection.PrimaryBundleId must not be empty or whitespace for Platform 'macos'.");
+
         RuleFor(d => d.IncludedApps)
             .NotEmpty()
             .When(_ => isMacOs, ApplyConditionTo.CurrentValidator)
-            .WithMessage("Detection.IncludedApps is required and must contain at least one entry for Platform 'macos'.");
+            .WithMessage("Detection.IncludedApps is required and must contain at least one entry for Platform 'macos'.")
+            .Must(entries => entries is null || entries.Count <= 500)
+            .When(_ => isMacOs, ApplyConditionTo.CurrentValidator)
+            .WithMessage("Detection.IncludedApps must contain at most 500 entries for Platform 'macos'.")
+            .Must(HaveUniqueBundleIds)
+            .When(_ => isMacOs, ApplyConditionTo.CurrentValidator)
+            .WithMessage("Detection.IncludedApps contains duplicate BundleId values.");
 
         RuleForEach(d => d.IncludedApps)
             .ChildRules(entry =>
             {
                 entry.RuleFor(e => e.BundleId).NotEmpty();
                 entry.RuleFor(e => e.BundleVersion).NotEmpty();
+                entry.RuleFor(e => e.BundleBuildVersion)
+                    .NotEmpty()
+                    .When(_ => isMacOsLob)
+                    .WithMessage("BundleBuildVersion is required for macOS AppType 'lob'.");
             })
             .When(_ => isMacOs);
+
+        RuleFor(d => d.PrimaryBundleId)
+            .Must((d, primaryBundleId) => primaryBundleId is null
+                || string.IsNullOrWhiteSpace(primaryBundleId)
+                || d.IncludedApps is not null && MacOsBundleSelector.FindMatchingIndexes(primaryBundleId, d.IncludedApps).Count == 1)
+            .When(_ => isMacOs)
+            .WithMessage(d => BuildPrimaryBundleError(d));
+    }
+
+    private static bool HaveUniqueBundleIds(List<IncludedAppManifest>? entries)
+        => entries is null
+            || entries.Where(entry => entry.BundleId is not null)
+                .Select(entry => entry.BundleId!)
+                .Distinct(StringComparer.Ordinal)
+                .Count() == entries.Count(entry => entry.BundleId is not null);
+
+    private static string BuildPrimaryBundleError(DetectionManifest detection)
+    {
+        var primary = detection.PrimaryBundleId;
+        var candidates = detection.IncludedApps is null
+            ? string.Empty
+            : string.Join(", ", detection.IncludedApps.Select(entry => entry.BundleId ?? "<null>"));
+        if (primary is not null && detection.IncludedApps is not null)
+        {
+            var matchCount = MacOsBundleSelector.FindMatchingIndexes(primary, detection.IncludedApps).Count;
+            return matchCount == 0
+                ? $"Detection.PrimaryBundleId '{primary}' did not match any IncludedApps BundleId. Candidates: {candidates}."
+                : $"Detection.PrimaryBundleId '{primary}' matched more than one IncludedApps BundleId. Candidates: {candidates}.";
+        }
+
+        return "Detection.PrimaryBundleId must match exactly one IncludedApps BundleId.";
     }
 }
 
