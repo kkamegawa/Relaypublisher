@@ -426,7 +426,7 @@ file body を検査できないため、heap offset と長さを検証して必�
 macOS の `pkgutil` への依存は持たない。
 
 `IPkgBundleInspector` は archive facts（bundle 一覧と inspector version）だけを返し、manifest 依存の判定は別の
-`MacOsPkgInspectionPolicy` が `PkgBundleInspectionReport` にまとめる。これにより同じ XAR fixtureを parser の
+`MacOsPkgInspectionPolicy` が `PkgInspectionReport` にまとめる。これにより同じ XAR fixtureを parser の
 unit test、manifestとの突合 test、CLI の preflight test で再利用できる。
 
 検査の上限は実装で固定し、XAR header、offset/length の checked arithmetic、TOC/XML の最大バイト数、XML の
