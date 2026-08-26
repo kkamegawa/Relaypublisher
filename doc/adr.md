@@ -103,3 +103,18 @@
   - **今後の注意**: `win32LobApp` の必須プロパティを追加・変更する場合は、必ず Microsoft Learn の
     [win32LobApp resource type](https://learn.microsoft.com/graph/api/resources/intune-apps-win32lobapp?view=graph-rest-1.0)
     で必須/オプションを裏取りしてから `issue-003` を更新し、その後に実装すること(今回の bug の再発防止)。
+
+## 2026-08-26: macOS PKG の primary bundle 選定を「除外リスト」ではなく「明示選択 + 非列挙ガイダンス」にした理由(doc/task.md 同日エントリ参照)
+
+- **決定**: 複数 bundle を同梱する macOS PKG(GitHub #112、Global Secure Access + Microsoft AutoUpdate が
+  典型例)への対応を、`Detection.PrimaryBundleId` による明示選択(§6.21)と、「同梱 updater は
+  `IncludedApps` に書かないことで除外する」という運用ガイダンスの組み合わせにした。`ExcludeBundleIds` の
+  ような除外リストフィールドや、`com.microsoft.autoupdate*` を判定する組み込みの既知 updater リストは
+  採らなかった。
+  - **理由**: `IncludedApps` は手書きの宣言的リストであり、暗黙のフィルタを追加すると「manifest に書いた
+    内容がそのまま Graph に送られる」という既存の設計原則(§6.7 の決定的 input hash、Categories の
+    宣言的同期など)と矛盾する。除外したい bundle は最初から書かなければよく、追加の仕組みは不要。
+    既知 updater リストは将来のバリエーション(他社製ソフトの updater 等)を網羅できずすぐに陳腐化する。
+  - **今後の注意**: 将来 pkg introspection(xar TOC 検査)を実装した際、検査結果から「未知の bundle」を
+    自動的に `IncludedApps` へ追記・除外するような自動化は行わないこと。あくまで警告 + 人間の確認
+    (`--force` で上書き可)に留め、manifest の内容を上書きしない、という本決定の前提を維持する。

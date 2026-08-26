@@ -2,6 +2,45 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-08-26: macOS PKG detection primary bundle の指定 — 設計ドキュメントフェーズ
+
+**ブランチ**: `docs/112-macos-primary-bundle-selection`
+
+**対応 Issue**: [#112](https://github.com/kkamegawa/Relaypublisher/issues/112)
+
+**背景**: ユーザーから、Intune で管理する macOS PKG(Global Secure Access クライアントを例示)が
+Microsoft AutoUpdate を同梱しており、Intune の `includedApps` 先頭要素によるバージョン検出が同梱
+updater に対して行われてしまう懸念が指摘された。調査の結果、現行の Relaypublisher 設計・実装
+(`IncludedApps[0]` を暗黙の primary とする)にはこれへの対応が存在しないことを確認し、設計ドキュメント
+フェーズ(YAML schema 設計・issue・サンプル・draft PR まで、実装は別フェーズ)として着手した。
+
+**設計判断(ユーザーとの協議で確定)**:
+
+| 項目 | 決定 |
+|---|---|
+| primary の選択手段 | 任意の `Detection.PrimaryBundleId`(完全一致 または セグメント境界の前置一致) |
+| 同梱 updater の除外 | `IncludedApps` に書かないことで除外(除外リスト機構は持たない) |
+| 複数 bundle 検出時の挙動 | pkg 実体をダウンロード時に検査(xar TOC)し、複数 bundle や bundle id 不一致を warning + 対話確認 |
+| CI 阻害の回避 | `--force` オプションで確認をスキップし警告のみで続行 |
+| hash 互換性 | nullable `string?`(初期値なし)、issue-021 の `Categories` と同じ契約 |
+
+### 実施内容
+
+1. **[doc/00-overview.md](doc/00-overview.md) §6.21 新設**: primary bundle 選定の設計判断を追記(§6.13 から
+   参照を追加)。
+2. **[AGENTS.md](../AGENTS.md)** の不変条件(macOS 検出の記述)を更新。
+3. **[doc/01-manifest-schema.md](doc/01-manifest-schema.md)**: §5.3 例、§5.4 validation ルール、
+   新設 §5.4.3(フィールド定義・マッチ規則・pkg introspection・warning/`--force` の挙動表・hash 互換性)、
+   §5.7 mapping 表を更新。
+4. **[doc/issues/issue-022-macos-primary-bundle-selection.md](issues/issue-022-macos-primary-bundle-selection.md)** を新規作成(確定仕様、実装フェーズのスコープ、対象外)。
+5. **[samples/manifests/global-secure-access-macos-arm64.yaml](../samples/manifests/global-secure-access-macos-arm64.yaml)** を新規作成(Reference-only、`PrimaryBundleId` の使用例)。
+6. **[samples/manifests/README.md](../samples/manifests/README.md) / [README_ja.md](../samples/manifests/README_ja.md)** に表の新行と「Primary bundle selection」節を追加。
+7. **[doc/adr.md](adr.md)** に、除外リスト方式を採らず明示選択 + 非列挙ガイダンスとした判断根拠を記録。
+
+実装(`src/` の変更: manifest model、validator、`MacOsAppPayloadMapper`、pkg introspection、CLI の
+確認プロンプト・`--force`)は本フェーズのスコープ外とし、issue #112 のスコープ更新または新規 issue で
+別途着手する。
+
 ## 2026-08-24: GitHub Actions CI/CD の設計と実装 (public 化前提)
 
 **ブランチ**: `feature/add-github-actions-ci`

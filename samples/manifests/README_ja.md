@@ -23,6 +23,7 @@
 | `contoso-tool-windows-arm64.yaml` | E2E 実行可能 | 通る | 通る(上記と同様) | |
 | `contoso-tool-macos-arm64.yaml` | 参照専用(schema 例) | 通る | **落ちる** — `Source` が架空の Azure Blob account(`contosopackages`)と、全ゼロのプレースホルダ `Sha256` を指している | [doc/01-manifest-schema.md §5.3](../../doc/01-manifest-schema.md) の `azureBlob` の形を示すためのもの。解決される想定ではない |
 | `apple-container-macos-arm64.yaml` | 参照専用(意図的な失敗) | **落ちる** — `Detection.IncludedApps` が空 | — | Apple Container の PKG は `.app` バンドルを一切インストールしないため、架空の bundleId を捏造しない限り `IncludedApps` を実値で埋められない。Intune の macOS 検出における実際の制約を記録したもの。ファイル冒頭のコメントと [doc/01-manifest-schema.md §5.4](../../doc/01-manifest-schema.md) を参照 |
+| `global-secure-access-macos-arm64.yaml` | 参照専用(schema 例) | 通る | **落ちる** — `contoso-tool-macos-arm64.yaml` と同様、架空の Azure Blob account を `Source` に指定 | 複数 app を同梱する pkg に対する `Detection.PrimaryBundleId`(§5.4.3)を示す。Microsoft AutoUpdate は意図的に `IncludedApps` に含めていない — ファイル冒頭のコメント参照 |
 
 ## PowerShell サンプルが E2E fixture として成立する理由
 
@@ -89,6 +90,32 @@ category の作成・改名・削除を行いません。`validate` は tenant �
 
 なお `Categories` の追加・変更は manifest 全体の `inputHash` を変えるため、metadata だけの変更でも次回の
 `package` / `publish` で content が再package・再upload されます。
+
+## Primary bundle の選択(複数 bundle を含む PKG)
+
+macOS PKG は 1 つの pkg に複数の app bundle を含むことがあります。`global-secure-access-macos-arm64.yaml` は
+典型例を示しています — Microsoft Global Secure Access は同じ `.pkg` に Microsoft AutoUpdate(MAU)を
+同梱しています。`Detection.PrimaryBundleId` を指定しないと、Intune の検出ルールとレポートは
+`IncludedApps` の先頭要素をそのまま使うため、MAU が先頭に来る(または manifest 編集で並び順が入れ替わる)と
+バージョン判定が updater に対して行われてしまいます。
+
+`Detection.PrimaryBundleId` を使うと、bundle id(完全一致 または `com.microsoft.globalsecureaccess` の
+ようなセグメント境界の前置一致 — `com.microsoft.globalsecureaccess.client` に一致)で、どの
+`IncludedApps` entry を primary にするか固定できます。省略すれば現行どおり先頭要素が primary のままで
+`inputHash` も変わりません。マッチ規則と validation の詳細は
+[doc/01-manifest-schema.md §5.4.3](../../doc/01-manifest-schema.md) を参照してください。
+
+同梱 updater を検出対象から外すのは「`IncludedApps` に書かないこと」で行います — 別途の除外リスト機構は
+ありません。Microsoft の unmanaged PKG app 向けガイダンスは、`includedApps` には PKG が実際にインストール
+する app のみを列挙すべきこと、列挙した app がインストールされていない場合は install status が success を
+報告しないことを明記しています。
+
+manifest だけでは `.pkg` が実際に何を同梱しているか分からないため、設計では `package`/`publish` 時に
+ダウンロードした pkg の中身(xar の table of contents)を検査し、`PrimaryBundleId` 未指定で複数 bundle が
+見つかった場合や、指定した bundle id が pkg 内に見つからない場合に警告することも定めています。対話実行時は
+続行確認を求め、`--force` を指定すると確認せず続行するため CI を妨げません。この検査と確認プロンプトは
+[doc/issues/issue-022-macos-primary-bundle-selection.md](../../doc/issues/issue-022-macos-primary-bundle-selection.md)
+のスコープであり、まだ実装されていません — このサンプルは manifest の形だけを示しています。
 
 ## PowerShell サンプルを E2E で実行する
 

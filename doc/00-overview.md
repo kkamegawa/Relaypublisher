@@ -351,7 +351,7 @@ Intune の macOS PKG 配布には 2 種類あり、制約が異なる。
 
 **既定は `macOSPkgApp`(unmanaged PKG)** とし、manifest の `AppType` で `lob` に切り替え可能とする。
 
-検出は **`IncludedApps`(bundleId + version のリスト)** で行う。manifest に必須フィールドとして定義する(schema は `01-manifest-schema.md` 参照)。
+検出は **`IncludedApps`(bundleId + version のリスト)** で行う。manifest に必須フィールドとして定義する(schema は `01-manifest-schema.md` 参照)。既定では**先頭要素**が Graph の `primaryBundleId`(pkg)/ 先頭 `childApps` エントリ(lob)として検出・レポートに使われる。pkg が複数の app bundle を同梱する場合の primary 選択は §6.21 を参照。
 
 validation ルール:
 
@@ -519,6 +519,40 @@ Intune の app category は tenant 共有の `mobileAppCategory` リソースで
   publish 直列化で足りる(6.9)。category ID や名前は management metadata の `notes` に保存しない。
 - `inputHash` は manifest 全体を対象とする現行契約のまま(6.7)。したがってカテゴリだけを変更した manifest でも
   content 再package / 再upload が発生し得る。
+
+### 6.21 macOS PKG の primary bundle 選定(GitHub #112)
+
+macOS PKG(`macOSPkgApp` / `macOSLobApp`)は 1 つの pkg に複数の app bundle を含むことがある。例えば
+Microsoft Global Secure Access クライアントの pkg は Microsoft AutoUpdate(MAU)を同梱する。Intune は
+`includedApps`(pkg)/ `childApps`(lob)の**先頭要素**を検出・レポートの primary(`primaryBundleId` /
+`primaryBundleVersion`、または top-level `buildNumber` / `versionNumber`)として使うため、同梱 updater が
+先頭に来る、または manifest 編集で順序が入れ替わると、意図しない app のバージョンで検出が行われる。
+
+- manifest に任意の `Detection.PrimaryBundleId`(文字列、schema は `01-manifest-schema.md` §5.4.3)を追加し、
+  `IncludedApps` の中から primary にする entry を明示できるようにする。**省略時は現行どおり先頭要素**が
+  primary(挙動・`inputHash` とも変更なし)。
+- マッチは **完全一致 または セグメント境界の前置一致**(`entry.BundleId == 値` または
+  `entry.BundleId` が `値 + "."` で始まる、Ordinal・大文字小文字区別)とする。ちょうど 1 件に一致する必要があり、
+  0 件・複数件一致は validation error とする(6.7 の「Graph 呼び出し前に fail」原則に従う)。一致した entry は
+  Graph payload 上で先頭に並べ替える(manifest ファイル自体は書き換えない)。`AppType: lob` にも同じ意味論を
+  適用し、childApps の並べ替え・top-level フィールドの選定に使う。
+- **同梱 updater の除外は「`IncludedApps` に書かない」ことで行う**(Microsoft Learn の
+  add-unmanaged-pkg-macos ガイダンスに従う)。暗黙のブロックリストや自動フィルタは持たない(スコープ外)。
+- **pkg 実体の中身は manifest だけでは分からない**ため、pkg のダウンロード時(`package` / `publish` フェーズ、
+  ローカル参照可能なら `validate` でも)に xar TOC の `Distribution` / `PackageInfo` XML から同梱 bundle
+  一覧を検査する(payload の展開や `pkgutil` への依存なし、.NET 標準ライブラリで xar ヘッダ + zlib 圧縮 TOC を
+  parse する)。検査の結果、次の場合は warning を出す。
+  - pkg 内に複数 bundle があり `PrimaryBundleId` が省略されている。
+  - `IncludedApps` / `PrimaryBundleId` に指定した bundle id が pkg 実体に存在しない(取り違え・typo 検知)。
+- 警告時は **対話実行(TTY)では続行確認を求め**、拒否時は fail する。**`--force` 指定時は確認せず warning
+  ログのみで続行**し、CI 等の非対話実行を妨げない。`--force` なしの非対話環境では安全側に倒して fail し、
+  `--force` の付与を促す。
+- hash 互換性は §6.20(Categories)と同じ契約: `Detection.PrimaryBundleId` は nullable な `string?`(既定値なし)
+  とし、省略している既存 manifest の `inputHash` はバイト単位で不変。指定すると `inputHash` が変わり
+  再 package / 再 upload が発生する(detection 修正のための意図的な republish)。新旧 CLI が混在すると
+  hash が振動する注意点も 6.20 と同様にドキュメントで明示する。
+- 対象外: 既知 updater の bundle id を判定する組み込みリスト、pkg からの bundle 自動抽出による manifest 自動生成、
+  `IncludedApps` の暗黙フィルタ(常に「書かない」ことで除外する)。
 
 ---
 

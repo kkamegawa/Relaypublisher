@@ -34,7 +34,7 @@ Relaypublisher は、winget 風の YAML manifest を Git に commit すると、
 - `AssignmentSync` の既定は `merge`(グループ単位 upsert。manifest にない既存 assignment を削除しない)。`replace` のみ完全同期。
 - 更新スキップ判定は決定的 **inputHash**(manifest + 入力ファイル群)。`.intunewin` 自体のハッシュは暗号鍵がランダムなため使わない。
 - Windows Arm64 は Graph の `allowedArchitectures` で表現する(v1.0 の `applicableArchitectures` enum に `arm64` はない)。
-- macOS の既定 app type は `macOSPkgApp`(unmanaged)。検出は `IncludedApps`(bundleId + version のリスト)。`AppType: pkg` に uninstall intent は不可。
+- macOS の既定 app type は `macOSPkgApp`(unmanaged)。検出は `IncludedApps`(bundleId + version のリスト)。`AppType: pkg` に uninstall intent は不可。任意の `Detection.PrimaryBundleId` で先頭要素以外を primary に選択可(既定は先頭要素、doc/00-overview.md §6.21)。
 - Changed detection は `plan --base-ref` で一度だけ確定し、`manifest-list.json` を CI の後続 job に artifact で渡す。後続 job で再計算しない。
 - manifest は top-level `SchemaVersion` 必須。未知の major は fail。
 - ダウングレードは既定 skip(`--allow-downgrade` で明示)。publish は `--expected-tenant` で tid を照合。

@@ -23,6 +23,7 @@ schema shape or constraint rather than a version-upgrade lifecycle.
 | `contoso-tool-windows-arm64.yaml` | E2E-runnable | passes | passes (same as above) | |
 | `contoso-tool-macos-arm64.yaml` | Reference-only (schema example) | passes | **fails** — `Source` points at a fictitious Azure Blob account (`contosopackages`) with a placeholder all-zero `Sha256` | Shows the `azureBlob` shape from [doc/01-manifest-schema.md §5.3](../../doc/01-manifest-schema.md); not meant to resolve |
 | `apple-container-macos-arm64.yaml` | Reference-only (intentional failure) | **fails** — `Detection.IncludedApps` is empty | n/a | The Apple Container PKG installs no `.app` bundle, so `IncludedApps` cannot be populated with real values without fabricating a bundle ID. Documents a real Intune macOS-detection limitation; see the comments at the top of the file and [doc/01-manifest-schema.md §5.4](../../doc/01-manifest-schema.md) |
+| `global-secure-access-macos-arm64.yaml` | Reference-only (schema example) | passes | **fails** — `Source` points at a fictitious Azure Blob account, same as `contoso-tool-macos-arm64.yaml` | Shows `Detection.PrimaryBundleId` (§5.4.3) for a pkg that bundles more than one app; Microsoft AutoUpdate is deliberately left out of `IncludedApps` — see the comments at the top of the file |
 
 ## Why the PowerShell samples work as an E2E fixture
 
@@ -89,6 +90,31 @@ against the tenant; run `publish --dry-run` to see the category plan. See
 
 Note that adding or changing `Categories` changes the manifest-wide `inputHash`, so the next `package` /
 `publish` re-packages and re-uploads the content even though only metadata changed.
+
+## Primary bundle selection (multi-bundle PKGs)
+
+A macOS PKG can install more than one app bundle. `global-secure-access-macos-arm64.yaml` illustrates the
+common case: Microsoft Global Secure Access bundles Microsoft AutoUpdate (MAU) inside the same `.pkg`.
+Without `Detection.PrimaryBundleId`, Intune's detection rule and reporting use whichever `IncludedApps`
+entry is listed first — if MAU ends up first (or a manifest edit reorders the list), version detection
+runs against the updater instead of the client.
+
+`Detection.PrimaryBundleId` lets you pin which `IncludedApps` entry is primary by bundle ID (exact match
+or a segment-boundary prefix, e.g. `com.microsoft.globalsecureaccess` matches
+`com.microsoft.globalsecureaccess.client`). Omitting it keeps today's behavior (first entry wins) with no
+change to `inputHash`. See [doc/01-manifest-schema.md §5.4.3](../../doc/01-manifest-schema.md) for the
+full matching and validation rules.
+
+Excluding a bundled updater from detection is done by **not listing it** in `IncludedApps` — there is no
+separate exclude-list mechanism. Microsoft's own guidance for unmanaged PKG apps says `includedApps`
+should contain only the apps the PKG actually installs, and that an app listed there but not installed
+prevents install status from reporting success.
+
+Because the manifest alone cannot tell you what a `.pkg` actually bundles, the design also calls for
+inspecting the downloaded pkg (its xar table of contents) during `package`/`publish` and warning when it
+contains multiple bundles with `PrimaryBundleId` unset, or when a listed bundle ID isn't found inside the
+pkg. In an interactive run this prompts for confirmation; `--force` skips the prompt so CI is not blocked.
+This inspection and prompt are part of [doc/issues/issue-022-macos-primary-bundle-selection.md](../../doc/issues/issue-022-macos-primary-bundle-selection.md) and are not implemented yet — this sample documents the manifest shape only.
 
 ## Running the PowerShell sample end to end
 

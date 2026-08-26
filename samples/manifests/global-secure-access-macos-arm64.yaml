@@ -1,0 +1,66 @@
+# Reference-only sample: macOS PKG that bundles more than one app (doc/01-manifest-schema.md 5.4.3).
+#
+# Microsoft Global Secure Access for macOS bundles Microsoft AutoUpdate (MAU) inside the same .pkg.
+# Without Detection.PrimaryBundleId, Intune's detection rule uses whichever IncludedApps entry is
+# listed first, so a stray MAU entry (or a reordering during manifest edits) can make version
+# detection run against the updater instead of the client itself.
+#
+# The bundle IDs below are illustrative. Before using this file against a real pkg, confirm the
+# actual bundle IDs and versions on a Mac after installing the package, e.g.:
+#   pkgutil --pkg-info com.microsoft.globalsecureaccess
+#   defaults read "/Applications/Global Secure Access.app/Contents/Info" CFBundleIdentifier
+#   defaults read "/Applications/Global Secure Access.app/Contents/Info" CFBundleShortVersionString
+#
+# Microsoft AutoUpdate is deliberately NOT listed in IncludedApps below: exclusion is done by
+# omission, not by an exclude-list mechanism (doc/00-overview.md 6.21). If MAU's bundle ID were
+# listed here, Intune would require it to also be present under /Applications for install status
+# to report success (see the Learn note referenced in doc/01-manifest-schema.md 5.4.3).
+SchemaVersion: "1.0"
+PackageIdentifier: Microsoft.GlobalSecureAccess
+PackageName: Global Secure Access Client
+Publisher: Microsoft Corporation
+Description: Reference-only sample showing PrimaryBundleId for a pkg that bundles multiple apps.
+PackageVersion: 1.0.0
+AssignmentSync: merge
+
+Apps:
+  - Platform: macos
+    Architecture: arm64
+    InstallerType: pkg
+    AppType: pkg
+    DisplayName: Global Secure Access Client [macOS Arm64]
+
+    # Fictitious source: this manifest is not meant to resolve (see samples/manifests/README.md).
+    Source:
+      Type: azureBlob
+      AccountName: contosopackages
+      Container: intune-packages
+      BlobName: macos/global-secure-access/1.0.0/GlobalSecureAccessClient-arm64.pkg
+      Destination: GlobalSecureAccessClient-arm64.pkg
+      # Replace with the real SHA256 of the pkg before use.
+      Sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+      Auth:
+        Type: workloadIdentity
+
+    Requirements:
+      MinimumOSVersion: "14.0"
+
+    Detection:
+      # The bundled Microsoft AutoUpdate self-updates independently of the client; do not gate
+      # detection on its version.
+      IgnoreAppVersion: true
+      # Without this, IncludedApps[0] below would be the primary — which happens to already be
+      # correct here, but PrimaryBundleId makes the choice explicit and keeps it correct even if
+      # entries are reordered or a bundled-updater entry is added later by mistake.
+      PrimaryBundleId: com.microsoft.globalsecureaccess
+      IncludedApps:
+        # Illustrative bundle IDs — confirm the real ones per the comment at the top of this file.
+        - BundleId: com.microsoft.globalsecureaccess.client
+          BundleVersion: 1.0.0
+        - BundleId: com.microsoft.globalsecureaccess.agent
+          BundleVersion: 1.0.0
+
+    Assignments:
+      - Target: group
+        GroupId: "00000000-0000-0000-0000-000000000004"
+        Intent: required

@@ -188,6 +188,8 @@ Apps:
     Detection:
       # bundleId + version のリストで判定する
       IgnoreAppVersion: false
+      # 任意。複数 bundle を含む pkg で先頭要素以外を primary にしたい場合に指定する(§5.4.3)
+      # PrimaryBundleId: com.contoso.tool
       IncludedApps:
         - BundleId: com.contoso.tool
           BundleVersion: 1.2.3
@@ -215,10 +217,12 @@ Apps:
 
 validation ルール:
 
-- `IncludedApps` は 1 件以上必須。先頭要素がレポート表示に使われる。
+- `IncludedApps` は 1 件以上必須。先頭要素(`PrimaryBundleId` 指定時は一致した entry、§5.4.3)がレポート表示に使われる。
 - `AppType: pkg` の app に `Intent: uninstall` があれば fail。
 - `AppType: lob` の場合、top-level `Icon` を必須とする。
 - `AppType: lob` または `Platform: windows` の app entry に `Scripts` があれば fail(§5.4.2)。
+- `Detection.PrimaryBundleId`(任意)は `IncludedApps` のちょうど 1 entry に一致(完全一致または `<値>.` 前置一致)
+  しなければ fail。`Platform: windows` の app entry に指定すれば fail(§5.4.3)。
 
 content upload の Graph URL は app の具体的な OData 型でキャストする。`contentVersions` は
 `mobileLobApp` から継承されるため、型キャストを省略した `/mobileApps/{id}/contentVersions` は
@@ -279,6 +283,80 @@ publish 時の挙動:
 - pre-install script が非 0 終了で app は "failed" となり、次回 device check-in で再試行される。
 - post-install script の失敗は報告されない(app は "success" のまま)。
 
+### 5.4.3 Detection primary bundle の選定(GitHub #112)
+
+macOS PKG は 1 つの pkg に複数の app bundle を含むことがある(例: Global Secure Access クライアントが
+Microsoft AutoUpdate を同梱)。既定では `IncludedApps` の**先頭要素**が Graph の `primaryBundleId` /
+`primaryBundleVersion`(`AppType: lob` では top-level `buildNumber` / `versionNumber`)になり、検出・
+レポートに使われる。任意の `Detection.PrimaryBundleId` で、先頭以外の entry を primary に指定できる。
+
+```yaml
+Detection:
+  IgnoreAppVersion: true                                # self-updating な primary に推奨
+  PrimaryBundleId: com.microsoft.globalsecureaccess     # 完全一致 または セグメント境界の前置一致
+  IncludedApps:
+    - BundleId: com.microsoft.globalsecureaccess.client # 例示。実際の値は実機で確認する
+      BundleVersion: 1.2.3
+```
+
+**マッチ規則**: `entry.BundleId == PrimaryBundleId` または `entry.BundleId` が `PrimaryBundleId + "."` で
+始まる(Ordinal、大文字小文字区別)。`com.microsoft.global` のような不完全な前置きが
+`com.microsoft.globalsecureaccess.*` に誤爆しないよう、区切り文字 `.` を含めて比較する。
+
+validation ルール(`validate` / `package` / `publish` はすべて、Graph 呼び出し前にこれらを検証する):
+
+- 省略時は現行どおり `IncludedApps[0]` が primary。挙動・`inputHash` とも変更なし。
+- `Platform: windows` の app entry に指定すれば fail。
+- 空文字・空白のみであれば fail。
+- 上記マッチ規則で `IncludedApps` に一致する entry が **0 件** なら fail(候補の BundleId 一覧をエラーに含める)。
+- 一致する entry が **2 件以上**(prefix の曖昧一致)なら fail(より長い/完全な bundle id の指定を促す)。
+- `IgnoreAppVersion` とは独立に併用可能。`PrimaryBundleId` は「どの app を primary にするか」、
+  `IgnoreAppVersion` は「primary のバージョンを検出に使うか」という別軸の設定。
+- `AppType: lob`(`childApps`)にも同じ意味論を適用する。一致した entry は `childApps` の先頭へ、
+  対応する `bundleId`/`buildNumber`/`versionNumber` が top-level フィールドへ反映される。
+
+**同梱 updater の除外**: `IncludedApps` に**書かないことで除外する**。Microsoft Learn の
+[Add an Unmanaged macOS PKG App to Microsoft Intune](https://learn.microsoft.com/intune/app-management/deployment/add-unmanaged-pkg-macos#step-4-%E2%80%93-detection-rules)
+は、`includedApps` には実際にインストールされる app のみを列挙すること、含まれる app が 1 つでも
+インストールされなければ install status が success を報告しないことを明記している。既知 updater(例:
+`com.microsoft.autoupdate2`)を自動判定して除外する仕組みは対象外(下記)。
+
+**pkg 実体の検査(package / publish フェーズ)**: manifest だけでは pkg に実際に何が同梱されているか
+分からない。pkg をダウンロードするフェーズ(`package` / `publish`。source がローカルで読める場合は
+`validate` でも)で、pkg(xar アーカイブ)の TOC にある `Distribution` / `PackageInfo` XML から
+`<bundle id="..." CFBundleShortVersionString="...">` を読み取り、同梱 bundle の一覧を検査する
+(payload の展開や `pkgutil` への依存なし、.NET 標準ライブラリで xar ヘッダ + zlib 圧縮 TOC を parse する)。
+
+検査の結果、次のいずれかに該当すれば warning とする。
+
+| 条件 | 挙動 |
+|---|---|
+| pkg 内に複数 bundle があり `PrimaryBundleId` 省略 | warning: 検出した bundle 一覧と、先頭要素で検出される旨を表示 |
+| `IncludedApps` / `PrimaryBundleId` の bundle id が pkg 実体に存在しない | warning: 取り違え・typo の可能性を表示 |
+| `PrimaryBundleId` 指定済みで一致 bundle が pkg 内にも存在 | 警告なし |
+
+| 実行環境 | 挙動 |
+|---|---|
+| 対話実行(TTY) | warning 表示後、続行確認を求める。拒否時は exit code 非 0 で中断 |
+| `--force` 指定時 | 確認せず warning ログのみで続行(CI 等の非対話実行を妨げない) |
+| `--force` なしの非対話環境(TTY なし) | 安全側に倒して fail し、`--force` の付与を促すメッセージを出す |
+
+**hash 互換性**(§6.20 Categories と同じ契約): `Detection.PrimaryBundleId` は nullable な `string?`
+(既定値なし)とする。`InputHashCalculator` の canonical JSON は null property を落とすため、
+`PrimaryBundleId` を宣言していない既存 manifest の `inputHash` はこの変更の前後で byte 単位で不変。
+指定すると `inputHash` が変わり、次の `package` / `publish` で再 package / 再 upload が発生する
+(macOS PKG は最大 8 GB)— detection 修正のための republish として意図どおりの挙動。`ManifestLoader` は
+`IgnoreUnmatchedProperties()` のため、新旧 CLI を交互に実行すると `inputHash` が振動して毎回 upload が
+発生する。`PrimaryBundleId` を使い始めたら CI と手元の CLI バージョンを揃えること。`SchemaVersion` は
+`"1.0"` のまま(additive optional field)。
+
+対象外:
+
+- 既知 updater(`com.microsoft.autoupdate*` 等)を判定する組み込みリストや自動警告。
+- pkg から bundle を自動抽出して manifest を自動生成すること。
+- `IncludedApps` の暗黙フィルタ(除外は常に「書かない」ことで行う)。
+- manifest ファイル自体の並べ替え(並べ替えは Graph payload 生成時のみ)。
+
 ### 5.5 Assignment schema
 
 ```yaml
@@ -328,8 +406,8 @@ macOS:
 | manifest | Graph | 備考 |
 |---|---|---|
 | `MinimumOSVersion: "14.0"` | `minimumSupportedOperatingSystem` | boolean flag の複合型。v1.0 は `v13_0` までしか無く、macOS 14/15/26 のフラグは beta 専用。`AppType: lob`(v1.0)で 14 以降を指定すると fail する |
-| `Detection.IncludedApps`(`AppType: pkg`) | `includedApps`(`macOSIncludedApp`: `bundleId` + `bundleVersion`) | 先頭要素の値がそのまま `primaryBundleId` / `primaryBundleVersion` にもなる |
-| `Detection.IncludedApps`(`AppType: lob`) | `childApps`(`macOSLobChildApp`: `bundleId` + `buildNumber` + `versionNumber`)。先頭要素が top-level `buildNumber` / `versionNumber` にもなる | `pkg` の `includedApps` とはフィールド名・形が異なる点に注意 |
+| `Detection.IncludedApps`(`AppType: pkg`) | `includedApps`(`macOSIncludedApp`: `bundleId` + `bundleVersion`) | 先頭要素(`PrimaryBundleId` 指定時は一致した entry、§5.4.3)の値がそのまま `primaryBundleId` / `primaryBundleVersion` になり、payload では先頭へ並べ替えられる |
+| `Detection.IncludedApps`(`AppType: lob`) | `childApps`(`macOSLobChildApp`: `bundleId` + `buildNumber` + `versionNumber`)。先頭要素(`PrimaryBundleId` 指定時は一致した entry)が top-level `buildNumber` / `versionNumber` にもなり、payload では先頭へ並べ替えられる | `pkg` の `includedApps` とはフィールド名・形が異なる点に注意 |
 
 ### 5.8 Categories(Intune app category / GitHub #99)
 
