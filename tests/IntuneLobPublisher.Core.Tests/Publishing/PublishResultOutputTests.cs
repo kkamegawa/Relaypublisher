@@ -254,9 +254,52 @@ public sealed class PublishResultOutputTests
         StringAssert.Contains(exception.Message, "invalid");
     }
 
+    [TestMethod]
+    public void FromResult_MacOsOmittedArchitecture_WritesUniversalArchitecture()
+    {
+        // AppArchitecture.Resolve (issue #123) must be applied here too: previously this threw once
+        // Architecture was optional on macOS, turning a successful Graph publish into a reported CLI
+        // failure while building the result JSON.
+        var request = CreateMacOsRequest();
+        var result = new PublishResult(
+            PublishOutcome.Published, "app-1", AppCreated: true, ContentUploadOutcome.Uploaded,
+            AssignmentPlan: null, SkipReason: null);
+
+        var json = PublishResultOutput.Serialize([PublishResultOutput.FromResult(request, result)]);
+
+        using var document = JsonDocument.Parse(json);
+        Assert.AreEqual("universal", document.RootElement[0].GetProperty("architecture").GetString());
+    }
+
+    [TestMethod]
+    public void FromFailure_MacOsOmittedArchitecture_WritesUniversalArchitecture()
+    {
+        var request = CreateMacOsRequest();
+
+        var json = PublishResultOutput.Serialize([PublishResultOutput.FromFailure(request, "content failed")]);
+
+        using var document = JsonDocument.Parse(json);
+        Assert.AreEqual("universal", document.RootElement[0].GetProperty("architecture").GetString());
+    }
+
     private static PublishRequest CreateRequest()
     {
         var manifest = TestManifests.CreateValid();
+        return new PublishRequest(
+            manifest,
+            manifest.Apps[0],
+            "manifests/contoso-tool.yaml",
+            Directory.GetCurrentDirectory(),
+            Directory.GetCurrentDirectory(),
+            "commit-1",
+            AllowDowngrade: false,
+            DryRun: false);
+    }
+
+    private static PublishRequest CreateMacOsRequest()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidMacOsApp(architecture: null)];
         return new PublishRequest(
             manifest,
             manifest.Apps[0],

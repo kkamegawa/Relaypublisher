@@ -69,7 +69,9 @@ public sealed class MacOsStagingService : IMacOsStagingService
         var packageIdentifier = manifest.PackageIdentifier
             ?? throw new StagingException("PackageIdentifier is required for staging.");
         var platform = app.Platform ?? throw new StagingException("Platform is required for staging.");
-        var architecture = app.Architecture ?? throw new StagingException("Architecture is required for staging.");
+        // macOS resolves an omitted Architecture to "universal" (AppArchitecture.Resolve, issue #123);
+        // Windows still requires it explicitly (this service is macOS-only, but Resolve is a no-op there).
+        var architecture = AppArchitecture.Resolve(app) ?? throw new StagingException("Architecture is required for staging.");
 
         // Validate every path before touching the file system, same as WindowsStagingService.
         PathSafety.EnsureSafeDirectoryName(packageIdentifier, "PackageIdentifier");

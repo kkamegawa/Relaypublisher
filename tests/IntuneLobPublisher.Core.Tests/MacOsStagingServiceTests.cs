@@ -48,7 +48,7 @@ public sealed class MacOsStagingServiceTests
             new SourceProviderRegistry([new FakeSourceProvider()]),
             NullLogger<MacOsStagingService>.Instance);
 
-    private IntunePackageManifest CreateManifest(string architecture = "arm64")
+    private IntunePackageManifest CreateManifest(string? architecture = "arm64")
     {
         var manifest = TestManifests.CreateValid();
         var app = TestManifests.CreateValidMacOsApp(architecture);
@@ -75,6 +75,18 @@ public sealed class MacOsStagingServiceTests
         CollectionAssert.AreEqual(PkgContent, await File.ReadAllBytesAsync(stagedPkg));
         Assert.AreEqual(PkgContentSha256, result.ActualSha256);
         Assert.AreEqual(manifest.Apps[0].Source!.Destination, result.ContentFile);
+    }
+
+    [TestMethod]
+    public async Task StageAsync_OmittedArchitecture_ResolvesToUniversalStagingDirectory()
+    {
+        // AppArchitecture.Resolve (issue #123): an omitted macOS Architecture stages under
+        // "macos-universal", matching what package/publish will key identity off of downstream.
+        var manifest = CreateManifest(architecture: null);
+        var result = await StageAsync(manifest);
+
+        Assert.AreEqual("universal", result.Architecture);
+        Assert.EndsWith(Path.Combine("Contoso.Tool", "macos-universal", "staging"), result.StagingDirectory);
     }
 
     [TestMethod]

@@ -170,7 +170,10 @@ public sealed class MacOsPackager : IMacOsPackager
     private static AppManifest ResolveApp(IntunePackageManifest manifest, MacOsStagingResult stagingResult)
         => manifest.Apps.FirstOrDefault(app =>
                 string.Equals(app.Platform, stagingResult.Platform, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(app.Architecture, stagingResult.Architecture, StringComparison.OrdinalIgnoreCase))
+                // stagingResult.Architecture is already the resolved effective value (AppArchitecture.Resolve,
+                // issue #123), so an app entry that omits Architecture must be compared by its resolved value
+                // too, not the raw (possibly null) manifest field.
+                string.Equals(AppArchitecture.Resolve(app), stagingResult.Architecture, StringComparison.OrdinalIgnoreCase))
             ?? throw new PackagingException(
                 $"Manifest does not contain macOS entry '{stagingResult.Platform}-{stagingResult.Architecture}'.");
 

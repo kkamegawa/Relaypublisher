@@ -48,9 +48,9 @@ public sealed class PublishCommandPreflightTests
     }
 
     private async Task<PublishCommand.PublishEntry> CreateMacOsEntryAsync(
-        string packageIdentifier, string content, IPkgBundleInspector inspector)
+        string packageIdentifier, string content, IPkgBundleInspector inspector, string? architecture = "arm64")
     {
-        var app = TestManifests.CreateValidMacOsApp();
+        var app = TestManifests.CreateValidMacOsApp(architecture);
         app.Source!.Sha256 = HashContent(content);
         var manifest = new IntunePackageManifest
         {
@@ -63,13 +63,15 @@ public sealed class PublishCommandPreflightTests
             Apps = [app],
         };
 
-        var appDirectory = Path.Combine(_packageDirectory, packageIdentifier, "macos-arm64");
+        // AppArchitecture.Resolve (issue #123): an omitted Architecture stages under "macos-universal".
+        var effectiveArchitecture = architecture ?? "universal";
+        var appDirectory = Path.Combine(_packageDirectory, packageIdentifier, $"macos-{effectiveArchitecture}");
         var stagingDirectory = Path.Combine(appDirectory, "staging");
         Directory.CreateDirectory(stagingDirectory);
         var fileName = $"{packageIdentifier}.pkg";
         File.WriteAllText(Path.Combine(stagingDirectory, fileName), content);
         var stagingResult = new MacOsStagingResult(
-            packageIdentifier, "macos", "arm64", stagingDirectory, fileName,
+            packageIdentifier, "macos", effectiveArchitecture, stagingDirectory, fileName,
             DryRun: false, SummaryPath: Path.Combine(appDirectory, "staging-summary.json"),
             ExpectedSha256: HashContent(content), ActualSha256: HashContent(content));
 
@@ -121,6 +123,25 @@ public sealed class PublishCommandPreflightTests
         Assert.IsNotNull(result.AbortResultEntries);
         Assert.HasCount(1, result.AbortResultEntries);
         Assert.AreEqual("failed", result.AbortResultEntries[0].Outcome);
+    }
+
+    [TestMethod]
+    public async Task RunPreflightAsync_TamperedArtifactOmittedArchitecture_AbortResultWritesUniversalArchitecture()
+    {
+        // PreflightFailureResult must resolve the effective architecture (AppArchitecture.Resolve,
+        // issue #123): previously a macOS entry that omitted Architecture fell back to `?? ""`, writing
+        // "architecture": "" instead of the "universal" recorded in notes/staging elsewhere.
+        var inspector = new FakeInspector();
+        var entry = await CreateMacOsEntryAsync("Contoso.Mac", "content", inspector, architecture: null);
+        var contentPath = Path.Combine(_packageDirectory, "Contoso.Mac", "macos-universal", "staging", "Contoso.Mac.pkg");
+        await File.AppendAllTextAsync(contentPath, "tampered");
+
+        var result = await RunAsync([entry], _packageDirectory, _repoRoot, inspector);
+
+        Assert.AreEqual(ExitCodes.Failure, result.AbortExitCode);
+        Assert.IsNotNull(result.AbortResultEntries);
+        Assert.HasCount(1, result.AbortResultEntries);
+        Assert.AreEqual("universal", result.AbortResultEntries[0].Architecture);
     }
 
     [TestMethod]

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using IntuneLobPublisher.Core.Exceptions;
+using IntuneLobPublisher.Core.Manifests;
 
 namespace IntuneLobPublisher.Core.Publishing;
 
@@ -53,7 +54,7 @@ public static class PublishResultOutput
             Require(request.Manifest.PackageIdentifier, nameof(request.Manifest.PackageIdentifier)),
             Require(request.Manifest.PackageVersion, nameof(request.Manifest.PackageVersion)),
             Require(request.App.Platform, nameof(request.App.Platform)),
-            Require(request.App.Architecture, nameof(request.App.Architecture)),
+            Require(AppArchitecture.Resolve(request.App), nameof(request.App.Architecture)),
             request.ManifestRepoRelativePath,
             ToWireValue(result.Outcome),
             result.AppId,
@@ -72,7 +73,7 @@ public static class PublishResultOutput
             Require(request.Manifest.PackageIdentifier, nameof(request.Manifest.PackageIdentifier)),
             Require(request.Manifest.PackageVersion, nameof(request.Manifest.PackageVersion)),
             Require(request.App.Platform, nameof(request.App.Platform)),
-            Require(request.App.Architecture, nameof(request.App.Architecture)),
+            Require(AppArchitecture.Resolve(request.App), nameof(request.App.Architecture)),
             request.ManifestRepoRelativePath,
             "failed",
             null,

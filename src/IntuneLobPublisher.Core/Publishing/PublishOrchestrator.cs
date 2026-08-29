@@ -1,4 +1,5 @@
 using IntuneLobPublisher.Core.Exceptions;
+using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Packaging;
 using IntuneLobPublisher.Core.Publishing.Assignments;
 using IntuneLobPublisher.Core.Publishing.Categories;
@@ -68,7 +69,9 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         var packageIdentifier = Require(manifest.PackageIdentifier, nameof(manifest.PackageIdentifier));
         var packageVersion = Require(manifest.PackageVersion, nameof(manifest.PackageVersion));
         var platform = Require(app.Platform, nameof(app.Platform));
-        var architecture = Require(app.Architecture, nameof(app.Architecture));
+        // Windows keeps Architecture required; macOS resolves an omitted value to "universal"
+        // (AppArchitecture.Resolve, issue #123) without ever writing it back into the manifest.
+        var architecture = Require(AppArchitecture.Resolve(app), nameof(app.Architecture));
         var displayName = Require(app.DisplayName, nameof(app.DisplayName));
 
         if (!_platformPublishers.TryGetValue(platform, out var platformPublisher))

@@ -39,6 +39,30 @@ public sealed class ManagementMetadataTests
     }
 
     [TestMethod]
+    public void Serialize_ThenTryParse_RoundTripsMacOsUniversalArchitecture()
+    {
+        // The "universal" effective value for an omitted macOS Architecture (AppArchitecture.Resolve,
+        // issue #123) is just an ordinary string once it reaches notes metadata built by
+        // PublishOrchestrator; confirm it round-trips like any other architecture value.
+        var original = new ManagementMetadata
+        {
+            PackageIdentifier = "Contoso.Tool",
+            PackageVersion = "1.2.3",
+            Platform = "macos",
+            Architecture = "universal",
+            ManifestPath = "manifests/Contoso/Contoso.Tool/1.2.3/Contoso.Tool.yaml",
+            ManifestHash = "manifest-hash",
+            InputHash = "input-hash",
+            SourceCommit = "abc123",
+        };
+
+        var parsed = ManagementMetadata.TryParse(original.Serialize(), out var metadata);
+
+        Assert.IsTrue(parsed);
+        Assert.AreEqual("universal", metadata!.Architecture);
+    }
+
+    [TestMethod]
     public void Serialize_JsonExceedsNotesLimit_ThrowsManagementMetadataTooLargeException()
     {
         var oversized = new ManagementMetadata

@@ -98,6 +98,40 @@ public sealed class MacOsPackagerTests
     }
 
     [TestMethod]
+    public async Task CreatePackageAsync_OmittedArchitectureManifestMatchesUniversalStagingResult()
+    {
+        // The staging result already carries the resolved effective architecture ("universal",
+        // AppArchitecture.Resolve, issue #123); ResolveApp must match it against the manifest entry's
+        // resolved value too, not the raw (null) Architecture field, or packaging a manifest that omits
+        // Architecture would fail with "Manifest does not contain macOS entry".
+        var appDirectory = Path.Combine(_outputDirectory, "Contoso.Tool", "macos-universal");
+        var stagingDirectory = Path.Combine(appDirectory, "staging");
+        Directory.CreateDirectory(stagingDirectory);
+        File.WriteAllText(Path.Combine(stagingDirectory, "contoso-tool-universal.pkg"), "fake-pkg-binary");
+        var stagingResult = new MacOsStagingResult(
+            "Contoso.Tool", "macos", "universal", stagingDirectory, "contoso-tool-universal.pkg",
+            DryRun: false, SummaryPath: Path.Combine(appDirectory, "staging-summary.json"),
+            ExpectedSha256: HashContent("fake-pkg-binary"), ActualSha256: HashContent("fake-pkg-binary"));
+
+        var app = TestManifests.CreateValidMacOsApp(architecture: null);
+        app.Source!.Sha256 = HashContent("fake-pkg-binary");
+        var manifest = new IntunePackageManifest
+        {
+            SchemaVersion = "1.0",
+            PackageIdentifier = "Contoso.Tool",
+            PackageName = "Contoso Tool",
+            Publisher = "Contoso Ltd.",
+            Description = "Internal tool for Contoso employees.",
+            PackageVersion = "1.2.3",
+            Apps = [app],
+        };
+
+        var result = await CreatePackager().CreatePackageAsync(manifest, stagingResult, CancellationToken.None);
+
+        Assert.AreEqual("universal", result.Architecture);
+    }
+
+    [TestMethod]
     public async Task CreatePackageAsync_DryRunStagingResult_Throws()
     {
         var stagingResult = StageFile() with { DryRun = true };

@@ -434,6 +434,38 @@ public sealed class PublishOrchestratorTests
     }
 
     [TestMethod]
+    public async Task PublishAsync_MacOsEntryOmittedArchitecture_UsesUniversalIdentity()
+    {
+        // AppArchitecture.Resolve (issue #123) must reach the orchestrator: the staged package
+        // directory, the app identity used to resolve/create the app, and the notes metadata written
+        // back to Intune all key off the effective "universal" value, not the raw (null) manifest field.
+        var macEntryDirectory = Path.Combine(_packageDirectory, "Contoso.Tool", "macos-universal");
+        Directory.CreateDirectory(macEntryDirectory);
+        var macMetadata = new PackageMetadata(
+            "Contoso.Tool", "1.2.3", "macos", "universal", "mac-hash-1",
+            Tool: null, IntuneWinFile: null, IntuneWinSha256: null, DateTimeOffset.Parse("2026-07-06T00:00:00Z"),
+            ContentFile: "staging/contoso-tool-universal.pkg", ContentSha256: "pkgsha");
+        File.WriteAllText(
+            Path.Combine(macEntryDirectory, PackageMetadataJson.FileName),
+            JsonSerializer.Serialize(macMetadata, PackageMetadataJson.SerializerOptions));
+        Directory.CreateDirectory(Path.Combine(macEntryDirectory, "staging"));
+        File.WriteAllBytes(Path.Combine(macEntryDirectory, "staging", "contoso-tool-universal.pkg"), [1, 2, 3]);
+
+        var macPublisher = new FakePlatformAppPublisher();
+        var harness = CreateHarness(extraPublishers: new Dictionary<string, IPlatformAppPublisher> { ["macos"] = macPublisher });
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidMacOsApp(architecture: null)];
+
+        var result = await harness.Orchestrator.PublishAsync(CreateRequest(manifest), null, CancellationToken.None);
+
+        Assert.AreEqual(PublishOutcome.Published, result.Outcome);
+        CollectionAssert.AreEqual(new[] { "create" }, macPublisher.AppCalls);
+        Assert.IsNotNull(macPublisher.CreatedNotes);
+        var notes = JsonSerializer.Deserialize<JsonElement>(macPublisher.CreatedNotes!);
+        Assert.AreEqual("universal", notes.GetProperty("architecture").GetString());
+    }
+
+    [TestMethod]
     public async Task PublishAsync_DryRunExistingApp_MakesNoWriteCallsButValidatesMapping()
     {
         var harness = CreateHarness([ExistingManagedApp()]);

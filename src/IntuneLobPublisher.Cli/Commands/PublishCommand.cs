@@ -188,8 +188,8 @@ internal static class PublishCommand
         var preflightItems = entries.Select(entry => new PreflightItem(
                 entry.Loaded.Manifest,
                 entry.App,
-                new AppIdentity(entry.Loaded.Manifest.PackageIdentifier!, entry.App.Platform!, entry.App.Architecture!),
-                $"{entry.Loaded.Manifest.PackageIdentifier} {entry.App.Platform}-{entry.App.Architecture}",
+                new AppIdentity(entry.Loaded.Manifest.PackageIdentifier!, entry.App.Platform!, AppArchitecture.Resolve(entry.App)!),
+                $"{entry.Loaded.Manifest.PackageIdentifier} {entry.App.Platform}-{AppArchitecture.Resolve(entry.App)}",
                 entry.Loaded.Path))
             .ToList();
         var preflight = new PublishPreflight(inspector, preflightLogger);
@@ -256,7 +256,7 @@ internal static class PublishCommand
             failure.Item.Manifest.PackageIdentifier ?? "",
             failure.Item.Manifest.PackageVersion ?? "",
             failure.Item.App.Platform ?? "",
-            failure.Item.App.Architecture ?? "",
+            AppArchitecture.Resolve(failure.Item.App) ?? "",
             GetBestEffortManifestRepoRelativePath(repoRoot, failure.Item.ManifestPath),
             "failed",
             null,
@@ -268,7 +268,7 @@ internal static class PublishCommand
             entry.Item.Manifest.PackageIdentifier ?? "",
             entry.Item.Manifest.PackageVersion ?? "",
             entry.Item.App.Platform ?? "",
-            entry.Item.App.Architecture ?? "",
+            AppArchitecture.Resolve(entry.Item.App) ?? "",
             GetBestEffortManifestRepoRelativePath(repoRoot, entry.Item.ManifestPath),
             "failed",
             null,
@@ -301,7 +301,7 @@ internal static class PublishCommand
             foreach (var app in loaded.Manifest.Apps)
             {
                 var identity = new AppIdentity(
-                    loaded.Manifest.PackageIdentifier!, app.Platform!, app.Architecture!);
+                    loaded.Manifest.PackageIdentifier!, app.Platform!, AppArchitecture.Resolve(app)!);
                 if (!byIdentity.TryGetValue(identity, out var existing))
                 {
                     byIdentity[identity] = new PublishEntry(loaded, app);
@@ -392,7 +392,7 @@ internal static class PublishCommand
 
         foreach (var entry in entries)
         {
-            var label = $"{entry.Loaded.Manifest.PackageIdentifier} {entry.App.Platform}-{entry.App.Architecture}";
+            var label = $"{entry.Loaded.Manifest.PackageIdentifier} {entry.App.Platform}-{AppArchitecture.Resolve(entry.App)}";
             var warningCodes = entry.Warnings is { Count: > 0 }
                 ? entry.Warnings.Select(w => w.Code.ToString()).ToArray()
                 : null;
@@ -492,7 +492,7 @@ internal static class PublishCommand
                 entry.Loaded.Manifest.PackageIdentifier ?? "",
                 entry.Loaded.Manifest.PackageVersion ?? "",
                 entry.App.Platform ?? "",
-                entry.App.Architecture ?? "",
+                AppArchitecture.Resolve(entry.App) ?? "",
                 GetBestEffortManifestRepoRelativePath(repoRoot, entry.Loaded.Path),
                 "failed",
                 null,
