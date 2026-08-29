@@ -6,7 +6,11 @@ public sealed class AppManifest
     /// <summary>"windows" or "macos".</summary>
     public string? Platform { get; set; }
 
-    /// <summary>"x64" or "arm64".</summary>
+    /// <summary>
+    /// "x64" or "arm64" on Windows (required). On macOS, "x64", "arm64", or "universal", and optional —
+    /// an omitted value resolves to "universal" for identity/staging/metadata purposes without ever being
+    /// written back here; see <see cref="AppArchitecture.Resolve"/>.
+    /// </summary>
     public string? Architecture { get; set; }
 
     /// <summary>"win32" (Windows) or "pkg" (macOS).</summary>

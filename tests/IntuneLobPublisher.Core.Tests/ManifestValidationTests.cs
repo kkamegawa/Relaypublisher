@@ -127,6 +127,24 @@ public sealed class ManifestValidationTests
     }
 
     [TestMethod]
+    public void Validate_WindowsMissingArchitecture_Fails()
+    {
+        // Windows Architecture stays required; only macOS may omit it (issue #123).
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Architecture = null;
+        AssertInvalid(manifest, "Architecture");
+    }
+
+    [TestMethod]
+    public void Validate_WindowsUniversalArchitecture_Fails()
+    {
+        // "universal" is only meaningful for macOS's omitted-Architecture default.
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Architecture = "universal";
+        AssertInvalid(manifest, "Architecture 'universal'");
+    }
+
+    [TestMethod]
     public void Validate_UnsupportedInstallerType_Fails()
     {
         var manifest = TestManifests.CreateValid();
@@ -412,6 +430,75 @@ public sealed class ManifestValidationTests
 
         var result = _validator.Validate(manifest);
         Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => $"{e.PropertyName}: {e.ErrorMessage}")));
+    }
+
+    [TestMethod]
+    public void Validate_MacOsOmittedArchitecture_Passes()
+    {
+        // macOS app resources have no Graph architecture property (issue #123); the effective value
+        // resolves to "universal" via AppArchitecture.Resolve, but the raw manifest field stays null.
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidMacOsApp(architecture: null)];
+
+        var result = _validator.Validate(manifest);
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => $"{e.PropertyName}: {e.ErrorMessage}")));
+        Assert.IsNull(manifest.Apps[0].Architecture);
+    }
+
+    [TestMethod]
+    public void Validate_MacOsOmittedArchitecture_LobAppType_Passes()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Icon = "assets/icons/contoso-tool.png";
+        manifest.Apps = [TestManifests.CreateValidMacOsApp(architecture: null, appType: "lob")];
+
+        var result = _validator.Validate(manifest);
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => $"{e.PropertyName}: {e.ErrorMessage}")));
+    }
+
+    [TestMethod]
+    [DataRow("x64")]
+    [DataRow("arm64")]
+    [DataRow("universal")]
+    public void Validate_MacOsExplicitArchitecture_Passes(string architecture)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidMacOsApp(architecture)];
+
+        var result = _validator.Validate(manifest);
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => $"{e.PropertyName}: {e.ErrorMessage}")));
+    }
+
+    [TestMethod]
+    [DataRow("")]
+    [DataRow("   ")]
+    public void Validate_MacOsBlankArchitecture_Fails(string architecture)
+    {
+        // Blank is not treated as omission (AppArchitecture.Resolve only resolves null): it must still
+        // fail rather than silently becoming "universal".
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Architecture = architecture;
+        manifest.Apps = [macApp];
+
+        AssertInvalid(manifest, "Architecture");
+    }
+
+    [TestMethod]
+    public void Validate_MacOsRequirementsArchitecture_FailsWithSingleError()
+    {
+        // Requirements.Architecture is forbidden on macOS, not merely optional (issue #123). The
+        // Windows-only match rule must not also fire for the same value.
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Requirements!.Architecture = "arm64";
+        manifest.Apps = [macApp];
+
+        var result = _validator.Validate(manifest);
+        Assert.IsFalse(result.IsValid);
+        var architectureErrors = result.Errors.Where(e => e.PropertyName.Contains("Architecture", StringComparison.OrdinalIgnoreCase)).ToList();
+        Assert.AreEqual(1, architectureErrors.Count, string.Join(" / ", architectureErrors.Select(e => e.ErrorMessage)));
+        StringAssert.Contains(architectureErrors[0].ErrorMessage, "must not be set for Platform 'macos'");
     }
 
     [TestMethod]

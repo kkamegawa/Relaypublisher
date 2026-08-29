@@ -19,14 +19,15 @@ public sealed class ManifestSetValidator
         var errors = new List<string>();
         var entries = manifests
             .SelectMany(m => m.Manifest.Apps
-                .Where(a => a.PlatformArchitectureComplete())
+                .Where(a => a.PlatformComplete())
                 .Select(a => new AppEntry(
                     m.Path,
                     m.Manifest.PackageIdentifier ?? string.Empty,
                     m.Manifest.PackageVersion ?? string.Empty,
                     a.Platform!,
-                    a.Architecture!,
+                    AppArchitecture.Resolve(a) ?? string.Empty,
                     a.DisplayName)))
+            .Where(e => e.Architecture.Length > 0)
             .ToList();
 
         foreach (var group in entries.GroupBy(e => e.IdentityKey, StringComparer.OrdinalIgnoreCase))
@@ -77,6 +78,6 @@ public sealed class ManifestSetValidator
 
 file static class AppManifestExtensions
 {
-    public static bool PlatformArchitectureComplete(this AppManifest app)
-        => !string.IsNullOrEmpty(app.Platform) && !string.IsNullOrEmpty(app.Architecture);
+    public static bool PlatformComplete(this AppManifest app)
+        => !string.IsNullOrEmpty(app.Platform);
 }

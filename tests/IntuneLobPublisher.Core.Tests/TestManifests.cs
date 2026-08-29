@@ -82,23 +82,30 @@ internal static class TestManifests
         };
     }
 
-    /// <summary>A valid macOS app entry with the default AppType ("pkg").</summary>
-    public static AppManifest CreateValidMacOsApp(string architecture = "arm64", string? appType = null, string? displayName = null)
+    /// <summary>
+    /// A valid macOS app entry with the default AppType ("pkg"). <paramref name="architecture"/> may be
+    /// null to build an entry that omits Architecture (effective value "universal", see
+    /// <see cref="AppArchitecture"/>) — the model's Architecture stays null in that case; only the display
+    /// name and source naming below use the effective label, matching how the resolver is meant to be
+    /// consumed everywhere else.
+    /// </summary>
+    public static AppManifest CreateValidMacOsApp(string? architecture = "arm64", string? appType = null, string? displayName = null)
     {
+        var label = architecture ?? AppArchitecture.MacOsDefault;
         return new AppManifest
         {
             Platform = "macos",
             Architecture = architecture,
             InstallerType = "pkg",
             AppType = appType,
-            DisplayName = displayName ?? $"Contoso Tool [macOS {architecture}]",
+            DisplayName = displayName ?? $"Contoso Tool [macOS {label}]",
             Source = new SourceManifest
             {
                 Type = "azureBlob",
                 AccountName = "contosopackages",
                 Container = "intune-packages",
-                BlobName = $"macos/contoso-tool/1.2.3/contoso-tool-{architecture}.pkg",
-                Destination = $"contoso-tool-{architecture}.pkg",
+                BlobName = $"macos/contoso-tool/1.2.3/contoso-tool-{label}.pkg",
+                Destination = $"contoso-tool-{label}.pkg",
                 Sha256 = new string('a', 64),
                 Auth = new AuthManifest { Type = "workloadIdentity" },
             },

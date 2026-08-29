@@ -77,6 +77,64 @@ public sealed class ManifestSetValidationTests
     }
 
     [TestMethod]
+    public void Validate_MacOsOmittedArchitectureDuplicate_Fails()
+    {
+        // Both entries resolve to the same effective identity ("universal", issue #123) even though
+        // neither declares Architecture on the manifest.
+        var a = TestManifests.CreateValid();
+        a.Apps = [TestManifests.CreateValidMacOsApp(architecture: null)];
+        var b = TestManifests.CreateValid();
+        b.Apps = [TestManifests.CreateValidMacOsApp(architecture: null)];
+
+        var errors = _validator.Validate(
+        [
+            new LoadedManifest("manifests/a.yaml", a),
+            new LoadedManifest("manifests/b.yaml", b),
+        ]);
+
+        Assert.IsTrue(
+            errors.Any(e => e.Contains("Duplicate app identity", StringComparison.Ordinal)),
+            string.Join(" / ", errors));
+    }
+
+    [TestMethod]
+    public void Validate_MacOsOmittedVsExplicitUniversalArchitectureDuplicate_Fails()
+    {
+        // Omitted Architecture and an explicit "universal" declaration share the same effective identity.
+        var a = TestManifests.CreateValid();
+        a.Apps = [TestManifests.CreateValidMacOsApp(architecture: null)];
+        var b = TestManifests.CreateValid();
+        b.Apps = [TestManifests.CreateValidMacOsApp(architecture: "universal")];
+
+        var errors = _validator.Validate(
+        [
+            new LoadedManifest("manifests/a.yaml", a),
+            new LoadedManifest("manifests/b.yaml", b),
+        ]);
+
+        Assert.IsTrue(
+            errors.Any(e => e.Contains("Duplicate app identity", StringComparison.Ordinal)),
+            string.Join(" / ", errors));
+    }
+
+    [TestMethod]
+    public void Validate_MacOsOmittedVsExplicitX64Architecture_Passes()
+    {
+        var a = TestManifests.CreateValid();
+        a.Apps = [TestManifests.CreateValidMacOsApp(architecture: null)];
+        var b = TestManifests.CreateValid();
+        b.Apps = [TestManifests.CreateValidMacOsApp(architecture: "x64")];
+
+        var errors = _validator.Validate(
+        [
+            new LoadedManifest("manifests/a.yaml", a),
+            new LoadedManifest("manifests/b.yaml", b),
+        ]);
+
+        Assert.IsEmpty(errors, string.Join(" / ", errors));
+    }
+
+    [TestMethod]
     public void Validate_DuplicateIdentityWithinOneManifest_Fails()
     {
         var manifest = TestManifests.CreateValid("x64");

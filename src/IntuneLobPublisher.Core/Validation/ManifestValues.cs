@@ -13,7 +13,17 @@ public static partial class ManifestValues
     public const string DefaultAssignmentMode = "include";
 
     public static readonly IReadOnlyList<string> Platforms = ["windows", "macos"];
-    public static readonly IReadOnlyList<string> Architectures = ["x64", "arm64"];
+
+    /// <summary>Windows requires Architecture; it maps to the Graph allowedArchitectures value.</summary>
+    public static readonly IReadOnlyList<string> WindowsArchitectures = ["x64", "arm64"];
+
+    /// <summary>
+    /// macOS app resources have no Graph architecture property, so Architecture is optional there;
+    /// "universal" is only meaningful as the effective value of an omitted Architecture
+    /// (see <see cref="Manifests.AppArchitecture"/>) but is also accepted when declared explicitly.
+    /// </summary>
+    public static readonly IReadOnlyList<string> MacOsArchitectures = ["x64", "arm64", "universal"];
+
     public static readonly IReadOnlyList<string> WindowsInstallerTypes = ["win32"];
     public static readonly IReadOnlyList<string> MacOsInstallerTypes = ["pkg"];
 

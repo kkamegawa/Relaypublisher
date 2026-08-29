@@ -170,6 +170,55 @@ public sealed class InputHashCalculatorTests
             InputHashCalculator.ComputeManifestHash(manifest));
     }
 
+    /// <summary>
+    /// Pinned so that macOS omitted-Architecture manifests (issue #123) never silently re-hash. The
+    /// resolved effective value ("universal") must never be written back into the manifest model, so
+    /// this must differ from <see cref="PinnedMacOsManifestHashWithoutPrimaryOrBuildVersion"/> (which
+    /// uses the explicit "arm64" default from <see cref="TestManifests.CreateValidMacOsApp"/>) and from
+    /// the explicit-"universal" hash below.
+    /// </summary>
+    private const string PinnedMacOsManifestHashWithOmittedArchitecture =
+        "53befc8fd7da5d5bf785e627ad6ba32462b1995dd4b541e00c01d1253f55ff4b";
+
+    [TestMethod]
+    public void ComputeManifestHash_MacOsOmittedArchitecture_MatchesPinnedValue()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidMacOsApp(architecture: null)];
+
+        Assert.AreEqual(
+            PinnedMacOsManifestHashWithOmittedArchitecture,
+            InputHashCalculator.ComputeManifestHash(manifest));
+    }
+
+    [TestMethod]
+    public void ComputeManifestHash_MacOsOmittedVsExplicitUniversalArchitecture_DifferHash()
+    {
+        // Effective identity is the same ("universal") for both, but the raw manifest model differs
+        // (null vs. "universal"), so the hashes must not collide (doc/00-overview.md §6.7).
+        var omitted = TestManifests.CreateValid();
+        omitted.Apps = [TestManifests.CreateValidMacOsApp(architecture: null)];
+        var explicitUniversal = TestManifests.CreateValid();
+        explicitUniversal.Apps = [TestManifests.CreateValidMacOsApp(architecture: "universal")];
+
+        Assert.AreNotEqual(
+            InputHashCalculator.ComputeManifestHash(omitted),
+            InputHashCalculator.ComputeManifestHash(explicitUniversal));
+    }
+
+    [TestMethod]
+    public void ComputeManifestHash_MacOsExplicitArm64Architecture_StillMatchesPreexistingPinnedValue()
+    {
+        // Regression guard: an existing macOS manifest that already declares Architecture must keep a
+        // byte-identical hash across this change (doc/00-overview.md §6.7).
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidMacOsApp()];
+
+        Assert.AreEqual(
+            PinnedMacOsManifestHashWithoutPrimaryOrBuildVersion,
+            InputHashCalculator.ComputeManifestHash(manifest));
+    }
+
     [TestMethod]
     public void ComputeManifestHash_EmptyCategoriesDiffersFromOmitted()
     {

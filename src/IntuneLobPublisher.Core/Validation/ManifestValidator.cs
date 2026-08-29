@@ -83,10 +83,19 @@ internal sealed class AppManifestValidator : AbstractValidator<AppManifest>
             .Must(v => ManifestValues.Platforms.Contains(v))
             .WithMessage(a => $"Platform '{a.Platform}' is not supported. Supported platforms: {string.Join(", ", ManifestValues.Platforms)}.");
 
+        // Windows Architecture is required (it maps to the Graph allowedArchitectures value). macOS app
+        // resources have no Graph architecture property, so it is optional there; an omitted value
+        // resolves to "universal" (AppArchitecture.Resolve) without being written back into the manifest.
         RuleFor(a => a.Architecture)
             .NotEmpty()
-            .Must(v => ManifestValues.Architectures.Contains(v))
-            .WithMessage(a => $"Architecture '{a.Architecture}' is not supported. Supported architectures: {string.Join(", ", ManifestValues.Architectures)}.");
+            .Must(v => ManifestValues.WindowsArchitectures.Contains(v))
+            .When(a => a.Platform == "windows")
+            .WithMessage(a => $"Architecture '{a.Architecture}' is not supported. Supported architectures: {string.Join(", ", ManifestValues.WindowsArchitectures)}.");
+
+        RuleFor(a => a.Architecture)
+            .Must(v => v is null || ManifestValues.MacOsArchitectures.Contains(v))
+            .When(a => a.Platform == "macos")
+            .WithMessage(a => $"Architecture '{a.Architecture}' is not supported. Supported architectures: {string.Join(", ", ManifestValues.MacOsArchitectures)}.");
 
         RuleFor(a => a.InstallerType)
             .NotEmpty()
@@ -144,9 +153,16 @@ internal sealed class AppManifestValidator : AbstractValidator<AppManifest>
             .WithMessage("Scripts must not be set for macOS AppType 'lob'; pre/post-install scripts are only supported for AppType 'pkg'.")
             .SetValidator(new MacOsScriptsManifestValidator()!);
 
+        // macOS has no "requirements architecture" concept (doc/01-manifest-schema.md §5.3): forbid it
+        // outright rather than leaving it optional, so a stray value can't silently do nothing.
+        RuleFor(a => a.Requirements!.Architecture)
+            .Must((app, requirementsArchitecture) => app.Platform != "macos" || requirementsArchitecture is null)
+            .WithMessage("Requirements.Architecture must not be set for Platform 'macos'; macOS apps have no architecture requirement.")
+            .OverridePropertyName("Requirements.Architecture");
+
         RuleFor(a => a.Requirements!.Architecture)
             .Must((app, requirementsArchitecture) => string.Equals(requirementsArchitecture, app.Architecture, StringComparison.Ordinal))
-            .When(a => a.Requirements?.Architecture is not null && a.Architecture is not null)
+            .When(a => a.Platform == "windows" && a.Requirements?.Architecture is not null && a.Architecture is not null)
             .WithMessage(a => $"Requirements.Architecture '{a.Requirements!.Architecture}' must match the app Architecture '{a.Architecture}'.")
             .OverridePropertyName("Requirements.Architecture");
 
@@ -458,8 +474,8 @@ internal sealed class DetectionManifestValidator : AbstractValidator<DetectionMa
 
 /// <summary>
 /// <see cref="RequirementsManifest.Architecture"/> only applies to Windows (it must match the app-level
-/// Architecture, checked separately by <see cref="AppManifestValidator"/>); the macOS sample manifest
-/// omits it, since macOS has no separate "requirements architecture" concept (doc/01-manifest-schema.md §5.3).
+/// Architecture, checked separately by <see cref="AppManifestValidator"/>); it is forbidden on macOS,
+/// since macOS has no separate "requirements architecture" concept (doc/01-manifest-schema.md §5.3).
 /// </summary>
 internal sealed class RequirementsManifestValidator : AbstractValidator<RequirementsManifest>
 {

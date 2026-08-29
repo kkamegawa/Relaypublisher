@@ -201,6 +201,44 @@ public sealed class ManifestLoaderTests
     }
 
     [TestMethod]
+    public async Task LoadAsync_MacOsAppWithoutArchitectureKey_ArchitectureIsNull()
+    {
+        // AppArchitecture.Resolve, not the loader, turns an omitted macOS Architecture into "universal"
+        // (issue #123) — the loaded model must keep the raw field null.
+        var manifest = await LoadFromTextAsync(
+            """
+            SchemaVersion: "1.0"
+            PackageIdentifier: Contoso.Tool
+            PackageName: Contoso Tool
+            Publisher: Contoso Ltd.
+            Description: Internal tool for Contoso employees.
+            PackageVersion: 1.2.3
+
+            Apps:
+              - Platform: macos
+                InstallerType: pkg
+                AppType: pkg
+                DisplayName: Contoso Tool [macOS]
+
+                Source:
+                  Type: publicHttp
+                  Url: https://example.com/downloads/contoso-tool.pkg
+                  Destination: contoso-tool.pkg
+                  Sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+                Requirements:
+                  MinimumOSVersion: "14.0"
+
+                Detection:
+                  IncludedApps:
+                    - BundleId: com.contoso.tool
+                      BundleVersion: 1.2.3
+            """);
+
+        Assert.IsNull(manifest.Apps[0].Architecture);
+    }
+
+    [TestMethod]
     public async Task LoadAsync_MacOsAppWithoutScripts_ScriptsIsNull()
     {
         var manifest = await LoadFromTextAsync(
