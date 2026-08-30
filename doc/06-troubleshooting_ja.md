@@ -303,10 +303,12 @@ Publish が package metadata missing を報告した場合:
 - **宣言した primary が package に存在しない**: warning に出た検出 bundle 一覧を確認します。source が間違っているか manifest が古い場合は修正して `package` を rerun します。意図した差異なら、検出結果を確認した後で同じ artifact に `--force` を付けて rerun します。
 - **`package` が source SHA mismatch を報告する**: staging file を破棄し、意図した release から package をやり直します。予期しない file に合わせるため `package-metadata.json` や検査 report を手編集しないでください。
 - **`publish` が stale または改ざんされた package artifact を報告する**: publish job は staging 済み `.pkg` を再 hash・再検査し、package report だけを信頼しません。同じ `manifest-list.json` と pin された CLI version で再 download/repackage し、artifact を置き換えます。古い report、変更された file、metadata identity mismatch、report/CLI version mismatch は Graph write 0 件で停止しなければなりません。
-- **XAR/XML parser が失敗する**: truncated archive、invalid offset、`none`/`gzip`/`bzip2` 以外の compression、malformed XML、external entity/DTD、展開上限超過は hard error として扱います。完全な package を source から取得して `package` を rerun し、`--force` で回避しません。エラー文言が正確に
-  `uses unsupported compression 'application/x-bzip2'` の場合、その CLI は bzip2 対応前のバージョンです
-  (issue #127)。最新の CLI に pin して再実行してください。この compression method はもはや hard error では
-  ありません。
+- **XAR/XML parser が失敗する**: truncated archive、invalid offset、`none`/`gzip`/`bzip2` 以外の compression、malformed XML、external entity/DTD、展開上限超過は hard error として扱います。完全な package を source から取得して `package` を rerun し、`--force` で回避しません。次の 3 つのエラー文言は、実際に壊れた package ではなく CLI version の古さを示します(いずれも issue #127 で修正済み。最新の CLI に pin して再実行してください)。
+  - `uses unsupported compression 'application/x-bzip2'` — bzip2 対応前の CLI。
+  - `The archive entry was compressed using an unsupported compression method`(`.NET GZipStream`/`Inflater` の call stack から、`... could not be read.` として wrap される)— xar の `application/x-gzip` heap entry を実体どおり raw zlib として読む修正が入る前の CLI。旧バージョンでは実在する `gzip` encoded entry がすべてこのエラーで失敗していました。
+  - `A Distribution bundle entry has no bundle identifier.` — `productbuild` が生成する
+    `<pkg-ref><bundle-version><bundle .../></bundle-version></pkg-ref>` 形式(`<bundle-version>` が属性を
+    持たず実際の `<bundle>` record を包むだけの wrapper)に対応する前の CLI。
 - **`AppType: lob` の version read-back が異なる**: `BundleVersion` は Graph `buildNumber`、`BundleBuildVersion` は Graph `versionNumber` に対応します。package が `CFBundleShortVersionString` と `CFBundleVersion` を区別する場合は両方を更新し、report を再生成するため package をやり直します。
 - **後続 entry が warning 後に失敗した**: 最終 preflight 契約では、Graph write 前に選択された全 entry を検査します。warning 拒否または hard error の前に Graph write が出ている log は古い CLI の実行を示します。CLI version を pin し、同じ manifest list で rerun します。
 

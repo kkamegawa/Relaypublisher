@@ -52,3 +52,38 @@
   - **今後の注意**: `SharpZipLib` の既知 CVE は `ZipFile`/`TarArchive` の展開パス処理にあり、本リポジトリは
     それらの API を一切呼ばない。この前提が変わる(該当 API を使い始める、あるいは `SharpZipLib` の
     メンテが完全に停止する)場合は、この決定を再確認すること。
+
+## 2026-08-30: 実 pkg での検証で見つかった 2 件の pre-existing bug を同じ issue #127 で修正
+
+上記 bzip2 対応の実装後、計画で必須としていた「実バイナリでの smoke test」で、bzip2 とは無関係の 2 件の
+pre-existing bug が見つかった。いずれもユーザーの承認を得て同じ issue #127 で修正した。
+
+- **決定 1**: `ReadHeapEntryAsync` の `application/x-gzip` heap entry を `GZipStream` ではなく
+  `ZLibStream` で展開する(TOC の展開処理 `ReadTocAsync` と同じ方式)。
+  - **理由**: 実際の Microsoft 製 pkg(Global Secure Access Client)の TOC で `application/x-gzip` と
+    宣言された heap entry の実バイトを直接検証したところ、magic bytes は `78 da`(zlib、RFC 1950)であり
+    GZIP 本来の形式(RFC 1952、magic `1f 8b`)ではなかった。Python の `zlib.decompress()` では問題なく
+    展開でき宣言サイズとも一致した。`GZipStream` は GZIP header を要求するため
+    `The archive entry was compressed using an unsupported compression method.` で fail していた。
+    xar の "gzip" という名称にもかかわらず実体は zlib であり、これは今回の bzip2 対応とは独立した
+    pre-existing bug だった。既存の gzip test が今まで通っていたのは、fixture 自体を `.NET GZipStream` で
+    生成・展開する自己整合的な作りだったためで、実物の xar ファイルでは一度も検証されていなかった。
+  - **影響**: 実在する gzip-encoded heap entry を持つ macOS pkg は、この修正以前は一度も正しく
+    inspection できていなかったことになる。test fixture の `Gzip()` helper は TOC 用の `Zlib()` helper と
+    統合した(実際に生成される byte 列が同じであるため)。
+- **決定 2**: `ReadMetadataBundlesAsync` で、`Distribution` の `<bundle-version>` 要素が識別属性
+  (`CFBundleIdentifier`/`id`/`bundle-id`/`identifier`)を一切持たない場合、bundle 要素としてではなく
+  透過的な wrapper として扱う(`required-bundles` と同様に skip するが、子要素は抑制しない)。
+  - **理由**: `productbuild` が生成する実際の Distribution XML は
+    `<pkg-ref><bundle-version><bundle id="..." .../><bundle id="..." .../></bundle-version></pkg-ref>`
+    という、`<bundle-version>` 自体は属性を持たない wrapper で、実際の識別情報は入れ子の `<bundle>` 子要素
+    側にある形を使っていた。既存実装は `<bundle-version>` 自体を bundle 識別要素として扱っており、
+    このケースでは wrapper 自身の欠落した識別子で `A Distribution bundle entry has no bundle identifier.`
+    と hard fail していた。既存コードが唯一対応していたのは
+    `<bundle-version id="..." CFBundleShortVersionString="..." />` という自己完結型のみ(古い形式)。
+  - **影響**: 修正後、wrapper の子 `<bundle>` は通常の bundle 要素として処理され、既存の `path` フィルタ
+    (`.app` で終わるもののみ採用)がそのまま適用される。既存 test への影響はなし
+    (`<bundle-version>` が空で fail することを検証する test は存在しなかった)。
+- **検証**: 上記 2 件の修正後、実際に Global Secure Access Client の pkg で `package` を実行し、
+  client 本体・uninstaller helper app・Microsoft AutoUpdate 関連 3 bundle の計 5 件が正しく検出され、
+  `inspectorVersion` は `"1"` のまま、report に URL/token が含まれないことを確認した。
