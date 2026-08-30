@@ -29,7 +29,7 @@
    (`workflows/azure-pipelines/release-nuget-tool.yml`)と `doc/04-ci-azure-pipelines.md` の該当節を削除した。
    Intune publish 用 Azure Pipelines sample は維持した。
 5. 親 Issue #131 と sub-issue #132 / #133 を作成し、最新 `origin/main` から独立した branch と
-   1つの PR #135 にまとめた。日英 Wiki plan と index 差分は作成済みで、Wiki push 前の明示承認を待っている。
+   1つの PR #135 にまとめた。明示承認後、日英 Wiki plan と Home / Relaypublisher index を push した。
 
 ### 検証結果
 
@@ -41,6 +41,8 @@
 - `dotnet build IntuneLobPublisher.slnx --configuration Release` 成功。既存の `CS8631` warning 2件、error 0件。
 - `dotnet test IntuneLobPublisher.slnx --configuration Release --no-build` 成功。
   656 passed、Windows専用37 skipped、0 failed。
+- PR #135 の Ubuntu / Windows build-test、NuGet pack、3 RID single-file app job がすべて成功。
+- Wiki の英語・日本語ページ、Home / Relaypublisher index、相互言語リンクをログイン済みブラウザーで確認。
 
 ### Merge 後の保留事項
 
