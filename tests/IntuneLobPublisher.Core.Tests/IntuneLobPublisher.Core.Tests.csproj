@@ -9,6 +9,9 @@
 
   <ItemGroup>
     <PackageReference Include="MSTest" Version="4.3.3" />
+    <!-- Used only to build bzip2 fixtures (BZip2OutputStream) for XarPkgBundleInspectorTests; production
+         code never compresses bzip2, only decompresses it via Bzip2DecompressionStream (issue #127). -->
+    <PackageReference Include="SharpZipLib" Version="1.4.2" />
   </ItemGroup>
 
   <ItemGroup>

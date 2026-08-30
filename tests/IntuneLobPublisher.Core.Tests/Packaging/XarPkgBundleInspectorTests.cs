@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using ICSharpCode.SharpZipLib.BZip2;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Packaging;
 
@@ -75,7 +76,7 @@ public sealed class XarPkgBundleInspectorTests
     {
         var pkg = BuildXar(
         [
-            Entry("Distribution", "<installer-gui-script><bundle id=\"com.contoso.agent\" CFBundleShortVersionString=\"2.0\" CFBundleVersion=\"200\" /></installer-gui-script>", gzip: true),
+            Entry("Distribution", "<installer-gui-script><bundle id=\"com.contoso.agent\" CFBundleShortVersionString=\"2.0\" CFBundleVersion=\"200\" /></installer-gui-script>", compression: HeapCompression.Gzip),
         ]);
 
         var result = await InspectAsync(pkg);
@@ -85,6 +86,138 @@ public sealed class XarPkgBundleInspectorTests
         Assert.AreEqual("2.0", result.Bundles[0].BundleVersion);
         Assert.AreEqual("200", result.Bundles[0].BundleBuildVersion);
         Assert.AreEqual("Distribution", result.Bundles[0].SourceEntry);
+    }
+
+    [TestMethod]
+    public async Task Inspect_PackageInfoBzip2_ReturnsBundleFacts()
+    {
+        // The XAR spec's compression enum is none/gzip/bzip2 (issue #127); real Microsoft-shipped
+        // packages (e.g. Global Secure Access Client) use bzip2 for this entry.
+        var pkg = BuildXar(
+        [
+            Entry("PackageInfo", "<pkg-info><bundle CFBundleIdentifier=\"com.contoso.tool\" CFBundleShortVersionString=\"1.2.3\" CFBundleVersion=\"123\" /></pkg-info>", compression: HeapCompression.Bzip2),
+        ]);
+
+        var result = await InspectAsync(pkg);
+
+        Assert.AreEqual(1, result.Bundles.Count);
+        Assert.AreEqual("com.contoso.tool", result.Bundles[0].BundleId);
+        Assert.AreEqual("1.2.3", result.Bundles[0].BundleVersion);
+        Assert.AreEqual("123", result.Bundles[0].BundleBuildVersion);
+        Assert.AreEqual("PackageInfo", result.Bundles[0].SourceEntry);
+    }
+
+    [TestMethod]
+    public async Task Inspect_DistributionBzip2_ReturnsBundleFacts()
+    {
+        var pkg = BuildXar(
+        [
+            Entry("Distribution", "<installer-gui-script><bundle id=\"com.contoso.agent\" CFBundleShortVersionString=\"2.0\" CFBundleVersion=\"200\" /></installer-gui-script>", compression: HeapCompression.Bzip2),
+        ]);
+
+        var result = await InspectAsync(pkg);
+
+        Assert.AreEqual(1, result.Bundles.Count);
+        Assert.AreEqual("com.contoso.agent", result.Bundles[0].BundleId);
+        Assert.AreEqual("Distribution", result.Bundles[0].SourceEntry);
+    }
+
+    [TestMethod]
+    public async Task Inspect_MixedGzipAndBzip2Entries_ReturnsBundleFacts()
+    {
+        // XAR encodes each heap entry's compression independently, so a PackageInfo/Distribution pair
+        // compressed with two different codecs in one archive is a realistic TOC shape, not contrived.
+        var pkg = BuildXar(
+        [
+            Entry("PackageInfo", "<pkg-info><bundle CFBundleIdentifier=\"com.contoso.primary\" CFBundleShortVersionString=\"1.0\" /></pkg-info>", compression: HeapCompression.Bzip2),
+            Entry("Distribution", "<installer-gui-script><bundle id=\"com.contoso.primary\" CFBundleShortVersionString=\"9.9\" /><bundle id=\"com.contoso.second\" CFBundleShortVersionString=\"2.0\" /></installer-gui-script>", compression: HeapCompression.Gzip),
+        ]);
+
+        var result = await InspectAsync(pkg);
+
+        Assert.AreEqual(2, result.Bundles.Count);
+        Assert.AreEqual("com.contoso.primary", result.Bundles[0].BundleId);
+        Assert.AreEqual("1.0", result.Bundles[0].BundleVersion);
+        Assert.AreEqual("PackageInfo", result.Bundles[0].SourceEntry);
+        Assert.AreEqual("com.contoso.second", result.Bundles[1].BundleId);
+        Assert.AreEqual("Distribution", result.Bundles[1].SourceEntry);
+    }
+
+    [TestMethod]
+    public async Task Inspect_Bzip2EntryWithTrailingBytes_FailsClosed()
+    {
+        // Regression guard for the trailing-bytes check generalized from "gzip is not null" to "any
+        // decompressor is not null" (issue #127) - without it, appended garbage after a valid bzip2
+        // stream would silently pass. BZip2InputStream stops at the first end-of-stream marker (verified
+        // against the SharpZipLib source), so the appended junk below is never consumed and must be
+        // caught by the "trailing compressed bytes" check, not by the decompressor itself.
+        var plaintext = Encoding.UTF8.GetBytes("<pkg-info><bundle id=\"com.contoso.app\" /></pkg-info>");
+        var withTrailingJunk = Bzip2(plaintext).Concat(new byte[] { 0x00, 0x01, 0x02, 0x03 }).ToArray();
+
+        var pkg = BuildXar(
+        [
+            Entry(
+                "PackageInfo", withTrailingJunk, compression: HeapCompression.None,
+                encoding: "application/x-bzip2", sizeOverride: (ulong)plaintext.Length),
+        ]);
+
+        await AssertInspectionFailureAsync(pkg);
+    }
+
+    [TestMethod]
+    public async Task Inspect_Bzip2EntryWithInvalidHeader_FailsClosed()
+    {
+        // BZip2InputStream's constructor eagerly reads and validates the first block header - unlike
+        // GZipStream, construction itself can throw on malformed input (discovered while implementing
+        // Bzip2DecompressionStream: this exact case originally escaped as a raw BZip2Exception before
+        // the adapter's constructor also translated exceptions, not just Read()).
+        var pkg = BuildXar(
+        [
+            Entry("PackageInfo", "<pkg-info><bundle id=\"com.contoso.app\" /></pkg-info>", encoding: "application/x-bzip2"),
+        ]);
+
+        await AssertInspectionFailureAsync(pkg);
+    }
+
+    [TestMethod]
+    public async Task Inspect_CorruptBzip2Entry_FailsClosed()
+    {
+        // Complements Inspect_Bzip2EntryWithInvalidHeader_FailsClosed: this stream has a valid bzip2
+        // header (so BZip2InputStream's constructor succeeds) but is corrupted deeper in, so the failure
+        // instead surfaces from Read(). BZip2Exception derives from plain Exception, not IOException, so
+        // if Bzip2DecompressionStream's Read() translation is missing, this fails with a raw
+        // BZip2Exception instead of the expected PkgInspectionException.
+        var valid = Bzip2(Encoding.UTF8.GetBytes("<pkg-info><bundle id=\"com.contoso.app\" /></pkg-info>"));
+        var corrupt = (byte[])valid.Clone();
+        corrupt[^1] ^= 0xFF;
+        corrupt[^2] ^= 0xFF;
+
+        var pkg = BuildXar(
+        [
+            Entry("PackageInfo", corrupt, compression: HeapCompression.None, encoding: "application/x-bzip2"),
+        ]);
+
+        await AssertInspectionFailureAsync(pkg);
+    }
+
+    [TestMethod]
+    public async Task Inspect_Bzip2EntryExceedingMetadataLimit_FailsClosed()
+    {
+        // A genuine decompression-bomb test: unlike Inspect_MetadataEntryLimitExceeded_FailsClosed
+        // (which fails on the declared-size mismatch before the bounded read loop's own size check ever
+        // trips), this content actually decompresses past MaxMetadataEntryBytes, exercising the
+        // `total > MaxMetadataEntryBytes` branch directly.
+        var oversized = Encoding.UTF8.GetBytes(
+            "<pkg-info><bundle id=\"com.contoso.app\" />" + new string('x', MaxMetadataEntryBytes + 1) + "</pkg-info>");
+
+        var pkg = BuildXar(
+        [
+            Entry(
+                "PackageInfo", oversized, compression: HeapCompression.Bzip2,
+                sizeOverride: (ulong)oversized.Length),
+        ]);
+
+        await AssertInspectionFailureAsync(pkg);
     }
 
     [TestMethod]
@@ -253,9 +386,11 @@ public sealed class XarPkgBundleInspectorTests
     [TestMethod]
     public async Task Inspect_UnsupportedHeapEncoding_FailsClosed()
     {
+        // application/x-bzip2 moved from this test to the supported set (issue #127); x-lzma is outside
+        // the XAR spec's none/gzip/bzip2 enum and is expected to remain unsupported.
         var pkg = BuildXar(
         [
-            Entry("PackageInfo", "<pkg-info><bundle id=\"com.contoso.app\" /></pkg-info>", encoding: "application/x-bzip2"),
+            Entry("PackageInfo", "<pkg-info><bundle id=\"com.contoso.app\" /></pkg-info>", encoding: "application/x-lzma"),
         ]);
 
         await AssertInspectionFailureAsync(pkg);
@@ -476,26 +611,38 @@ public sealed class XarPkgBundleInspectorTests
         }
     }
 
-    private static byte[] BuildPackageInfo(string xml, bool gzip = false)
-        => BuildXar([Entry("PackageInfo", xml, gzip)]);
+    /// <summary>
+    /// The XAR spec defines exactly three heap-entry compression values (doc/00-overview.md,
+    /// doc/adr-phase-2.md 2026-08-30, issue #127); this enum mirrors that closed set instead of a second
+    /// mutually-exclusive bool, which would allow an illegal "gzip and bzip2 both true" fixture state.
+    /// </summary>
+    private enum HeapCompression
+    {
+        None,
+        Gzip,
+        Bzip2,
+    }
+
+    private static byte[] BuildPackageInfo(string xml, HeapCompression compression = HeapCompression.None)
+        => BuildXar([Entry("PackageInfo", xml, compression)]);
 
     private static XarEntrySpec Entry(
         string name,
         string xml,
-        bool gzip = false,
+        HeapCompression compression = HeapCompression.None,
         string? encoding = null,
         string? offsetText = null,
         ulong? sizeOverride = null)
-        => Entry(name, Encoding.UTF8.GetBytes(xml), gzip, encoding, offsetText, sizeOverride);
+        => Entry(name, Encoding.UTF8.GetBytes(xml), compression, encoding, offsetText, sizeOverride);
 
     private static XarEntrySpec Entry(
         string name,
         byte[] content,
-        bool gzip = false,
+        HeapCompression compression = HeapCompression.None,
         string? encoding = null,
         string? offsetText = null,
         ulong? sizeOverride = null)
-        => new(name, content, gzip, encoding, offsetText, sizeOverride);
+        => new(name, content, compression, encoding, offsetText, sizeOverride);
 
     private static byte[] BuildXar(
         IReadOnlyList<XarEntrySpec> entries,
@@ -509,10 +656,20 @@ public sealed class XarPkgBundleInspectorTests
         var tocBuilder = new StringBuilder("<xar><toc>");
         foreach (var entry in entries)
         {
-            var physical = entry.Gzip ? Gzip(entry.Content) : entry.Content;
+            var physical = entry.Compression switch
+            {
+                HeapCompression.Gzip => Gzip(entry.Content),
+                HeapCompression.Bzip2 => Bzip2(entry.Content),
+                _ => entry.Content,
+            };
             var offset = heap.Position;
             heap.Write(physical);
-            var encoding = entry.Encoding ?? (entry.Gzip ? "application/x-gzip" : "application/octet-stream");
+            var encoding = entry.Encoding ?? entry.Compression switch
+            {
+                HeapCompression.Gzip => "application/x-gzip",
+                HeapCompression.Bzip2 => "application/x-bzip2",
+                _ => "application/octet-stream",
+            };
             var size = entry.SizeOverride ?? (ulong)entry.Content.Length;
             var offsetText = entry.OffsetText ?? offset.ToString(System.Globalization.CultureInfo.InvariantCulture);
             tocBuilder.Append("<file><name>")
@@ -568,6 +725,19 @@ public sealed class XarPkgBundleInspectorTests
         return output.ToArray();
     }
 
+    private static byte[] Bzip2(byte[] content)
+    {
+        // Unlike GZipStream, BZip2OutputStream has no CompressionLevel parameter and no leaveOpen
+        // constructor argument - IsStreamOwner (default true) is set false instead.
+        using var output = new MemoryStream();
+        using (var bzip2 = new BZip2OutputStream(output) { IsStreamOwner = false })
+        {
+            bzip2.Write(content);
+        }
+
+        return output.ToArray();
+    }
+
     private static void WriteUInt16BigEndian(Stream stream, ushort value)
     {
         Span<byte> buffer = stackalloc byte[2];
@@ -592,7 +762,7 @@ public sealed class XarPkgBundleInspectorTests
     private sealed record XarEntrySpec(
         string Name,
         byte[] Content,
-        bool Gzip,
+        HeapCompression Compression,
         string? Encoding,
         string? OffsetText,
         ulong? SizeOverride);
