@@ -115,7 +115,6 @@ repo/
       publish-intune-apps.yml
     azure-pipelines/
       azure-pipelines.yml
-      release-nuget-tool.yml
   .gitignore
   LICENSE
   SECURITY.md
@@ -128,8 +127,10 @@ repo/
 
 `workflows/` 配下は**利用者向けの参照用サンプル**であり、この repository では有効にならない。
 GitHub Actions の publish sample は対象 repository の `.github/workflows/` に、Azure Pipelines の
-publish sample は対象 repository の root にコピーしてから、`doc/05-operation.md` の workflow setup
-checklist に従って secret、variable、environment、service connection を設定する。
+Intune publish sample は対象 repository の root にコピーしてから、`doc/05-operation.md` の workflow setup
+checklist に従って secret、variable、environment、service connection を設定する。`nuget.org` への
+自動 publish はこの repository の `.github/workflows/release-publish.yml` だけが担当し、Azure Pipelines
+からの NuGet release 自動化は提供しない。
 
 ---
 
@@ -441,7 +442,16 @@ Intune 系 Graph API は 429 が発生しやすい。すべての Graph 呼び�
 - 実行コマンド名は `relaypublisher` 固定。
 - バージョンは Git tag(`vX.Y.Z`)を唯一の正本とし、`dotnet pack -p:Version=<X.Y.Z>` で CI から注入する。
 - `csproj` に固定バージョン文字列は置かない(ローカル検証用の fallback は許容)。
-- `nuget.org` への publish は CI でのみ実行し、重複 version は `--skip-duplicate` で冪等に扱う。
+- `nuget.org` への publish は GitHub Actions の `.github/workflows/release-publish.yml` でのみ実行し、
+  重複 version は `--skip-duplicate` で冪等に扱う。Azure Pipelines の NuGet release はサポート対象外とする。
+- `nuget.org` の認証は NuGet Trusted Publishing (OIDC) とし、長期有効な API key を secret に保存しない。
+  `NuGet/login` は commit SHA `8d196754b4036150537f80ac539e15c2f1028841` (v1.2.0) で固定し、
+  `id-token: write` を持つ publish job から push 直前に利用する。
+- Trusted Publishing policy は Repository Owner=`kkamegawa`、Repository=`Relaypublisher`、
+  Workflow File=`release-publish.yml` (`.github/workflows/` を含めない)、Environment=`release` に固定する。
+  workflow 名は underscore ではなく実ファイル名の hyphen を使う。
+- `NUGET_USER` は policy に紐付く nuget.org profile username を `release` environment secret として渡す。
+  `NuGet/login` が返す一時的な API key は同じ job の `dotnet nuget push` にだけ渡し、保存・再利用しない。
 - macOS 向けの初期配布導線も `dotnet tool install --global relaypublisher` を標準とする(Homebrew tap は別トラックで検討)。
 
 ### 6.18 テスト実行環境

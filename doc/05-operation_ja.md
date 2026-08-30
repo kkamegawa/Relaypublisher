@@ -558,16 +558,61 @@ Apps:
 これは Relaypublisher repository 自身に対する項目です。利用者 repository には適用しません。
 
 - [ ] `release` GitHub environment を作成し、publishing secrets を repository ではなくこの environment に置く。
-- [ ] `NUGET_API_KEY` は nuget.org の package publish 権限のみを持つ key にする。
+  この移行では既存の protection rules を変更しない。
+- [ ] nuget.org の profile name を `NUGET_USER` environment secret に保存する。現在/例の値は
+  `kkamegawa` とし、email address ではなく profile name を使う。長期保存する `NUGET_API_KEY` secret は
+  作成または保持しない。
+- [ ] `relaypublisher` package を所有する NuGet.org account または organization に、NuGet Trusted Publishing
+  policy を設定する。
+- [ ] policy の GitHub repository owner は `kkamegawa`、repository は `Relaypublisher`、workflow file は
+  `release-publish.yml`（file name のみ。`.github/workflows/` は含めない）、environment は `release` にする。
 - [ ] `AZURE_ARTIFACTS_FEED_URL` に feed の v3 `index.json` URL を入れる。URL が workflow のログに出ないよう
-      必ず secret にする。
+  必ず secret にする。
 - [ ] user-assigned managed identity を作成し、その client ID / tenant ID / subscription ID を
-      `AZURE_ARTIFACTS_CLIENT_ID` / `AZURE_ARTIFACTS_TENANT_ID` / `AZURE_ARTIFACTS_SUBSCRIPTION_ID` に設定する。
+  `AZURE_ARTIFACTS_CLIENT_ID` / `AZURE_ARTIFACTS_TENANT_ID` / `AZURE_ARTIFACTS_SUBSCRIPTION_ID` に設定する。
 - [ ] その managed identity に、この repository の `release` environment を信頼する federated identity
-      credential を audience `api://AzureADTokenExchange` で設定する。
+  credential を audience `api://AzureADTokenExchange` で設定する。
 - [ ] Azure DevOps 側で、その managed identity を対象プロジェクトの **Contributors** グループに追加する。
 - [ ] `packages: write` と `id-token: write` を持つ workflow が `release-publish.yml` だけであることを確認する。
 - [ ] `ci.yml` が secrets を一切参照していないことを確認する（fork からの PR を通すため）。
+
+#### NuGet Trusted Publishing の値
+
+policy owner と `NuGet/login` に渡す profile は、関連しますが別の項目です。この repository ではどちらも
+NuGet.org の個人 profile `kkamegawa` です。`NUGET_USER` は NuGet profile name であり、email address や
+GitHub numeric ID ではありません。
+
+| 項目 | 値または扱い |
+| --- | --- |
+| Policy owner / profile user | `kkamegawa` |
+| `NUGET_USER` | GitHub `release` environment secret。現在/例の値は `kkamegawa` |
+| Repository owner | `kkamegawa` (GitHub numeric ID `1450745`) |
+| Repository | `Relaypublisher` (GitHub numeric ID `1289044691`) |
+| Workflow file | `release-publish.yml` のみ。`.github/workflows/release-publish.yml` は入力しない |
+| Environment | `release` |
+
+`NuGet/login@v1` は `NUGET_USER` を使い、GitHub OIDC の fresh token を要求します。この workflow では action の
+step 名を `nuget_login` としているため、交換された key は `steps.nuget_login.outputs.NUGET_API_KEY` で取得し、
+直後の `dotnet nuget push` の間だけ `NUGET_TEMP_API_KEY` に map します。output 名に `NUGET_API_KEY` が含まれますが、
+これは従来の保存型長期 API-key secret ではなく、一時 key です。NuGet の temporary key は最長 1 時間
+有効で、1 つの OIDC token は 1 回だけ交換できます。step output を GitHub secret に保存したり、commit したり、
+log に出したりしないでください。Trusted Publishing の受入確認完了後も従来の長期 API key が残っている場合は、
+別途承認を得てから revoke します。
+
+GitHub numeric ID は NuGet policy の受入情報です。workflow や GitHub secret に設定する値ではありません。
+
+#### Merge 後の受入確認
+
+workflow と policy の設定を repository の default branch に反映した後、次を確認します:
+
+1. 新しい draft release を publish し、`release-publish.yml` を起動して `NuGet/login` が fresh OIDC token と
+   temporary API key を取得することを確認します。保存された `NUGET_API_KEY` secret なしで nuget.org が package を
+   受け付けることを確認します。
+2. Trusted Publishing policy に GitHub owner と repository の numeric ID が表示される場合は、その ID が対象
+   repository を示すことを確認し、owner、repository、workflow file、`release` environment に対して policy が
+   active であることを確認します。
+3. 同じ release workflow を再実行します。別の fresh OIDC token を取得し、package が既に存在していても
+   `--skip-duplicate` により正常終了することを確認します。duplicate package を publish failure として扱わないことを確認します。
 
 ## 7. Production checklist
 

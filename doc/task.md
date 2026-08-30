@@ -2,6 +2,54 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-08-30: NuGet.org Trusted Publishing (OIDC) への移行
+
+**ブランチ**: `feature/131-nuget-trusted-publishing`
+
+**対応 Issue / PR**:
+
+- 親 Issue: [#131](https://github.com/kkamegawa/Relaypublisher/issues/131)
+- Workflow sub-issue: [#132](https://github.com/kkamegawa/Relaypublisher/issues/132)
+- Documentation sub-issue: [#133](https://github.com/kkamegawa/Relaypublisher/issues/133)
+- Pull request: [#135](https://github.com/kkamegawa/Relaypublisher/pull/135)
+
+### 実施内容
+
+1. `release-publish.yml` の nuget.org 認証を、保存型の長期 `NUGET_API_KEY` から GitHub OIDC +
+   `NuGet/login` v1.2.0 に変更した。Action は commit SHA
+   `8d196754b4036150537f80ac539e15c2f1028841` に固定し、push 直前に取得する一時 API key を
+   `NUGET_TEMP_API_KEY` として正確な package path の `dotnet nuget push` にだけ渡す。
+2. GitHub の `release` Environment に `NUGET_USER` を追加した。Azure Artifacts 用の4 secrets、
+   Environment protection rules、GitHub OIDC subject 設定は変更していない。保存型の
+   `NUGET_API_KEY` secret は作成していない。
+3. `doc/00-overview.md`、`doc/03-ci-github-actions.md`、`doc/05-operation.md` / `_ja.md`、
+   `doc/adr.md` を Trusted Publishing の契約に更新した。NuGet policy の owner / repository の
+   numeric ID、workflow file、environment を日英で受入値として記録した。
+4. Trusted Publishing の公式対象外である Azure Pipelines の nuget.org release sample
+   (`workflows/azure-pipelines/release-nuget-tool.yml`)と `doc/04-ci-azure-pipelines.md` の該当節を削除した。
+   Intune publish 用 Azure Pipelines sample は維持した。
+5. 親 Issue #131 と sub-issue #132 / #133 を作成し、最新 `origin/main` から独立した branch と
+   1つの PR #135 にまとめた。明示承認後、日英 Wiki plan と Home / Relaypublisher index を push した。
+
+### 検証結果
+
+- すべての workflow / sample YAML の parse に成功。
+- active workflow のすべての `uses:` が40桁 commit SHAに固定されていることを確認。
+- `secrets.NUGET_API_KEY` が0件、Azure Pipelines nuget.org release sampleファイルが存在しないことを確認。
+- `doc/05-operation.md` / `_ja.md` の対象節は、見出し2、checklist 10、表8行、merge後確認3項目で一致。
+- `git diff --check` 成功。
+- `dotnet build IntuneLobPublisher.slnx --configuration Release` 成功。既存の `CS8631` warning 2件、error 0件。
+- `dotnet test IntuneLobPublisher.slnx --configuration Release --no-build` 成功。
+  656 passed、Windows専用37 skipped、0 failed。
+- PR #135 の Ubuntu / Windows build-test、NuGet pack、3 RID single-file app job がすべて成功。
+- Wiki の英語・日本語ページ、Home / Relaypublisher index、相互言語リンクをログイン済みブラウザーで確認。
+
+### Merge 後の保留事項
+
+- 新しい version の draft release publish、3 feed の実確認、fresh OIDC交換と `--skip-duplicate` の
+  冪等性確認は、merge後に別途明示承認を得て実施する。
+- 長期 nuget.org API key が残っている場合の revoke は、実 publish 成功後に別途承認を得て実施する。
+
 ## 2026-08-24: GitHub Actions CI/CD の設計と実装 (public 化前提)
 
 **ブランチ**: `feature/add-github-actions-ci`

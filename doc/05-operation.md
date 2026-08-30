@@ -572,17 +572,62 @@ This section covers the *consumer* workflows that publish Intune apps. Relaypubl
 This applies to the Relaypublisher repository itself, not to consumer repositories.
 
 - [ ] Create the `release` GitHub environment and store the publishing secrets on it, not on the repository.
-- [ ] `NUGET_API_KEY` holds a nuget.org key scoped to package publish only.
+  Keep its existing protection rules unchanged during this migration.
+- [ ] Store the nuget.org profile name in the `NUGET_USER` environment secret. The current/example value is
+  `kkamegawa`; use the profile name, not an email address. Do not create or retain a long-lived
+  `NUGET_API_KEY` secret.
+- [ ] Configure a NuGet Trusted Publishing policy for the `relaypublisher` package under the NuGet.org account or
+  organization that owns the package.
+- [ ] In the policy, set the GitHub repository owner to `kkamegawa`, repository to `Relaypublisher`, workflow file to
+  `release-publish.yml` (file name only; omit `.github/workflows/`), and environment to `release`.
 - [ ] `AZURE_ARTIFACTS_FEED_URL` holds the feed's v3 `index.json` URL. Keep it a secret so the URL never
-      reaches the workflow logs.
+  reaches the workflow logs.
 - [ ] Create a user-assigned managed identity and copy its client ID, tenant ID, and subscription ID into
-      `AZURE_ARTIFACTS_CLIENT_ID`, `AZURE_ARTIFACTS_TENANT_ID`, and `AZURE_ARTIFACTS_SUBSCRIPTION_ID`.
+  `AZURE_ARTIFACTS_CLIENT_ID`, `AZURE_ARTIFACTS_TENANT_ID`, and `AZURE_ARTIFACTS_SUBSCRIPTION_ID`.
 - [ ] Configure a federated identity credential on that managed identity that trusts this repository's
-      `release` environment, with audience `api://AzureADTokenExchange`.
+  `release` environment, with audience `api://AzureADTokenExchange`.
 - [ ] In Azure DevOps, add the managed identity to the target project's **Contributors** group so it can
-      push to the feed.
+  push to the feed.
 - [ ] Confirm `release-publish.yml` is the only workflow with `packages: write` and `id-token: write`.
 - [ ] Confirm `ci.yml` references no secrets, so pull requests from forks still pass.
+
+#### NuGet Trusted Publishing values
+
+The policy owner and the profile passed to `NuGet/login` are related but distinct fields. For this repository, both are
+the individual NuGet.org profile `kkamegawa`. `NUGET_USER` is a NuGet profile name, not an email address or a GitHub
+numeric ID.
+
+| Item | Value or handling |
+| --- | --- |
+| Policy owner / profile user | `kkamegawa` |
+| `NUGET_USER` | GitHub `release` environment secret; current/example value `kkamegawa` |
+| Repository owner | `kkamegawa` (GitHub numeric ID `1450745`) |
+| Repository | `Relaypublisher` (GitHub numeric ID `1289044691`) |
+| Workflow file | `release-publish.yml` only; do not enter `.github/workflows/release-publish.yml` |
+| Environment | `release` |
+
+`NuGet/login@v1` uses `NUGET_USER` and requests a fresh GitHub OIDC token. In this workflow the action step is named
+`nuget_login`, so the exchanged key is available as `steps.nuget_login.outputs.NUGET_API_KEY` and is mapped to
+`NUGET_TEMP_API_KEY` only for the following `dotnet nuget push`. The output name contains `NUGET_API_KEY`, but this is
+a temporary key, not the old stored long-lived API-key secret. NuGet temporary keys are valid for up to one hour,
+and each OIDC token can be exchanged only once. Do not store the step output in a GitHub secret, commit it, or print it
+in a log. If a legacy long-lived API key still exists after the Trusted Publishing acceptance check passes, obtain
+separate approval before revoking it.
+
+The GitHub numeric IDs are NuGet policy acceptance information. They are not values to enter into the workflow or
+GitHub secrets.
+
+#### Post-merge acceptance checks
+
+Run these checks only after the workflow and policy configuration are present on the repository's default branch:
+
+1. Publish a new draft release and start `release-publish.yml` so `NuGet/login` obtains a fresh OIDC token and temporary
+   API key. Confirm that the package is accepted by nuget.org without a stored `NUGET_API_KEY` secret.
+2. Confirm the Trusted Publishing policy shows numeric GitHub owner and repository IDs, if displayed, and that those IDs
+   identify the intended repository. Confirm that the policy is active for the intended owner, repository, workflow file,
+   and `release` environment.
+3. Re-run the same release workflow. It must obtain another fresh OIDC token and complete successfully with
+   `--skip-duplicate` when the package already exists; a duplicate package must not be treated as a publish failure.
 
 ## 7. Production Checklist
 
