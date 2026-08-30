@@ -2,6 +2,40 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-08-30: macOS Architecture 移行時の履歴 content 再 publish を防止
+
+**対応 Issue / PR**: [#122](https://github.com/kkamegawa/Relaypublisher/issues/122) /
+[#126](https://github.com/kkamegawa/Relaypublisher/pull/126)
+
+PR #126 の review で、旧 version folder の明示 architecture entry と、省略形の新 `universal` entry が
+同じ `DisplayName` を持つ場合、identity 単位の最高 version 選択を両方が通過し、処理順によって旧 entry が
+DisplayName fallback で同じ Intune app を再 adopt して downgrade guard を回避できる問題が見つかった。
+
+ユーザー確認済みの collapse 方針に基づき、次を実施した。
+
+- `doc/00-overview.md` §6.8、`doc/issues/issue-023-macos-optional-architecture.md`、
+  `doc/05-operation.md` / `_ja`、`doc/adr-phase-2.md` に migration collision の選択仕様を反映。
+- `PublishCommand.SelectHighestVersions` の identity 単位選択後に、同じ
+  `PackageIdentifier + Platform + DisplayName`、異なる実効 architecture、かつ `universal` を含む macOS
+  entry を最高 `PackageVersion` の 1 件へ collapse。同一 version では移行先の `universal` を優先。
+- `universal` を含まない x64/arm64、および異なる `DisplayName` は別 entry のまま維持する回帰 test を追加。
+
+### 検証結果
+
+```
+dotnet format IntuneLobPublisher.slnx --verify-no-changes --no-restore
+→ 変更なし。
+
+dotnet build IntuneLobPublisher.slnx --configuration Release --no-restore -m:1
+→ ビルドに成功しました。0 warning、0 error。
+
+dotnet test IntuneLobPublisher.slnx --configuration Release --no-build --no-restore -m:1
+→ 成功。失敗: 0、合格: 788、スキップ: 37、合計: 825。
+
+git diff --check
+→ 問題なし。
+```
+
 ## 2026-08-29: macOS manifest の Architecture を任意化
 
 **対応 Issue**: [#122](https://github.com/kkamegawa/Relaypublisher/issues/122)(サブ issue:

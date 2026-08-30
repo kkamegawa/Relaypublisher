@@ -288,9 +288,15 @@ internal static class PublishCommand
         PackageArtifacts? VerifiedArtifacts = null,
         IReadOnlyList<PkgInspectionWarning>? Warnings = null);
 
+    private readonly record struct MacOsMigrationTarget(
+        string PackageIdentifier,
+        string Platform,
+        string DisplayName);
+
     /// <summary>
     /// When several manifests target the same app identity, only the highest PackageVersion is
-    /// published (doc/00-overview.md 6.8); the rest are reported as skipped.
+    /// published. macOS universal migration aliases that share the DisplayName fallback target are
+    /// then collapsed by version too (doc/00-overview.md 6.8); the rest are reported as skipped.
     /// </summary>
     internal static List<PublishEntry> SelectHighestVersions(
         IReadOnlyList<IntuneLobPublisher.Core.Validation.LoadedManifest> manifests)
@@ -332,8 +338,85 @@ internal static class PublishCommand
             }
         }
 
-        return [.. byIdentity.Values];
+        return CollapseMacOsArchitectureMigrations([.. byIdentity.Values]);
     }
+
+    /// <summary>
+    /// Collapses historical explicit-architecture entries with their macOS universal migration target
+    /// before preflight or Graph access. DisplayName is the resolver's fallback key, so publishing both
+    /// entries could otherwise update the same Intune app in input order and leave historical content active.
+    /// </summary>
+    private static List<PublishEntry> CollapseMacOsArchitectureMigrations(List<PublishEntry> entries)
+    {
+        var migrationGroups = entries
+            .Where(entry => string.Equals(entry.App.Platform, "macos", StringComparison.Ordinal))
+            .GroupBy(entry => new MacOsMigrationTarget(
+                entry.Loaded.Manifest.PackageIdentifier!, entry.App.Platform!, entry.App.DisplayName!))
+            .Where(group =>
+            {
+                var architectures = group
+                    .Select(entry => AppArchitecture.Resolve(entry.App)!)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                return architectures.Count > 1
+                    && architectures.Contains(AppArchitecture.MacOsDefault, StringComparer.OrdinalIgnoreCase);
+            })
+            .ToList();
+
+        if (migrationGroups.Count == 0)
+        {
+            return entries;
+        }
+
+        var winnerByTarget = new Dictionary<MacOsMigrationTarget, PublishEntry>();
+        foreach (var group in migrationGroups)
+        {
+            var winner = group.First();
+            foreach (var candidate in group.Skip(1))
+            {
+                var comparison = PublishGuard.CompareVersions(
+                    candidate.Loaded.Manifest.PackageVersion!, winner.Loaded.Manifest.PackageVersion!);
+                if (comparison > 0 || (comparison == 0 && IsUniversal(candidate) && !IsUniversal(winner)))
+                {
+                    winner = candidate;
+                }
+            }
+
+            winnerByTarget[group.Key] = winner;
+            foreach (var loser in group.Where(entry => !ReferenceEquals(entry, winner)))
+            {
+                Console.WriteLine(
+                    $"Skipping {group.Key.PackageIdentifier} {group.Key.Platform}-{AppArchitecture.Resolve(loser.App)} " +
+                    $"version {loser.Loaded.Manifest.PackageVersion} from '{loser.Loaded.Path}' " +
+                    $"(collapsed into macOS universal migration target {group.Key.Platform}-{AppArchitecture.Resolve(winner.App)} " +
+                    $"version {winner.Loaded.Manifest.PackageVersion} from '{winner.Loaded.Path}' for DisplayName '{group.Key.DisplayName}').");
+            }
+        }
+
+        var emittedTargets = new HashSet<MacOsMigrationTarget>();
+        var collapsed = new List<PublishEntry>(entries.Count);
+        foreach (var entry in entries)
+        {
+            var target = new MacOsMigrationTarget(
+                entry.Loaded.Manifest.PackageIdentifier!, entry.App.Platform!, entry.App.DisplayName!);
+            if (!winnerByTarget.TryGetValue(target, out var winner))
+            {
+                collapsed.Add(entry);
+                continue;
+            }
+
+            if (emittedTargets.Add(target))
+            {
+                collapsed.Add(winner);
+            }
+        }
+
+        return collapsed;
+    }
+
+    private static bool IsUniversal(PublishEntry entry)
+        => string.Equals(
+            AppArchitecture.Resolve(entry.App), AppArchitecture.MacOsDefault, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Publishes entries one by one, continuing on per-app failures so one broken app does not block

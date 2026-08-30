@@ -310,6 +310,7 @@ manifest はバージョン別フォルダで管理するが、app identity は�
 
 - publish 時、Intune 側 metadata の `packageVersion` と manifest の `PackageVersion` を比較し、**バージョンが下がる場合は既定で skip + warning** とする。意図的なロールバックは `--allow-downgrade` で明示する。
 - 同一 push で同じ `PackageIdentifier + Platform + Architecture` の複数バージョンが changed になった場合、**最高バージョンのみ**を処理し、他は skip としてログに出す。
+- 上記の identity 単位の選択後、macOS の同じ `PackageIdentifier + Platform + DisplayName` に異なる実効 architecture が残り、その中に `universal` が含まれる場合は、明示 architecture から `universal` への移行 alias として扱う。Graph 呼び出し前に **最高 `PackageVersion` の 1 entry へ collapse** し、同一バージョンなら移行先の `universal` を優先する。これにより旧 version folder の明示 architecture entry が DisplayName fallback で同じ Intune app を再 adopt し、downgrade guard を回避して履歴 content を再 publish することを防ぐ。`universal` を含まない x64/arm64 の組み合わせは collapse しない。
 - 旧バージョンの manifest フォルダは削除せず残してよい(履歴として機能する)。ただし changed にならない限り処理対象にはならない。
 - 既存 app のバージョンアップは、新しいバージョンフォルダを追加する(既存フォルダを上書きしない)のが正規の手順である。運用手順は doc/05-operation.md §4c を参照。
 

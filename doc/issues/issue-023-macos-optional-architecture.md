@@ -89,7 +89,7 @@ YAML に書かれたとおり(省略時は `null`)であり、resolver は publi
   判定する。macOS の 2 entry がともに `Architecture` を省略している場合、あるいは片方が省略・片方が
   `Architecture: universal` 明示の場合も、重複 identity として検出する。
 
-### 既存 app からの移行(運用上の注意、コード変更なし)
+### 既存 app からの移行
 
 `Architecture: arm64` で publish 済みの macOS app の manifest から `Architecture` を削除すると、identity が
 `arm64` → `universal` に変わる。既存の app 解決ルールの組み合わせで挙動が説明できる(doc/05-operation.md に
@@ -102,6 +102,15 @@ YAML に書かれたとおり(省略時は `null`)であり、resolver は publi
    1 回だけ再 package / 再 upload が発生する。
 4. 同時に `DisplayName` も変えると fallback 照合が外れ、doc/06-troubleshooting.md に既出の identity
    drift と同じ形で新規 Intune app が作られる。
+
+旧 version folder を残したまま全 manifest を選択すると、旧 `arm64` entry と新 `universal` entry は
+identity が異なるため、identity 単位の最高 version 選択だけでは両方が publish 対象に残る。両者の
+`DisplayName` が同じ場合、処理順によって旧 entry が DisplayName fallback で同じ app を再 adopt し、
+metadata が無い扱いで downgrade guard を回避できる。これを防ぐため、publish は identity 単位の選択後、
+同じ `PackageIdentifier + Platform + DisplayName`、異なる実効 architecture、かつ `universal` を含む macOS
+候補を移行 alias として最高 `PackageVersion` の 1 entry へ collapse する。同一 version では `universal` を
+優先し、`universal` を含まない x64/arm64 の組み合わせは対象外とする。この選択は preflight と Graph 呼び出し
+より前に完了する。
 
 ## 3 つのサブ issue
 
@@ -139,3 +148,7 @@ YAML に書かれたとおり(省略時は `null`)であり、resolver は publi
   `architecture` が `"universal"` になることを検証する。
 - staging / packaging が省略形 entry を `macos-universal` として扱い、staging 結果と manifest entry の
   突合が実効値ベースで成功することを検証する。
+- 同じ `PackageIdentifier + Platform + DisplayName` の旧明示 architecture / 新 `universal` entry が同時に
+  publish 対象となっても、入力順に関係なく最高 `PackageVersion` の 1 entry に collapse されること、同一
+  version では `universal` が選ばれること、`universal` を含まない x64/arm64 は別 entry のままであることを
+  検証する。

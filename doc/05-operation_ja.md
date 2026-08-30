@@ -452,6 +452,13 @@ app 解決ルール(§6.1)がそのまま適用される。
    作られる — doc/06-troubleshooting.md に既出の identity drift と同じ障害モード。同じ publish で
    両方を同時に変えないこと。
 
+全 manifest を対象にした実行で、`arm64` や `x64` を明示した履歴 entry も選択された場合、`publish` は
+preflight および Graph 呼び出しより前に移行 alias を collapse する。同じ `PackageIdentifier`・platform・
+完全一致する `DisplayName` を持ち、実効 architecture が異なり、かつ `universal` を含む entry 群は、最高
+`PackageVersion` の 1 件に絞られる。同一 version では `universal` を優先する。これにより、旧版の明示
+architecture entry が DisplayName fallback で同じ app を再 adopt し、履歴 content を再 publish することを
+防ぐ。`universal` を含まない x64/arm64 の組み合わせは別 entry のまま維持する。
+
 この切り替えを自動化する移行ツールは提供しない。manifest を編集して行う、operator 主導の一回限りの
 再 package / 再 upload である。
 

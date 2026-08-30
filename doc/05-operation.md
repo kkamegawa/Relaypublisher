@@ -459,6 +459,14 @@ Switching an already-published macOS app's manifest entry from an explicit `Arch
    creates a second Intune app - the same identity-drift failure mode covered in
    doc/06-troubleshooting.md. Change one or the other, not both, in the same publish.
 
+If a full-manifest run also selects historical entries that still declare `arm64` or `x64`, `publish`
+collapses the migration aliases before preflight or any Graph call. Entries with the same
+`PackageIdentifier`, platform, and exact `DisplayName`, different effective architectures, and a
+`universal` member are reduced to the highest `PackageVersion`; an equal-version tie prefers
+`universal`. This prevents an older explicit-architecture entry from re-adopting the same app through
+the DisplayName fallback and republishing historical content. An x64/arm64 set without `universal`
+remains separate.
+
 There is no automated migration tool for this switch; it is a manual, one-time re-package/re-upload that
 operators opt into by editing the manifest.
 
