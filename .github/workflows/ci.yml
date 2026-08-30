@@ -1,4 +1,5 @@
-# Build, test and produce distributable artifacts for every change targeting main.
+# Build, test and produce distributable artifacts for every pull request (any base branch, including
+# the intermediate branches used by stacked PRs) and every push to main.
 #
 # This workflow must stay secret-free: the repository is intended to become public, and
 # pull requests from forks receive neither secrets nor a writable GITHUB_TOKEN.
@@ -7,8 +8,7 @@ name: CI
 
 on:
   pull_request:
-    branches:
-      - main
+
   push:
     branches:
       - main
