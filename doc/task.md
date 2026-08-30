@@ -19,6 +19,9 @@ DisplayName fallback で同じ Intune app を再 adopt して downgrade guard �
   `PackageIdentifier + Platform + DisplayName`、異なる実効 architecture、かつ `universal` を含む macOS
   entry を最高 `PackageVersion` の 1 件へ collapse。同一 version では移行先の `universal` を優先。
 - `universal` を含まない x64/arm64、および異なる `DisplayName` は別 entry のまま維持する回帰 test を追加。
+- PR #126 の Copilot 再 review で指摘された #124 の受入条件漏れを補完。semantic warning を対話的に拒否する
+  preflight 経路へ `Architecture` 省略 entry を通し、failure result の `architecture` が `"universal"` に
+  解決されることを固定した。実装は既に `AppArchitecture.Resolve` を使用していたため、test のみを変更。
 
 ### 検証結果
 
@@ -31,6 +34,9 @@ dotnet build IntuneLobPublisher.slnx --configuration Release --no-restore -m:1
 
 dotnet test IntuneLobPublisher.slnx --configuration Release --no-build --no-restore -m:1
 → 成功。失敗: 0、合格: 788、スキップ: 37、合計: 825。
+
+dotnet test tests/IntuneLobPublisher.Core.Tests/IntuneLobPublisher.Core.Tests.csproj --configuration Release --filter FullyQualifiedName~PublishCommandPreflightTests --no-restore -m:1
+→ 成功。失敗: 0、合格: 6、スキップ: 0、合計: 6。
 
 git diff --check
 → 問題なし。

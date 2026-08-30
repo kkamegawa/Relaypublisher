@@ -145,14 +145,14 @@ public sealed class PublishCommandPreflightTests
     }
 
     [TestMethod]
-    public async Task RunPreflightAsync_WarningDeclinedInteractively_AbortsWithEmptyEntries()
+    public async Task RunPreflightAsync_WarningDeclinedOmittedArchitecture_AbortsWithUniversalResult()
     {
         var inspector = new FakeInspector(
         [
             new PkgBundleIdentity("com.contoso.tool", "1.2.3", null, "PackageInfo"),
             new PkgBundleIdentity("com.contoso.helper", "1.0", null, "PackageInfo"),
         ]);
-        var entry = await CreateMacOsEntryAsync("Contoso.Mac", "content", inspector);
+        var entry = await CreateMacOsEntryAsync("Contoso.Mac", "content", inspector, architecture: null);
 
         var result = await RunAsync([entry], _packageDirectory, _repoRoot, inspector, interactive: true, confirm: false);
 
@@ -160,6 +160,7 @@ public sealed class PublishCommandPreflightTests
         Assert.IsEmpty(result.Entries);
         Assert.IsNotNull(result.AbortResultEntries);
         Assert.HasCount(1, result.AbortResultEntries);
+        Assert.AreEqual("universal", result.AbortResultEntries[0].Architecture);
         CollectionAssert.Contains(result.AbortResultEntries[0].WarningCodes, "MultipleBundlesWithoutExplicitPrimary");
         Assert.IsNull(result.WarningsAcknowledgedViaForce);
         // null, not false: false would misleadingly read as "an interactive [y/N] accepted this",
