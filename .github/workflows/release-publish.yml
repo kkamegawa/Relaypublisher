@@ -79,7 +79,7 @@ jobs:
           EXPECTED: ${{ steps.resolve.outputs.package }}
         run: |
           set -euo pipefail
-          ASSETS="$(gh release view "$TAG_NAME" --json assets --jq '.assets[].name | select(endswith(".nupkg"))')"
+          ASSETS="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG_NAME}" --jq '.assets[].name | select(endswith(".nupkg"))')"
           if [ "$ASSETS" != "$EXPECTED" ]; then
             echo "::error::expected exactly one package asset named ${EXPECTED}, found:"
             printf '%s\n' "$ASSETS"
