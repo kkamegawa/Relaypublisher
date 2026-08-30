@@ -558,20 +558,20 @@ Apps:
 これは Relaypublisher repository 自身に対する項目です。利用者 repository には適用しません。
 
 - [ ] `release` GitHub environment を作成し、publishing secrets を repository ではなくこの environment に置く。
-      この移行では既存の protection rules を変更しない。
+  この移行では既存の protection rules を変更しない。
 - [ ] nuget.org の profile name を `NUGET_USER` environment secret に保存する。現在/例の値は
-      `kkamegawa` とし、email address ではなく profile name を使う。長期保存する `NUGET_API_KEY` secret は
-      作成または保持しない。
+  `kkamegawa` とし、email address ではなく profile name を使う。長期保存する `NUGET_API_KEY` secret は
+  作成または保持しない。
 - [ ] `relaypublisher` package を所有する NuGet.org account または organization に、NuGet Trusted Publishing
-      policy を設定する。
+  policy を設定する。
 - [ ] policy の GitHub repository owner は `kkamegawa`、repository は `Relaypublisher`、workflow file は
-      `release-publish.yml`（file name のみ。`.github/workflows/` は含めない）、environment は `release` にする。
+  `release-publish.yml`（file name のみ。`.github/workflows/` は含めない）、environment は `release` にする。
 - [ ] `AZURE_ARTIFACTS_FEED_URL` に feed の v3 `index.json` URL を入れる。URL が workflow のログに出ないよう
-      必ず secret にする。
+  必ず secret にする。
 - [ ] user-assigned managed identity を作成し、その client ID / tenant ID / subscription ID を
-      `AZURE_ARTIFACTS_CLIENT_ID` / `AZURE_ARTIFACTS_TENANT_ID` / `AZURE_ARTIFACTS_SUBSCRIPTION_ID` に設定する。
+  `AZURE_ARTIFACTS_CLIENT_ID` / `AZURE_ARTIFACTS_TENANT_ID` / `AZURE_ARTIFACTS_SUBSCRIPTION_ID` に設定する。
 - [ ] その managed identity に、この repository の `release` environment を信頼する federated identity
-      credential を audience `api://AzureADTokenExchange` で設定する。
+  credential を audience `api://AzureADTokenExchange` で設定する。
 - [ ] Azure DevOps 側で、その managed identity を対象プロジェクトの **Contributors** グループに追加する。
 - [ ] `packages: write` と `id-token: write` を持つ workflow が `release-publish.yml` だけであることを確認する。
 - [ ] `ci.yml` が secrets を一切参照していないことを確認する（fork からの PR を通すため）。

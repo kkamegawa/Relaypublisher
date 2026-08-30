@@ -572,22 +572,22 @@ This section covers the *consumer* workflows that publish Intune apps. Relaypubl
 This applies to the Relaypublisher repository itself, not to consumer repositories.
 
 - [ ] Create the `release` GitHub environment and store the publishing secrets on it, not on the repository.
-      Keep its existing protection rules unchanged during this migration.
+  Keep its existing protection rules unchanged during this migration.
 - [ ] Store the nuget.org profile name in the `NUGET_USER` environment secret. The current/example value is
-      `kkamegawa`; use the profile name, not an email address. Do not create or retain a long-lived
-      `NUGET_API_KEY` secret.
+  `kkamegawa`; use the profile name, not an email address. Do not create or retain a long-lived
+  `NUGET_API_KEY` secret.
 - [ ] Configure a NuGet Trusted Publishing policy for the `relaypublisher` package under the NuGet.org account or
-      organization that owns the package.
+  organization that owns the package.
 - [ ] In the policy, set the GitHub repository owner to `kkamegawa`, repository to `Relaypublisher`, workflow file to
-      `release-publish.yml` (file name only; omit `.github/workflows/`), and environment to `release`.
+  `release-publish.yml` (file name only; omit `.github/workflows/`), and environment to `release`.
 - [ ] `AZURE_ARTIFACTS_FEED_URL` holds the feed's v3 `index.json` URL. Keep it a secret so the URL never
-      reaches the workflow logs.
+  reaches the workflow logs.
 - [ ] Create a user-assigned managed identity and copy its client ID, tenant ID, and subscription ID into
-      `AZURE_ARTIFACTS_CLIENT_ID`, `AZURE_ARTIFACTS_TENANT_ID`, and `AZURE_ARTIFACTS_SUBSCRIPTION_ID`.
+  `AZURE_ARTIFACTS_CLIENT_ID`, `AZURE_ARTIFACTS_TENANT_ID`, and `AZURE_ARTIFACTS_SUBSCRIPTION_ID`.
 - [ ] Configure a federated identity credential on that managed identity that trusts this repository's
-      `release` environment, with audience `api://AzureADTokenExchange`.
+  `release` environment, with audience `api://AzureADTokenExchange`.
 - [ ] In Azure DevOps, add the managed identity to the target project's **Contributors** group so it can
-      push to the feed.
+  push to the feed.
 - [ ] Confirm `release-publish.yml` is the only workflow with `packages: write` and `id-token: write`.
 - [ ] Confirm `ci.yml` references no secrets, so pull requests from forks still pass.
 
