@@ -604,21 +604,29 @@ public class XarPkgBundleInspector : IPkgBundleInspector
 
         using var bounded = new BoundedReadStream(archive, entry.Length);
         Stream input = bounded;
-        GZipStream? gzip = null;
+        // The XAR spec defines exactly three heap-entry compression values: none, gzip, bzip2. A switch
+        // expresses that closed set at a glance; anything outside it is a hard fail, not a set that is
+        // expected to grow (doc/00-overview.md, doc/adr-phase-2.md 2026-08-30, issue #127).
+        Stream? decompressor = null;
         try
         {
-            if (entry.Encoding is null || entry.Encoding.Length == 0 || entry.Encoding == "application/octet-stream")
+            switch (entry.Encoding)
             {
-                // The bounded stream is already the input.
-            }
-            else if (entry.Encoding == "application/x-gzip")
-            {
-                gzip = new GZipStream(bounded, CompressionMode.Decompress, leaveOpen: true);
-                input = gzip;
-            }
-            else
-            {
-                throw new PkgInspectionException($"The XAR metadata entry '{entry.Name}' uses unsupported compression '{entry.Encoding}'.");
+                case null:
+                case "":
+                case "application/octet-stream":
+                    // The bounded stream is already the input.
+                    break;
+                case "application/x-gzip":
+                    decompressor = new GZipStream(bounded, CompressionMode.Decompress, leaveOpen: true);
+                    input = decompressor;
+                    break;
+                case "application/x-bzip2":
+                    decompressor = new Bzip2DecompressionStream(bounded);
+                    input = decompressor;
+                    break;
+                default:
+                    throw new PkgInspectionException($"The XAR metadata entry '{entry.Name}' uses unsupported compression '{entry.Encoding}'.");
             }
 
             var initialCapacity = entry.UncompressedLength is > 0 and <= MaxMetadataEntryBytes
@@ -650,7 +658,7 @@ public class XarPkgBundleInspector : IPkgBundleInspector
                 throw new PkgInspectionException($"The XAR metadata entry '{entry.Name}' length does not match its declared uncompressed size.");
             }
 
-            if (gzip is not null && bounded.Remaining != 0)
+            if (decompressor is not null && bounded.Remaining != 0)
             {
                 throw new PkgInspectionException($"The XAR metadata entry '{entry.Name}' contains trailing compressed bytes.");
             }
@@ -671,7 +679,7 @@ public class XarPkgBundleInspector : IPkgBundleInspector
         }
         finally
         {
-            gzip?.Dispose();
+            decompressor?.Dispose();
         }
     }
 
