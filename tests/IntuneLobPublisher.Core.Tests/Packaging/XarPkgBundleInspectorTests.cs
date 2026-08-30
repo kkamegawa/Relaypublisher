@@ -238,6 +238,39 @@ public sealed class XarPkgBundleInspectorTests
     }
 
     [TestMethod]
+    public async Task Inspect_DistributionNestedBundleVersionWrapper_ReturnsBundleFacts()
+    {
+        // productbuild-generated Distribution XML (verified against a real Microsoft-shipped .pkg,
+        // issue #127) nests <bundle> records inside an attribute-less <bundle-version> wrapper under
+        // <pkg-ref>, unlike the older self-contained shape covered by
+        // Inspect_DistributionBundleVersion_ReturnsBundleFacts above. The wrapper itself must be
+        // transparent (not treated as a bundle-identity element), while its children still go through
+        // the normal <bundle> path - including the existing .app-path filter, which excludes the nested
+        // .bundle resource below exactly as it would for a PackageInfo entry.
+        var pkg = BuildXar(
+        [
+            Entry(
+                "Distribution",
+                "<installer-gui-script>" +
+                "<pkg-ref id=\"com.contoso.app\">" +
+                "<bundle-version>" +
+                "<bundle CFBundleShortVersionString=\"1.0\" CFBundleVersion=\"100\" id=\"com.contoso.app\" path=\"Contoso.app\" />" +
+                "<bundle CFBundleShortVersionString=\"2.0\" id=\"org.example.resources\" path=\"Contoso.app/Contents/Resources/Assets.bundle\" />" +
+                "</bundle-version>" +
+                "</pkg-ref>" +
+                "</installer-gui-script>"),
+        ]);
+
+        var result = await InspectAsync(pkg);
+
+        Assert.AreEqual(1, result.Bundles.Count);
+        Assert.AreEqual("com.contoso.app", result.Bundles[0].BundleId);
+        Assert.AreEqual("1.0", result.Bundles[0].BundleVersion);
+        Assert.AreEqual("100", result.Bundles[0].BundleBuildVersion);
+        Assert.AreEqual("Distribution", result.Bundles[0].SourceEntry);
+    }
+
+    [TestMethod]
     public async Task Inspect_PackageInfoAndDistribution_DeduplicatesWithPackageInfoPriority()
     {
         var pkg = BuildXar(
@@ -658,7 +691,10 @@ public sealed class XarPkgBundleInspectorTests
         {
             var physical = entry.Compression switch
             {
-                HeapCompression.Gzip => Gzip(entry.Content),
+                // xar's "application/x-gzip" heap-entry encoding is raw zlib despite the name (verified
+                // against real xar-produced .pkg files, issue #127) - reuse the same Zlib() helper the
+                // TOC compression below already uses, not a real-GZIP-format helper.
+                HeapCompression.Gzip => Zlib(entry.Content),
                 HeapCompression.Bzip2 => Bzip2(entry.Content),
                 _ => entry.Content,
             };
@@ -709,17 +745,6 @@ public sealed class XarPkgBundleInspectorTests
         using (var zlib = new ZLibStream(output, CompressionLevel.SmallestSize, leaveOpen: true))
         {
             zlib.Write(content);
-        }
-
-        return output.ToArray();
-    }
-
-    private static byte[] Gzip(byte[] content)
-    {
-        using var output = new MemoryStream();
-        using (var gzip = new GZipStream(output, CompressionLevel.SmallestSize, leaveOpen: true))
-        {
-            gzip.Write(content);
         }
 
         return output.ToArray();

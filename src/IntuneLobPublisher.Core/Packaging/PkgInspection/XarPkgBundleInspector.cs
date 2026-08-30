@@ -512,6 +512,20 @@ public class XarPkgBundleInspector : IPkgBundleInspector
                             continue;
                         }
 
+                        // Newer Distribution XML (e.g. from productbuild) nests the actual per-item
+                        // <bundle> records inside an attribute-less <bundle-version> wrapper under
+                        // <pkg-ref>, rather than declaring identity directly on <bundle-version> itself
+                        // (the older, self-contained shape this parser originally targeted:
+                        // <bundle-version id="..." CFBundleShortVersionString="..." />, still handled by
+                        // the branch below). Treat an identity-less <bundle-version> as a transparent
+                        // wrapper - unlike required-bundles, its children are not suppressed, because
+                        // those nested <bundle> elements are genuine records that must still be read
+                        // (verified against a real Microsoft-shipped .pkg, issue #127).
+                        if (sourceEntry == "Distribution" && reader.LocalName == "bundle-version" && !HasIdentityAttribute(reader))
+                        {
+                            continue;
+                        }
+
                         var isBundleElement = reader.LocalName == "bundle"
                             || (sourceEntry == "Distribution" && reader.LocalName == "bundle-version");
                         if (!isBundleElement || requiredBundlesDepths.Count != 0)
@@ -618,7 +632,15 @@ public class XarPkgBundleInspector : IPkgBundleInspector
                     // The bounded stream is already the input.
                     break;
                 case "application/x-gzip":
-                    decompressor = new GZipStream(bounded, CompressionMode.Decompress, leaveOpen: true);
+                    // Despite the "gzip" name, xar's application/x-gzip heap-entry encoding is raw zlib
+                    // (RFC 1950: a 2-byte zlib header, e.g. 0x78 0xda, then deflate, then an Adler-32
+                    // trailer) - not the GZIP file format (RFC 1952: 0x1f 0x8b magic, per-file header,
+                    // then deflate, then a CRC-32 + size trailer) that GZipStream expects. Verified
+                    // against real xar-produced .pkg heap entries (issue #127): GZipStream fails those
+                    // with "unsupported compression method" because it is looking for a gzip header that
+                    // was never there. ZLibStream is correct here, matching ReadTocAsync's TOC
+                    // decompression above, which has always used ZLibStream for the same reason.
+                    decompressor = new ZLibStream(bounded, CompressionMode.Decompress, leaveOpen: true);
                     input = decompressor;
                     break;
                 case "application/x-bzip2":
@@ -718,6 +740,14 @@ public class XarPkgBundleInspector : IPkgBundleInspector
 
         return null;
     }
+
+    /// <summary>True when the current element carries one of the bundle-identity attribute names.</summary>
+    private static bool HasIdentityAttribute(XmlReader reader)
+        => FirstNonBlank(
+            reader.GetAttribute("CFBundleIdentifier"),
+            reader.GetAttribute("id"),
+            reader.GetAttribute("bundle-id"),
+            reader.GetAttribute("identifier")) is not null;
 
     private static int ReadBoundedLength(ulong value, int maximum, string description)
     {
