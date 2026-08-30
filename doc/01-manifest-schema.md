@@ -373,10 +373,12 @@ artifact の実ファイルを再ハッシュしてから再 inspection する�
 PKG(xar アーカイブ)の inspection は XAR header、compressed TOC、TOC が指す heap entry を bounded reader で読む。
 TOC の `Distribution` / `PackageInfo` entry 本体から `<bundle id="..." CFBundleShortVersionString="..."
 CFBundleVersion="...">` を読み取り、同梱 bundle 一覧(bundle id + version)を検査する。Payload(cpio.gz)の展開や
-`pkgutil` への依存は不要で、.NET 標準ライブラリだけを使用する。compressed TOC は 16 MiB、decompressed TOC は
-64 MiB、1 heap entry は 16 MiB、bundle は 4,096 件、XML depth は 64 を上限とする。DTD/外部 entity は禁止する。
-未知の compression、header/offset/length の不整合、切り詰め、展開・XMLエラー、上限超過は hard fail とし、
-`--force` でも回避できない。
+`pkgutil` への依存は不要で、完全な managed 実装(Linux/Windows の CI runner でも動く)。heap entry の
+compression は XAR 仕様の `none` / `gzip` / `bzip2` に対応する。bzip2 は .NET の BCL に decompressor が無いため、
+MIT license の `SharpZipLib` を専用 adapter 越しにのみ使う(issue #127、`doc/adr-phase-2.md`)。compressed TOC は
+16 MiB、decompressed TOC は 64 MiB、1 heap entry は 16 MiB、bundle は 4,096 件、XML depth は 64 を上限とする。
+DTD/外部 entity は禁止する。`none`/`gzip`/`bzip2` 以外の compression、header/offset/length の不整合、切り詰め、
+展開・XMLエラー、上限超過は hard fail とし、`--force` でも回避できない。
 
 検査の結果、次のいずれかに該当すれば semantic warning とする。
 

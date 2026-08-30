@@ -430,10 +430,11 @@ macOS の `pkgutil` への依存は持たない。
 unit test、manifestとの突合 test、CLI の preflight test で再利用できる。
 
 検査の上限は実装で固定し、XAR header、offset/length の checked arithmetic、TOC/XML の最大バイト数、XML の
-深さ・要素数、bundle 一覧の最大件数、cancellation を検証する。header/offset の不整合、truncated archive、
-未対応 compression、invalid UTF-8/XML、DTD/外部 entity、必要な `Distribution` / `PackageInfo` を読めない場合は
-**hard error** とし、`--force` で回避できない。重複する bundle ID、曖昧な `PrimaryBundleId`、metadata の不正、
-artifact の checksum 不一致も hard error とする。
+深さ・要素数、bundle 一覧の最大件数、cancellation を検証する。heap entry の compression は `none`/`gzip`/`bzip2`
+に対応する(bzip2 は `SharpZipLib` を専用 adapter 越しに使う、issue #127)。header/offset の不整合、
+truncated archive、上記 3 種以外の compression、invalid UTF-8/XML、DTD/外部 entity、必要な `Distribution` /
+`PackageInfo` を読めない場合は **hard error** とし、`--force` で回避できない。重複する bundle ID、曖昧な
+`PrimaryBundleId`、metadata の不正、artifact の checksum 不一致も hard error とする。
 
 manifest との突合で発生する `MultipleBundlesWithoutExplicitPrimary`、`ManifestBundleNotFound`、
 `ManifestBundleVersionMismatch` は semantic warning として扱う。`IgnoreAppVersion: true` の場合、version mismatch
@@ -766,8 +767,9 @@ Tasks:
 
 Acceptance criteria:
 
-- A source checksum mismatch, truncated/malformed XAR, unsupported compression, invalid metadata, artifact rehash
-  mismatch, or report mismatch fails with zero Graph writes and cannot be bypassed by `--force`.
+- A source checksum mismatch, truncated/malformed XAR, compression other than `none`/`gzip`/`bzip2`, invalid
+  metadata, artifact rehash mismatch, or report mismatch fails with zero Graph writes and cannot be bypassed
+  by `--force`.
 - Package and publish use the same content SHA256 and inspector version; publish never re-downloads a source.
 - A multi-entry publish that is declined on a later item performs no Graph write for earlier items.
 - The Graph payload contains the selected primary in the documented pkg/LOB fields, including LOB top-level `bundleId`

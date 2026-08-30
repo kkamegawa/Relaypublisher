@@ -298,12 +298,15 @@ Publish が package metadata missing を報告した場合:
 `validate` は package を download せず、XAR 内容も検査しません。そのため `package` または `publish` で初めて発生する失敗は、source に依存する semantic check として想定された動作です。
 
 - **semantic warning で `[y/N]` を求められる**: 検出された bundle ID と version を確認します。manifest が宣言した primary と IncludedApps が意図どおりである場合だけ `y` を入力します。既定値 `N` は Graph write 前に停止します。CI などの非対話 process では、protected job が明示的に `--force` を指定しない限り同じ warning で fail します。
-- **`--force` でも error を越えられない**: hard error では正常です。`--force` が確認できるのは、未列挙 bundle、package に存在しない declared primary、primary selector 未指定時の複数 bundle など semantic difference だけです。曖昧な selector、空または破損した XAR、未対応 compression、XML の安全性/サイズ制限、source SHA mismatch、古い/改ざんされた artifact、tenant/Graph safety check は回避できません。
+- **`--force` でも error を越えられない**: hard error では正常です。`--force` が確認できるのは、未列挙 bundle、package に存在しない declared primary、primary selector 未指定時の複数 bundle など semantic difference だけです。曖昧な selector、空または破損した XAR、`none`/`gzip`/`bzip2` 以外の compression、XML の安全性/サイズ制限、source SHA mismatch、古い/改ざんされた artifact、tenant/Graph safety check は回避できません。
 - **`PrimaryBundleId` が曖昧**: exact または segment-boundary prefix が複数 bundle に一致しました。selector を完全一致にするか、1件に絞れる値へ変更します。payload が安全に primary を選べないため `--force` は使いません。
 - **宣言した primary が package に存在しない**: warning に出た検出 bundle 一覧を確認します。source が間違っているか manifest が古い場合は修正して `package` を rerun します。意図した差異なら、検出結果を確認した後で同じ artifact に `--force` を付けて rerun します。
 - **`package` が source SHA mismatch を報告する**: staging file を破棄し、意図した release から package をやり直します。予期しない file に合わせるため `package-metadata.json` や検査 report を手編集しないでください。
 - **`publish` が stale または改ざんされた package artifact を報告する**: publish job は staging 済み `.pkg` を再 hash・再検査し、package report だけを信頼しません。同じ `manifest-list.json` と pin された CLI version で再 download/repackage し、artifact を置き換えます。古い report、変更された file、metadata identity mismatch、report/CLI version mismatch は Graph write 0 件で停止しなければなりません。
-- **XAR/XML parser が失敗する**: truncated archive、invalid offset、未対応 compression、malformed XML、external entity/DTD、展開上限超過は hard error として扱います。完全な package を source から取得して `package` を rerun し、`--force` で回避しません。
+- **XAR/XML parser が失敗する**: truncated archive、invalid offset、`none`/`gzip`/`bzip2` 以外の compression、malformed XML、external entity/DTD、展開上限超過は hard error として扱います。完全な package を source から取得して `package` を rerun し、`--force` で回避しません。エラー文言が正確に
+  `uses unsupported compression 'application/x-bzip2'` の場合、その CLI は bzip2 対応前のバージョンです
+  (issue #127)。最新の CLI に pin して再実行してください。この compression method はもはや hard error では
+  ありません。
 - **`AppType: lob` の version read-back が異なる**: `BundleVersion` は Graph `buildNumber`、`BundleBuildVersion` は Graph `versionNumber` に対応します。package が `CFBundleShortVersionString` と `CFBundleVersion` を区別する場合は両方を更新し、report を再生成するため package をやり直します。
 - **後続 entry が warning 後に失敗した**: 最終 preflight 契約では、Graph write 前に選択された全 entry を検査します。warning 拒否または hard error の前に Graph write が出ている log は古い CLI の実行を示します。CLI version を pin し、同じ manifest list で rerun します。
 

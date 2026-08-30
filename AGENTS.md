@@ -43,8 +43,8 @@ Relaypublisher は、winget 風の YAML manifest を Git に commit すると、
 ## 実装規約(`src/` を追加する場合)
 
 - .NET 10 / C#。テストフレームワークは MSTest
-- NuGet パッケージは Microsoft 製を優先する。Microsoft 製で要件を満たせない場合のみサードパーティを使う(現時点で許容しているのは YamlDotNet, FluentValidation)
-- 使用パッケージ: System.CommandLine, YamlDotNet, FluentValidation, MSTest, Microsoft.Extensions.Logging / DependencyInjection, Azure.Identity, Azure.Storage.Blobs
+- NuGet パッケージは Microsoft 製を優先する。Microsoft 製で要件を満たせない場合のみサードパーティを使う(現時点で許容しているのは YamlDotNet, FluentValidation, SharpZipLib — SharpZipLib は bzip2 decompression 用。.NET の BCL に bzip2 decompressor が無いため許可した。issue #127・doc/adr-phase-2.md 参照)
+- 使用パッケージ: System.CommandLine, YamlDotNet, FluentValidation, SharpZipLib, MSTest, Microsoft.Extensions.Logging / DependencyInjection, Azure.Identity, Azure.Storage.Blobs
 - Microsoft Graph SDK は使わず `HttpClient` + `Azure.Identity`(REST URL と payload をレビュー可能に保つため)
 - ソースコードのコメントは英語(MIT ライセンス)
 - secrets / token / Authorization ヘッダー / 署名付き URL をログ・成果物・例外メッセージに出さない

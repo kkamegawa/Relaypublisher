@@ -76,6 +76,11 @@ PKG は XAR archive として扱い、TOC に記録された `Distribution` / `P
 TOC に列挙された entry の offset/length を使い、payload(cpio.gz)は展開しない。実装は .NET 標準ライブラリのみで行い、macOS の
 `pkgutil` には依存しない。
 
+> **2026-08-30 追記**: ここで記録した「.NET 標準ライブラリのみ」という制約は issue #127 で見直した。
+> heap entry の bzip2 compression に対応するため MIT license の `SharpZipLib` を adapter 越しに許可している。
+> 詳細は `doc/adr-phase-2.md` を参照。`pkgutil` 非依存の要件(完全な managed 実装で macOS runner を
+> 必要としない)は変更していない。
+
 安全上の上限は次のとおり固定する。
 
 | 対象 | 上限 |

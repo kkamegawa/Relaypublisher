@@ -566,8 +566,11 @@ Microsoft Global Secure Access クライアントの pkg は Microsoft AutoUpdat
   download + SHA256 検証直後に一度行う。
 - **PKG inspection** は XAR の header、compressed TOC、TOC が指す heap entry を bounded reader で読む。TOC に記録された
   `Distribution` / `PackageInfo` XML の entry 本体を必要な範囲だけ読み、payload(cpio.gz)は展開しない。
-  .NET 標準ライブラリだけを使用し、`pkgutil`へ依存しない。上限は compressed TOC 16 MiB、decompressed TOC 64 MiB、
-  1 heap entry 16 MiB、bundle 4,096 件、XML depth 64 とする。DTD/外部 entity は禁止する。未知の compression、
+  完全な managed 実装で、macOS の `pkgutil` へは依存しない(Linux/Windows の CI runner でも動く)。heap entry の
+  compression は XAR 仕様の `none` / `gzip` / `bzip2` に対応する。bzip2 は .NET の BCL に decompressor が無いため、
+  MIT license の `SharpZipLib` を専用 adapter(`Bzip2DecompressionStream`)越しにのみ使う(issue #127、
+  `doc/adr-phase-2.md`)。上限は compressed TOC 16 MiB、decompressed TOC 64 MiB、1 heap entry 16 MiB、
+  bundle 4,096 件、XML depth 64 とする。DTD/外部 entity は禁止する。`none`/`gzip`/`bzip2` 以外の compression、
   header/offset/length の不整合、切り詰め、展開・XMLエラー、上限超過は hard fail とし、`--force` でも回避できない。
 - package は source の期待 SHA256 を検証して一致した後に限り inspection を実行する。検査結果には検査した content SHA256、
   inspector version、検出 bundle(`bundleId`、`CFBundleShortVersionString`、取得できる場合は `CFBundleVersion`)、
