@@ -4,6 +4,21 @@
 
 このファイルが 200 行を超えた場合は phase 単位で分割します。
 
+## 2026-08-30: nuget.org Trusted Publishing (OIDC) への移行 (Issue #131)
+
+- **決定**: `nuget.org` への自動 publish は GitHub Actions の `.github/workflows/release-publish.yml` に一本化し、
+  `NuGet/login` v1.2.0 (`8d196754b4036150537f80ac539e15c2f1028841`) で Trusted Publishing を利用する。
+  - **理由**: 長期有効な NuGet API key を repository/environment secret に保持せず、GitHub の OIDC token から
+    publish 直前に発行される短期 API key へ移行するため。
+  - **影響**: publish job は `id-token: write` と `NUGET_USER` を必要とする。action output は同じ job の
+    push にだけ渡し、secret や artifact として保存しない。既存の GitHub Packages / Azure Artifacts の push は変更しない。
+- **決定**: Trusted Publishing policy の Repository Owner=`kkamegawa`、Repository=`Relaypublisher`、
+  Workflow File=`release-publish.yml` (basename only)、Environment=`release` を正とする。
+  - **理由**: NuGet が発行元 workflow と environment を限定できるようにし、実ファイル名(hyphen)との不一致を防ぐため。
+- **決定**: Azure Pipelines から `nuget.org` へ publish する設計・参照サンプルを削除し、Azure Pipelines は
+  Intune publish と Azure Artifacts の用途に限定する。
+  - **理由**: 本リポジトリの NuGet.org Trusted Publishing の自動化経路を一つにし、長期 API key を使う別経路を残さないため。
+
 ## 2026-08-21: macOS PKG アップロード HTTP 400 の根本修正(doc/task.md 同日エントリ参照)
 
 - **決定**: macOS `.pkg` の content upload でアップロードするバイト列を、`ciphertext` のみから

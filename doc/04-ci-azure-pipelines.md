@@ -176,52 +176,8 @@ stages:
 - `System.PullRequest.TargetCommitId` は PR ビルドでのみ設定される。push ビルドでは CLI 側で直前コミットとの diff または全件 fallback を使う。
 - `--expected-tenant` の `<tenant-id>` は variable group から渡す(placeholder のまま commit しない)。
 
-## 13a. NuGet global tool release (optional)
-
-GitHub Actions を使わず Azure Pipelines で `relaypublisher` を `nuget.org` に公開する場合は、Intune publish pipeline と分離した release pipeline を用意する。
-NuGet release の参照サンプルは `workflows/azure-pipelines/release-nuget-tool.yml`。対象 repository の
-pipeline 定義として登録し、NuGet push 用 secret を設定してから使用する。
-
-設計上のポイント:
-
-- trigger は `v*` tag のみ。
-- version は tag から取り出し、`dotnet pack -p:Version=<X.Y.Z>` で注入する。
-- `dotnet build` / `dotnet test` を通した後に `dotnet nuget push --skip-duplicate` を実行する。
-- API key は secret variable で保持し、publish stage 以外に公開しない。
-
-```yaml
-trigger:
-  tags:
-    include:
-      - v*
-
-stages:
-  - stage: ReleaseNuGet
-    jobs:
-      - job: PackAndPush
-        pool:
-          vmImage: ubuntu-latest
-        steps:
-          - checkout: self
-            fetchDepth: 0
-          - task: UseDotNet@2
-            inputs:
-              packageType: sdk
-              version: 10.0.x
-          - script: dotnet build IntuneLobPublisher.slnx --configuration Release
-          - script: dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
-          - script: |
-              VERSION="${BUILD_SOURCEBRANCHNAME#v}"
-              dotnet pack src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj \
-                --configuration Release \
-                -p:ContinuousIntegrationBuild=true \
-                -p:Version="$VERSION" \
-                --output '$(Build.ArtifactStagingDirectory)/nuget'
-          - script: |
-              dotnet nuget push '$(Build.ArtifactStagingDirectory)/nuget/*.nupkg' \
-                --source https://api.nuget.org/v3/index.json \
-                --api-key '$(NUGET_API_KEY)' \
-                --skip-duplicate
-```
+Azure Pipelines では NuGet.org への release automation を提供しない。`nuget.org` への自動 publish は
+GitHub Actions の `.github/workflows/release-publish.yml` に一本化し、NuGet Trusted Publishing (OIDC)
+を利用する。Azure Pipelines の Intune publish 用サンプルは引き続き提供する。
 
 ---

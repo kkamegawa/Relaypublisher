@@ -21,6 +21,7 @@
   | `actions/setup-dotnet` | v6.0.0 | `a98b56852c35b8e3190ac28c8c2271da59106c68` |
   | `actions/upload-artifact` | v7.0.1 | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` |
   | `azure/login` | v3.0.1 | `f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca` |
+  | `NuGet/login` | v1.2.0 | `8d196754b4036150537f80ac539e15c2f1028841` |
 
 - **`actions/checkout` は必ず `persist-credentials: false` を指定する。** 既定の `true` は job token を
   `.git/config` に書き込むため、その後に走る `dotnet build` / `dotnet pack` / `dotnet publish`
@@ -321,7 +322,27 @@ publish する操作を最後の関門にする**。tag の打ち直しは draft
 |---|---|---|
 | GitHub Packages (このリポジトリ) | リポジトリを直接見ている利用者 | `GITHUB_TOKEN` (`packages: write`) |
 | Azure Artifacts | 社内 CI / 閉じたネットワーク | OIDC (workload identity federation) + artifacts-credprovider |
-| nuget.org | 一般利用者 | `NUGET_API_KEY` |
+| nuget.org | 一般利用者 | NuGet Trusted Publishing (OIDC) + `NuGet/login` |
+
+### nuget.org Trusted Publishing (OIDC)
+
+nuget.org への publish は長期有効な API key を使わない。`release-publish.yml` の publish job が
+GitHub OIDC token を `NuGet/login` に渡し、push 直前に発行された一時的な API key を
+`dotnet nuget push` の `--api-key` に渡す。action output の名前は `NUGET_API_KEY` だが、これは
+environment secret ではなく、同じ job の push にだけ使う短期値である(有効期限は 1 時間)。
+
+Trusted Publishing の policy は次の値で固定する。`Workflow File` はファイル名だけを指定し、
+`.github/workflows/` は含めない。
+
+| policy field | value |
+|---|---|
+| Repository Owner | `kkamegawa` |
+| Repository | `Relaypublisher` |
+| Workflow File | `release-publish.yml` |
+| Environment | `release` |
+
+`NUGET_USER` には policy に紐付く nuget.org profile username を指定する。publish job には
+`id-token: write` が必要であり、`NuGet/login` は上記の commit SHA (v1.2.0) で固定する。
 
 ### release-draft.yml の設計上のポイント
 
@@ -363,6 +384,9 @@ publish する操作を最後の関門にする**。tag の打ち直しは draft
   一致させるため。ワイルドカードでは download も push もしない。
 - `environment: release` に publishing secrets をスコープする。必要なら required reviewers も付ける。
   event 由来の trigger に対する最終的な人間側のゲートはこの environment protection。
+- nuget.org は `NuGet/login` による Trusted Publishing (OIDC) を使う。`id-token: write` を持つ job で
+  `NUGET_USER` を渡し、返された一時 output を直後の `dotnet nuget push` にだけ渡す。長期有効な
+  API key secret は使わない。
 - Azure Artifacts は Microsoft Learn の
   [GitHub Actions → Azure Artifacts quickstart (managed identity)](https://learn.microsoft.com/azure/devops/artifacts/quickstarts/github-actions?view=azure-devops)
   に準拠する。`azure/login` → credential provider install →
@@ -386,7 +410,7 @@ publish する操作を最後の関門にする**。tag の打ち直しは draft
 | `AZURE_ARTIFACTS_CLIENT_ID` | user-assigned managed identity / app registration の client id |
 | `AZURE_ARTIFACTS_TENANT_ID` | tenant id |
 | `AZURE_ARTIFACTS_SUBSCRIPTION_ID` | subscription id |
-| `NUGET_API_KEY` | nuget.org の package publish 権限のみを持つ API key |
+| `NUGET_USER` | Trusted Publishing policy に紐付く nuget.org profile username |
 
 `GITHUB_TOKEN` は自動供給される。Intune publish 用の `AZURE_CLIENT_ID` 等と名前空間を分けるため
 `AZURE_ARTIFACTS_` prefix を付けている。
@@ -395,7 +419,12 @@ publish する操作を最後の関門にする**。tag の打ち直しは draft
 
 - Azure Artifacts 側の事前セットアップ(managed identity 作成、federated credential 設定、
   Azure DevOps プロジェクトの Contributors への追加)は `doc/05-operation.md` §6 を参照する。
-- NuGet Trusted Publishing (OIDC) を使う場合は、nuget.org 向け push step を trusted publishing 用手順に置き換える。
+- `release` environment には `NUGET_USER` と Azure Artifacts 用の 4 secrets だけを登録する。
+  Environment protection rules はこの移行では変更しない。
+- NuGet の policy と workflow の値は一致させる。特に実ファイル名は `release-publish.yml` (hyphen) であり、
+  `release_publish.yml` や `.github/workflows/release-publish.yml` は指定しない。
+- `NuGet/login` の一時 output は保存せず、push 後は再利用しない。最大 1 時間で失効するが、
+  それまでの間も secret、artifact、ログへ保存しない。
 - single-file app には署名・notarization を行わない。macOS では Gatekeeper の警告が出る。
 
 ---
