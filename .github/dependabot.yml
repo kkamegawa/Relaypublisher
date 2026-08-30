@@ -1,0 +1,33 @@
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/src/ContextRelay.Core"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "nuget"
+    directory: "/src/ContextRelay.VSExtension"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "nuget"
+    directory: "/tests/ContextRelay.Core.Tests"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
