@@ -11,7 +11,8 @@ namespace IntuneLobPublisher.Core.Packaging;
 ///
 /// - <see cref="BZip2InputStream.IsStreamOwner"/> defaults to <c>true</c>. This adapter sets it to
 ///   <c>false</c> so disposing this stream never disposes the caller's underlying bounded stream,
-///   matching the <c>GZipStream(..., leaveOpen: true)</c> sibling used for the gzip heap-entry branch.
+///   matching the <c>ZLibStream(..., leaveOpen: true)</c> sibling used for the gzip heap-entry branch
+///   (xar's "gzip" encoding is raw zlib, not GZIP file format - see that branch's own comment).
 /// - <see cref="BZip2Exception"/> derives from <see cref="SharpZipBaseException"/>, which derives from
 ///   <see cref="Exception"/> directly - not <see cref="IOException"/>. The caller
 ///   (<c>XarPkgBundleInspector.ReadHeapEntryAsync</c>) only translates <see cref="InvalidDataException"/>,

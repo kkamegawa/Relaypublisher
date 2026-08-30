@@ -271,6 +271,23 @@ public sealed class XarPkgBundleInspectorTests
     }
 
     [TestMethod]
+    public async Task Inspect_DistributionBundleVersionWithBlankIdentity_FailsClosed()
+    {
+        // Regression for a Codex review finding on PR #128: the wrapper detection must check whether an
+        // identity attribute is *present*, not whether its value is non-blank. A self-contained
+        // <bundle-version id=""> declares the attribute (just with a blank value), so it must still fall
+        // through to the ordinary bundle-identity check below and hard-fail there - not be silently
+        // treated as a transparent wrapper (which would have produced a successful zero-bundle result
+        // instead of failing closed on malformed input).
+        var pkg = BuildXar(
+        [
+            Entry("Distribution", "<installer-gui-script><bundle-version id=\"\" CFBundleShortVersionString=\"1.0\" /></installer-gui-script>"),
+        ]);
+
+        await AssertInspectionFailureAsync(pkg);
+    }
+
+    [TestMethod]
     public async Task Inspect_PackageInfoAndDistribution_DeduplicatesWithPackageInfoPriority()
     {
         var pkg = BuildXar(

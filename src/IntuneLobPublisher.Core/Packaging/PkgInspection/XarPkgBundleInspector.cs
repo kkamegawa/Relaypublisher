@@ -741,13 +741,19 @@ public class XarPkgBundleInspector : IPkgBundleInspector
         return null;
     }
 
-    /// <summary>True when the current element carries one of the bundle-identity attribute names.</summary>
+    /// <summary>
+    /// True when the current element declares one of the bundle-identity attribute names, regardless of
+    /// whether its value is blank. This intentionally checks presence, not blankness: a malformed
+    /// self-contained <c>&lt;bundle-version id=""&gt;</c> must still fall through to the ordinary bundle
+    /// path below and hit its "no bundle identifier" hard error via <see cref="FirstNonBlank"/>, not be
+    /// silently treated as a transparent wrapper because <see cref="FirstNonBlank"/> also excludes blank
+    /// values. Only a <c>&lt;bundle-version&gt;</c> with none of these attributes at all is a wrapper.
+    /// </summary>
     private static bool HasIdentityAttribute(XmlReader reader)
-        => FirstNonBlank(
-            reader.GetAttribute("CFBundleIdentifier"),
-            reader.GetAttribute("id"),
-            reader.GetAttribute("bundle-id"),
-            reader.GetAttribute("identifier")) is not null;
+        => reader.GetAttribute("CFBundleIdentifier") is not null
+            || reader.GetAttribute("id") is not null
+            || reader.GetAttribute("bundle-id") is not null
+            || reader.GetAttribute("identifier") is not null;
 
     private static int ReadBoundedLength(ulong value, int maximum, string description)
     {
