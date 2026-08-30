@@ -1,7 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: "nuget"
-    directory: "/src/ContextRelay.Core"
+    directory: "/src"
     schedule:
       interval: "weekly"
     ignore:
@@ -10,7 +10,7 @@ updates:
           - "version-update:semver-major"
 
   - package-ecosystem: "nuget"
-    directory: "/src/ContextRelay.VSExtension"
+    directory: "/src"
     schedule:
       interval: "weekly"
     ignore:
@@ -19,7 +19,7 @@ updates:
           - "version-update:semver-major"
 
   - package-ecosystem: "nuget"
-    directory: "/tests/ContextRelay.Core.Tests"
+    directory: "/tests"
     schedule:
       interval: "weekly"
     ignore:
