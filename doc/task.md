@@ -2,6 +2,85 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-08-30: macOS PKG inspector の compression/XML parsing bug 3 件を修正(issue #127)
+
+**対応 Issue**: [#127](https://github.com/kkamegawa/Relaypublisher/issues/127)
+
+`feature/122-macos-optional-architecture` を base にした `fix/127-pkg-bzip2-metadata` で実装した。
+
+### 経緯
+
+実際の manifest(Microsoft Global Secure Access Client の macOS installer)に対して `relaypublisher package`
+を実行したところ、以下で fail した。
+
+```
+error: The XAR metadata entry 'PackageInfo' uses unsupported compression 'application/x-bzip2'.
+```
+
+XAR archive の compression 仕様は `none`/`gzip`/`bzip2` の 3 値のみで、bzip2 は狭いエッジケースではなく、
+Microsoft 自身が配布する実パッケージが使用している正規の値だった。.NET の BCL には bzip2 decompressor が
+存在しないため、これを追加するには third-party package の承認判断が必要だった。
+
+### 実施内容
+
+1. **bzip2 対応**(`e2d1d27`/`e0166d6`/`56d8913`): MIT license の `SharpZipLib` を新規 third-party package
+   として `AGENTS.md` に追加(`doc/adr-phase-2.md` に決定と理由を記録)。`XarPkgBundleInspector` からは
+   `Bzip2DecompressionStream` という 1 ファイルの adapter 越しにのみ使用し、`BZip2Exception` が
+   `IOException` ではなく plain `Exception` を継承するため既存の catch フィルタを素通りする点(コンストラクタ・
+   `Read()` 両方で発生し得ることを開発中に実際のテスト失敗で発見)を `InvalidDataException` へ変換して対処。
+2. **計画で必須としていた実バイナリでの smoke test を実行したところ、bzip2 とは無関係の pre-existing bug が
+   さらに 2 件見つかり、ユーザーの承認を得て同じ issue に含めて修正した**(`c47b767`/`242dcf9`)。
+   - `application/x-gzip` heap entry の実体が raw zlib(RFC 1950)であり、`GZipStream` が要求する
+     GZIP file format(RFC 1952)ではなかった。TOC の展開に既に使っていた `ZLibStream` に統一した。
+     既存の gzip test は `.NET GZipStream` で fixture を生成・展開する自己整合的な作りだったため、
+     実物の xar ファイルでは一度も検証されていなかった。
+   - `productbuild` が生成する実際の `Distribution` XML は
+     `<pkg-ref><bundle-version><bundle id="..." .../></bundle-version></pkg-ref>` という、
+     `<bundle-version>` 自体は属性を持たない wrapper 形式を使っており、これを bundle 識別要素として
+     誤って扱っていたため `A Distribution bundle entry has no bundle identifier.` で hard fail していた。
+     識別属性のない `<bundle-version>` を `required-bundles` と同様の透過的 wrapper として扱うよう修正した。
+
+### 検証結果
+
+```
+dotnet build IntuneLobPublisher.slnx --configuration Release
+→ ビルドに成功しました。0 エラー(既存の pre-existing warning 4 件のみ)。
+
+dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
+→ 成功! 失敗: 0、合格: 796、スキップ: 37、合計: 833
+
+dotnet format IntuneLobPublisher.slnx --verify-no-changes --no-restore
+→ 差分なし。
+
+dotnet pack src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj --configuration Release
+→ 正常に .nupkg を生成(新規依存追加後も tool packaging に問題なし)。
+```
+
+**実バイナリでの smoke test**: 実際に今回の failure を引き起こした Microsoft Global Secure Access Client
+の macOS installer(約 51.5 MB)を local(repository 外、`--repo-root` のみローカル一時ディレクトリ)で
+`package` した。
+
+- 3 つの修正すべてが動作し、`package` が最終的に成功(`inputHash` を出力)。
+- inspection report(`package-metadata.json`)に実際の bundle 情報が 5 件正しく記録された:
+  `com.microsoft.globalsecureaccess`(client 本体、primary)、
+  `com.microsoft.globalsecureaccess.uninstaller`、`com.microsoft.autoupdate.fba`、
+  `com.microsoft.autoupdate2`、`com.microsoft.errorreporting`。
+- 検出結果は、この codebase とは独立に Python で xar の TOC/heap を直接デコードして得た ground truth と
+  完全に一致した。
+- `inspectorVersion` は `"1"` のまま(変更なし)。
+- report に source URL・token・署名付き URL は含まれていないことを確認した。
+- content SHA256(`a21f4a07ec6fe59fb3b5d268ee8bfb74cd223b60393426a3f8a91eb1a3275113`)を記録する。
+  ダウンロード URL は `AGENTS.md` の方針に従いここには記載しない。
+
+### 未確定事項
+
+- `Inspect_MetadataEntryLimitExceeded_FailsClosed`(既存の gzip 版 decompression-bomb test)は実際には
+  宣言サイズの不一致で fail しており、`total > MaxMetadataEntryBytes` の分岐を通っていない。今回追加した
+  bzip2 版(`Inspect_Bzip2EntryExceedingMetadataLimit_FailsClosed`)は実際にその分岐を通る。gzip 版の
+  修正は本 issue のスコープ外とし、次回の課題として残す。
+- gzip の encoding style 判定を `application/gzip`(RFC 6713 表記)にも広げることは対象外とした
+  (Apple の `xar` は `application/x-gzip` しか出さないため live bug ではない)。
+
 ## 2026-08-30: macOS Architecture 移行時の履歴 content 再 publish を防止
 
 **対応 Issue / PR**: [#122](https://github.com/kkamegawa/Relaypublisher/issues/122) /
