@@ -94,6 +94,15 @@ against the tenant; run `publish --dry-run` to see the category plan. See
 Note that adding or changing `Categories` changes the manifest-wide `inputHash`, so the next `package` /
 `publish` re-packages and re-uploads the content even though only metadata changed.
 
+## Optional macOS Architecture
+
+macOS app resources have no Graph architecture property, so a `Platform: macos` entry may omit
+`Architecture`; the effective value used for app identity, staging, and `notes` metadata is then
+`universal` (doc/01-manifest-schema.md §5.3.1). None of the samples in this directory use the omitted
+form — they keep declaring `Architecture: arm64` (or `x64`) explicitly, since that is what the real
+binaries they reference actually target. Omitting the field is a valid choice for a manifest that packages
+a universal binary; it is not exercised here so the E2E fixture keeps testing an explicit value too.
+
 ## Primary bundle selection (multi-bundle PKGs)
 
 A macOS PKG can install more than one app bundle. `global-secure-access-macos-arm64.yaml` illustrates the

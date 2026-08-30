@@ -167,7 +167,7 @@ Apps:
 
 ```yaml
   - Platform: macos
-    Architecture: arm64
+    Architecture: arm64  # 省略可(§5.3.1)。universal binary の pkg を配る場合は省略するか universal を明示する。
     InstallerType: pkg
     AppType: pkg          # pkg (既定: unmanaged macOS PKG app) | lob (macOS LOB app)
     DisplayName: Contoso Tool [macOS Arm64]
@@ -206,6 +206,39 @@ Apps:
         GroupId: "00000000-0000-0000-0000-000000000003"
         Intent: required
 ```
+
+### 5.3.1 macOS の Architecture 省略(issue #122)
+
+Intune の macOS app リソース(`macOSPkgApp` / `macOSLobApp`)には architecture を表す Graph プロパティが
+存在しない。そのため `Platform: macos` の app entry は `Architecture` を省略できる。省略時の実効値は
+`universal` とする(`AppType: pkg` / `lob` の両方が対象)。
+
+```yaml
+Apps:
+  - Platform: macos
+    # Architecture は省略可。省略時の実効値は universal。
+    InstallerType: pkg
+    AppType: pkg
+    DisplayName: Contoso Tool [macOS]
+```
+
+| Platform | `Architecture` | 判定 |
+|---|---|---|
+| `windows` | 省略 | fail(現状どおり) |
+| `windows` | `x64` / `arm64` | ok(現状どおり) |
+| `windows` | `universal` | fail |
+| `macos` | 省略 | ok — 実効値 `universal` |
+| `macos` | `x64` / `arm64` / `universal` | ok |
+| `macos` | `""` / 空白のみ | fail(省略扱いにしない) |
+
+`IntuneLobPublisher.Core.Manifests.AppArchitecture.Resolve(AppManifest)` が実効値を解決する唯一の箇所であり、
+app identity(§6.1)・staging ディレクトリ名・management metadata・publish 結果 JSON はすべてこの resolver
+経由で値を読む。**解決結果を manifest model に書き戻すことはない**ため、`Architecture` を明示している既存
+macOS manifest の `manifestHash` / `inputHash` は本機能追加の前後で不変(§6.7)。省略と `Architecture: universal`
+の明示は実効 identity は同じだが `inputHash` は異なり、切り替えると 1 回だけ再 package / 再 upload が発生する。
+
+`Requirements.Architecture`(§5.7)は `Platform: macos` の app entry では**禁止**とする。macOS には
+「requirements 側の architecture」という概念自体が存在しない。
 
 ### 5.4 macOS app type 制約
 
@@ -431,6 +464,10 @@ Windows:
 | `MinimumOSVersion: 10.0.22621` | `minimumSupportedWindowsRelease: Windows11_22H2` | |
 
 macOS:
+
+`Architecture` に対応する Graph プロパティは存在しない(`macOSPkgApp` / `macOSLobApp` のどちらにも
+architecture フィールドがない)。manifest 上は §5.3.1 のとおり省略可能で、実効値(既定 `universal`)は
+app identity・staging・metadata にのみ使い、Graph payload には一切マッピングしない。
 
 | manifest | Graph | 備考 |
 |---|---|---|

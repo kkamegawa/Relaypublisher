@@ -94,6 +94,15 @@ category の作成・改名・削除を行いません。`validate` は tenant �
 なお `Categories` の追加・変更は manifest 全体の `inputHash` を変えるため、metadata だけの変更でも次回の
 `package` / `publish` で content が再package・再upload されます。
 
+## macOS の Architecture 省略
+
+macOS の app リソースには architecture を表す Graph プロパティが無いため、`Platform: macos` の entry は
+`Architecture` を省略できます。省略時の実効値は、app identity・staging・`notes` metadata で使われる
+`universal` になります(doc/01-manifest-schema.md §5.3.1)。このディレクトリのサンプルはどれも省略形を
+使っておらず、`Architecture: arm64`(または `x64`)を明示したままです。これは参照している実際の binary が
+その architecture を対象にしているためです。universal binary を配る manifest では省略が有効な選択肢ですが、
+ここでは明示値のテストも兼ねて E2E fixture では使用していません。
+
 ## Primary bundle の選択(複数 bundle を含む PKG)
 
 macOS PKG は 1 つの pkg に複数の app bundle を含むことがあります。`global-secure-access-macos-arm64.yaml` は

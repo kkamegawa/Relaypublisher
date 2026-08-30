@@ -526,7 +526,10 @@ public sealed class IntunePackageManifest
 public sealed class AppManifest
 {
     public required string Platform { get; init; }
-    public required string Architecture { get; init; }
+
+    // Windows: required ("x64" | "arm64"). macOS: optional ("x64" | "arm64" | "universal"); an omitted
+    // value resolves to "universal" via AppArchitecture.Resolve (issue #122), never written back here.
+    public string? Architecture { get; init; }
     public required string InstallerType { get; init; }
 
     // macOS のみ: pkg (既定, macOSPkgApp) | lob (macOSLobApp)

@@ -2,6 +2,56 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-08-29: macOS manifest の Architecture を任意化
+
+**対応 Issue**: [#122](https://github.com/kkamegawa/Relaypublisher/issues/122)(サブ issue:
+[#123](https://github.com/kkamegawa/Relaypublisher/issues/123)、
+[#124](https://github.com/kkamegawa/Relaypublisher/issues/124)、
+[#125](https://github.com/kkamegawa/Relaypublisher/issues/125))
+
+**設計**: [English implementation plan](https://github.com/kkamegawa/Relaypublisher/wiki/plan/Relaypublisher/issue-122-macos-optional-architecture) /
+[Japanese implementation plan](https://github.com/kkamegawa/Relaypublisher/wiki/plan/Relaypublisher/issue-122-macos-optional-architecture_ja)
+
+`feature/122-macos-optional-architecture`(base: `feature/116-ci-e2e-integration`)上で、3 つのサブ issue を
+非 stacked の通常コミットとして実装した。
+
+- **#123 — 実効値の解決と validation**: 新規 `AppArchitecture.Resolve(AppManifest)` が
+  「`Platform: macos` かつ `Architecture` が `null`」を `"universal"` に解決する唯一の箇所。
+  `ManifestValues.Architectures` を `WindowsArchitectures`(`x64`/`arm64`、必須)と
+  `MacOsArchitectures`(`x64`/`arm64`/`universal`、任意)に分離し、`ManifestValidator` の `Architecture`
+  rule を platform 条件付きに変更。`Requirements.Architecture` は `Platform: macos` で禁止(従来は
+  任意)にし、既存の一致 rule は `Platform: windows` に明示的に限定。`ManifestSetValidator` の
+  repository-wide 一意性 lint を実効値ベースに変更(実効値が同じ省略形 2 件・省略形と `universal` 明示の
+  組み合わせも重複として検出)。pinned hash test で、既存 macOS manifest(`Architecture` 明示)の
+  `manifestHash`/`inputHash` が不変であること、省略形と `universal` 明示の hash が異なることを固定。
+- **#124 — staging / packaging / publish への伝播**: `PublishOrchestrator`・`MacOsStagingService`・
+  `MacOsPackager`(staging 結果と manifest entry の突合を実効値ベースに修正)・`PublishCommand.cs` の
+  各 call site を resolver 経由に変更。**P1 で見つかった欠陥の修正を含む**: `PublishResultOutput.FromResult`/
+  `FromFailure` が raw の `Architecture` を `Require` していたため、macOS 省略形 entry は Graph publish
+  成功後に結果 JSON 生成で例外になり CLI が failure と誤報告していた。`PublishCommand.cs` の failure 経路の
+  `?? ""` fallback も、notes には `universal` を書きながら結果 JSON には `"architecture": ""` を出す
+  不整合があったため合わせて修正。
+- **#125 — ドキュメント**: `doc/issues/issue-023-macos-optional-architecture.md` を新設し、
+  `doc/01-manifest-schema.md`(§5.3.1 新設、§5.7 に Graph プロパティ非対応の注記)、
+  `doc/00-overview.md`(§3.2、§6.1)、`doc/02-dotnet-architecture.md`(`Architecture` の
+  `required string` 表記を nullable に修正)、`doc/05-operation.md`/`_ja`(§4b.2 新設、既存 app からの
+  移行手順)、`doc/06-troubleshooting.md`/`_ja`(identity drift の行を追加)、
+  `samples/manifests/README.md`/`_ja`(sample は明示形のまま、の節を追加)、`doc/adr.md` を更新した。
+  sample manifest(`samples/manifests/**/*.yaml`)自体は変更していない。
+
+### 検証結果
+
+```
+dotnet build IntuneLobPublisher.slnx --configuration Release
+→ ビルドに成功しました。0 エラー。
+
+dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
+→ 成功! 失敗: 0、合格: 783、スキップ: 37、合計: 820
+```
+
+実機(Intune テナントへの実 publish / `publish --dry-run`)での検証は未実施。次回のローカル E2E
+([07-local-e2e.md](07-local-e2e.md))で、`Architecture` を省略した macOS manifest による確認が必要。
+
 ## 2026-08-26: macOS PKG primary bundle — Layer 3 (publish preflight / CLI force gate / CI pin)
 
 **対応 Issue / PR**: [#116](https://github.com/kkamegawa/Relaypublisher/issues/116)(親: [#112](https://github.com/kkamegawa/Relaypublisher/issues/112))

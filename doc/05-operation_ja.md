@@ -432,6 +432,29 @@ XAR 検査は package 内容に対する semantic check です。`IncludedApps` 
 
 `AppType: lob` では、`BundleVersion` が Graph の `buildNumber` に対応する short bundle version、`BundleBuildVersion` が `versionNumber` に対応する build version です。package が `CFBundleShortVersionString` と `CFBundleVersion` を区別している場合は両方を正しく更新し、既定で同じ値を両 field にコピーしないでください。選択した primary は LOB の top-level bundle field にも設定し、`childApps` の先頭にします。
 
+### 4b.2. macOS entry の `Architecture` を省略する
+
+macOS の app リソースには architecture を表す Graph プロパティが無いため、`Platform: macos` の entry は
+`Architecture` を省略できる(issue #122、doc/01-manifest-schema.md §5.3.1)。この場合、app identity・
+staging ディレクトリ名・`notes` metadata で使われる実効値は `universal` になる。
+
+publish 済みの macOS app の manifest entry を、明示的な `Architecture`(例: `arm64`)から省略へ切り替えると、
+identity は `<PackageIdentifier>|macos|arm64` から `<PackageIdentifier>|macos|universal` に変わる。既存の
+app 解決ルール(§6.1)がそのまま適用される。
+
+1. `notes` の management metadata 照合は `architecture` が一致しなくなるため外れる。
+2. `DisplayName` を変えていなければ `DisplayName` fallback は引き続き一致し、既存 app を **adopt** して
+   `notes` を新しい(`universal` の)identity で書き戻す — 同じ Intune app ID と assignment が維持される。
+3. staging ディレクトリが変わり(`macos-arm64` → `macos-universal`)、決定的な `inputHash` も変わるため、
+   次の `package`/`publish` で 1 回だけ再 package / 再 upload が発生する。実体の `.pkg` に変更が無くても
+   発生する。
+4. `Architecture` の削除と同時に `DisplayName` も変えると fallback 照合まで外れ、新規 Intune app が
+   作られる — doc/06-troubleshooting.md に既出の identity drift と同じ障害モード。同じ publish で
+   両方を同時に変えないこと。
+
+この切り替えを自動化する移行ツールは提供しない。manifest を編集して行う、operator 主導の一回限りの
+再 package / 再 upload である。
+
 ## 4c. 既存 app を新しいバージョンに更新する
 
 app identity は `PackageIdentifier + Platform + Architecture` であり、バージョンを含まない

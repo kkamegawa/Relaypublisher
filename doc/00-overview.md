@@ -64,8 +64,10 @@ GitHub repository または Azure Repos に Intune LOB app 定義 YAML を commi
   - Windows Arm64
   - macOS x64
   - macOS Arm64
-  - 必要なら macOS universal
-- 同一 app 判定は `PackageIdentifier + Platform + Architecture` を基本とする。
+  - macOS universal(既定。manifest で `Architecture` を省略した場合の実効値、issue #122)
+- 同一 app 判定は `PackageIdentifier + Platform + Architecture` を基本とする。macOS の `Architecture` は
+  Graph に対応プロパティが無いため省略可能で、省略時の実効値が `universal` になる(§6.1、
+  `doc/01-manifest-schema.md` §5.3.1)。
 - Intune に存在しなければ新規追加。
 - Intune に存在すれば更新。
 - public に認証なしで取得可能な binary は Git に置かない。
@@ -145,6 +147,13 @@ Intune 側に独自の package identifier field はないため、検索 key を
 ```text
 PackageIdentifier + Platform + Architecture
 ```
+
+macOS には architecture を表す Graph プロパティが無いため、`Platform: macos` の app entry は manifest の
+`Architecture` を省略できる(issue #122)。この場合の実効値は `universal` とし、上記 identity・`notes`・
+staging ディレクトリ名などすべての下流処理はこの実効値を使う(`IntuneLobPublisher.Core.Manifests.AppArchitecture.Resolve`
+が解決する唯一の箇所)。ただし解決結果を manifest model に書き戻すことはないため、`manifestHash` /
+`inputHash` の計算(6.7)は常に生の(省略時は null の)`Architecture` field を対象とする。詳細は
+`doc/01-manifest-schema.md` §5.3.1 を参照。
 
 Intune app の `notes` に management metadata を保存する。
 

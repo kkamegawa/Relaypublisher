@@ -240,6 +240,7 @@ Rollback 後は Intune で app を確認し、assignments が意図した manife
 | 症状 | 考えられる原因 | 対処 |
 |---|---|---|
 | 既存 app が更新されず、Intune に別 app が増えた | `DisplayName`・`PackageIdentifier`・`Platform`・`Architecture` をバージョンと一緒に変更してしまい、identity 解決(doc/00-overview.md §6.1)が既存 app と一致しなくなった | 元の identity フィールドに戻して正しい app が更新されるよう再 publish し、余分に増えた app は Intune 管理センターで手動削除する(doc/00-overview.md §6.11 — リタイアは本ツールのスコープ外) |
+| macOS entry の `Architecture` を明示から省略へ(またはその逆に)切り替えたら別 app が増えた | identity が変わり(例: `...\|macos\|arm64` → `...\|macos\|universal`、issue #122)、かつ同じ publish で `DisplayName` も変更したため `DisplayName` fallback が既存 app を adopt できなかった(doc/05-operation.md §4b.2) | `Architecture` の指定方法だけを変える場合は `DisplayName` を変えないこと。fallback が既存 app を adopt する。既に重複 app ができてしまった場合は Intune 管理センターで手動削除する |
 | run が `skipped (downgrade)` と報告した | manifest の version が Intune 側 metadata に保存された version より低い | 上記 §3 を参照 |
 | `Invalid operation: app's PublishingState is not 'Published'` で失敗した | Intune が app を処理中だった、または committed content version がまだ activate されていない状態で metadata / category を更新しようとした | 現在の CLI で同じ publish を再実行する。`processing` は `published` になるまで待機し、`notPublished` は `inputHash` が一致していても content を upload する。polling が timeout した場合は Intune の処理完了後に再実行する。app は削除・再作成しない |
 | `publish` は成功したが content が変わらない | `inputHash` が保存値と一致し、content upload が skip された(doc/00-overview.md §6.7) | manifest または入力ファイルが実際に変わっているか確認する。`inputHash` が変わっていなければ再アップロードを skip するのは仕様どおり |

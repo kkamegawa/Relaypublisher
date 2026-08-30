@@ -438,6 +438,30 @@ If `PrimaryBundleId` matches more than one discovered bundle, the selection is a
 
 For `AppType: lob`, `BundleVersion` supplies the short bundle version used for Graph `buildNumber`, while `BundleBuildVersion` supplies the build version used for Graph `versionNumber`. Keep both values aligned with the bundle metadata when the package distinguishes `CFBundleShortVersionString` and `CFBundleVersion`; do not copy one value into both fields by default. The selected primary is also mapped to the top-level LOB bundle fields and is first in `childApps`.
 
+### 4b.2. Omitting `Architecture` on macOS entries
+
+macOS app resources have no Graph architecture property, so a `Platform: macos` entry may omit
+`Architecture` (issue #122, doc/01-manifest-schema.md §5.3.1). The effective value used for app identity,
+the staging directory name, and `notes` metadata is then `universal`.
+
+Switching an already-published macOS app's manifest entry from an explicit `Architecture` (for example
+`arm64`) to omitted changes its identity from `<PackageIdentifier>|macos|arm64` to
+`<PackageIdentifier>|macos|universal`. The existing app-resolution rules (§6.1) then apply:
+
+1. The `notes` management-metadata match misses, because `architecture` no longer agrees.
+2. If `DisplayName` is unchanged, the `DisplayName` fallback still matches and **adopts** the existing
+   app, rewriting its `notes` with the new (`universal`) identity - the same Intune app ID and its
+   assignments are kept.
+3. The staging directory changes (`macos-arm64` -> `macos-universal`) and so does the deterministic
+   `inputHash`, so the next `package`/`publish` re-packages and re-uploads the content once, even though
+   the underlying `.pkg` may not have changed.
+4. Changing `DisplayName` at the same time as removing `Architecture` breaks the fallback match too, and
+   creates a second Intune app - the same identity-drift failure mode covered in
+   doc/06-troubleshooting.md. Change one or the other, not both, in the same publish.
+
+There is no automated migration tool for this switch; it is a manual, one-time re-package/re-upload that
+operators opt into by editing the manifest.
+
 ## 4c. Updating an Existing App to a New Version
 
 App identity is `PackageIdentifier + Platform + Architecture` and does not include the version

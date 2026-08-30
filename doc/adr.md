@@ -174,3 +174,28 @@
   - **理由**: warning 未確認のまま `package-metadata.json` を残すと、次の `publish` がそれをそのまま信頼して
     しまう経路が残る。metadata を削除すれば `publish` は「metadata が存在しない」という既存の hard error
     (`PackageMetadataReader.ReadAsync`)で確実に止まり、新しい特別分岐を `publish` 側に増やさずに済む。
+
+## 2026-08-29: macOS の Architecture 任意化(issue #122)
+
+- **決定**: `Platform: macos` の app entry で `Architecture` を省略可能にし、省略時の実効値を `universal` と
+  定める。実効値は `AppArchitecture.Resolve` という単一の resolver でのみ解決し、**解決結果を manifest
+  model(`AppManifest.Architecture`)へ書き戻さない**。
+  - **理由**: Intune の macOS app リソース(`macOSPkgApp` / `macOSLobApp`)には architecture を表す Graph
+    プロパティが存在せず、`Architecture` を必須にする現行仕様は Graph 側に何の効果もない負担だった。一方で
+    `Architecture` は app identity・staging ディレクトリ名・`notes` metadata の構成要素でもあるため、
+    「必須を外すだけ」では下流処理が壊れる。resolver を model に書き戻すと `InputHashCalculator` が解決後の
+    値をハッシュ対象にしてしまい、省略形 manifest の `inputHash` が CLI バージョン間で振動し、毎回
+    re-package / re-upload(macOS pkg は最大 8 GB)が発生する。`doc/00-overview.md` §6.7 の「optional field
+    は nullable + 初期値なし」契約をそのまま適用し、省略と `Architecture: universal` の明示は実効 identity
+    は同じだが `inputHash` は異なる(切り替えは意図的な 1 回限りの再 package / 再 upload)という設計にした。
+  - **今後の注意**: `Architecture` を消費する新しい call site を追加するときは、必ず `AppArchitecture.Resolve`
+    経由にすること。`app.Architecture` を直接参照すると macOS の省略形で `null` 例外や `""` の誤った出力に
+    つながる(実際に `PublishResultOutput.FromResult`/`FromFailure` と `PublishCommand` の一部 call site が
+    この誤りを持っていたため、#124 で修正した)。
+- **決定**: `Requirements.Architecture` を `Platform: macos` の app entry では**禁止**にする(従来は「app-level
+  Architecture と一致していれば任意」)。
+  - **理由**: macOS には「requirements 側の architecture」という概念自体が存在せず、値を書いても何にも
+    使われない。曖昧な任意フィールドとして残すより、意図を明確にするため禁止に倒した。これは既存 valid な
+    manifest を invalid にし得る validation の厳格化であり additive な緩和ではないが、プロジェクトは初期
+    開発段階(`AGENTS.md`)であるため後方互換シムは追加しない。既存の「app-level Architecture と一致必須」
+    rule は `Platform: windows` に明示的に限定し、macOS entry で禁止 rule と二重にエラーが出ないようにした。
