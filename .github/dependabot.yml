@@ -10,15 +10,6 @@ updates:
           - "version-update:semver-major"
 
   - package-ecosystem: "nuget"
-    directory: "/src"
-    schedule:
-      interval: "weekly"
-    ignore:
-      - dependency-name: "*"
-        update-types:
-          - "version-update:semver-major"
-
-  - package-ecosystem: "nuget"
     directory: "/tests"
     schedule:
       interval: "weekly"
