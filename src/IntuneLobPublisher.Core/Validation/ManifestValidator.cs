@@ -155,8 +155,13 @@ internal sealed class AppManifestValidator : AbstractValidator<AppManifest>
 
         // macOS has no "requirements architecture" concept (doc/01-manifest-schema.md §5.3): forbid it
         // outright rather than leaving it optional, so a stray value can't silently do nothing.
+        // Guarded on Requirements being non-null: the separate NotNull() rule above only reports its own
+        // error, it does not stop FluentValidation from also evaluating this rule's `a.Requirements!.Architecture`
+        // property accessor, which would otherwise throw NullReferenceException for a manifest that omits
+        // Requirements entirely.
         RuleFor(a => a.Requirements!.Architecture)
             .Must((app, requirementsArchitecture) => app.Platform != "macos" || requirementsArchitecture is null)
+            .When(a => a.Requirements is not null)
             .WithMessage("Requirements.Architecture must not be set for Platform 'macos'; macOS apps have no architecture requirement.")
             .OverridePropertyName("Requirements.Architecture");
 

@@ -502,6 +502,21 @@ public sealed class ManifestValidationTests
     }
 
     [TestMethod]
+    public void Validate_MacOsMissingRequirements_FailsWithoutThrowing()
+    {
+        // Repro for a Copilot review finding on PR #126: the new macOS Requirements.Architecture
+        // forbidden rule reads a.Requirements!.Architecture, which must not NRE when Requirements
+        // itself is entirely omitted (should surface as a validation error instead).
+        var manifest = TestManifests.CreateValid();
+        var macApp = TestManifests.CreateValidMacOsApp();
+        macApp.Requirements = null;
+        manifest.Apps = [macApp];
+
+        var result = _validator.Validate(manifest);
+        Assert.IsFalse(result.IsValid);
+    }
+
+    [TestMethod]
     public void Validate_ValidMacOsLobManifest_WithIcon_Passes()
     {
         var manifest = TestManifests.CreateValid();

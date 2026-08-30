@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using IntuneLobPublisher.Core.Manifests;
 
 namespace IntuneLobPublisher.Core.Validation;
 
@@ -20,7 +21,7 @@ public static partial class ManifestValues
     /// <summary>
     /// macOS app resources have no Graph architecture property, so Architecture is optional there;
     /// "universal" is only meaningful as the effective value of an omitted Architecture
-    /// (see <see cref="Manifests.AppArchitecture"/>) but is also accepted when declared explicitly.
+    /// (see <see cref="AppArchitecture"/>) but is also accepted when declared explicitly.
     /// </summary>
     public static readonly IReadOnlyList<string> MacOsArchitectures = ["x64", "arm64", "universal"];
 
