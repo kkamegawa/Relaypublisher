@@ -11,7 +11,7 @@ to a new version. It serves the same role as `Tools/YamlCreate.ps1` in winget-pk
 - The authoritative version update procedure is [`doc/05-operation.md`](05-operation.md) §4c. Update mode automates that procedure.
 
 PowerShell 7.3 or later is required. The script runs on Windows, macOS, and Linux. There is no bash implementation,
-to avoid maintaining separate implementations of the interactive UI and hash calculation.
+because maintaining multiple scripts is unnecessary.
 
 ## 2. Modes
 

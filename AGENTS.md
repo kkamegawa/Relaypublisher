@@ -50,13 +50,13 @@ Relaypublisher は、winget 風の YAML manifest を Git に commit すると、
 - ソースコードのコメントは英語(MIT ライセンス)
 - secrets / token / Authorization ヘッダー / 署名付き URL をログ・成果物・例外メッセージに出さない
 - manifest 由来のパスは必ず path traversal / 絶対パス検証を通す
-- スクリプトは bash(macOS / Linux)と PowerShell 7 の両方を用意する。Windows で実行する場合は PowerShell を優先する
+- スクリプトは PowerShell 7 を用意する。複数のスクリプトを保守しないため、bash 版は用意しない。Windows で実行する場合は PowerShell を優先する
 - `dotnet build` と `dotnet test` が通ることを変更の完了条件とする
 
 ## ドキュメント規約
 
-- ドキュメントは当面日本語で書く(技術用語は英語のまま)。LICENSE / SECURITY.md は英語を維持する
-- 実在の URL・IP アドレス・テナント ID を書かない。`<tenant-id>` のようなプレースホルダを使う(例示用の `example.com` / `contoso` は可)
+- `doc/` 配下のドキュメントおよび Wiki に登録する plan は、日本語版と英語版の両方を用意する(技術用語は英語のまま)。LICENSE / SECURITY.md は英語を維持する
+- 実在の URL・IP アドレス・テナント ID を書かない。`<tenant-id>` のようなプレースホルダを使う(例示用の `example.com` / `contoso` は可)。ただし Wiki、issue、PR では issue、公開 URL、PR へのリンクを許容する
 - Intune / Microsoft Graph の API 仕様(endpoint、enum 値、v1.0 と beta の差)に触れる変更は、Microsoft Learn で最新仕様を確認してから行う
 
 ## Git 規約

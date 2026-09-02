@@ -11,7 +11,7 @@
 - バージョンアップ手順の正本は [`doc/05-operation.md`](05-operation.md) §4c。Update モードはその手順を機械化したもの。
 
 前提は PowerShell 7.3 以降。Windows / macOS / Linux のいずれでも動作する(bash 版は用意しない。
-対話 UI とハッシュ計算を二重に保守しないため)。
+複数のスクリプトを保守しないため)。
 
 ## 2. モード
 
