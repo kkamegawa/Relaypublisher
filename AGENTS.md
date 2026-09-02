@@ -19,6 +19,7 @@ Relaypublisher は、winget 風の YAML manifest を Git に commit すると、
 | `doc/02-dotnet-architecture.md` | .NET solution / interface 設計、実装フェーズ |
 | `doc/03-ci-github-actions.md` | GitHub Actions workflow 案 |
 | `doc/04-ci-azure-pipelines.md` | Azure Pipelines workflow 案 |
+| `doc/08-yamlcreate.md` | manifest 作成 / バージョンアップスクリプト(`tools/yamlcreate.ps1`)の仕様 |
 | `doc/issues/issue-001 〜 005` | 実装 Issue(この順に実装する) |
 | `doc/relaypublisher-design-and-copilot-issues.md` | 分割版へのポインタ。**実内容を書かない** |
 | `doc/99-full-conversation-summary.md` | 初期検討のスナップショット。**歴史的記録なので更新しない**(最新設計と差分あり) |
