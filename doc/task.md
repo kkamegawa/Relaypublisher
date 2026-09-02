@@ -2,6 +2,37 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-09-02: manifest 作成スクリプトのレビュー修正
+
+**ブランチ**: `feature/yamlcreate-manifest-tool`
+
+**対応 Issue / PR**: [#140](https://github.com/kkamegawa/Relaypublisher/issues/140) / [#139](https://github.com/kkamegawa/Relaypublisher/pull/139)
+
+### 実施内容
+
+ユーザーが承認したレビュー指摘 8 件について、設計の整合、実装修正、回帰検証の順で対応した。
+
+1. `.pkg` / `.exe` / `.tar.gz` などの拡張子直前の旧バージョンを更新し、より長いバージョンの一部分は置換しないようにした。
+2. New のプレビュー、Update の差分・残存行で URL の認証情報・クエリ・フラグメントを除去し、保存する YAML の値は維持した。取得エラーにも生の応答を表示しない。
+3. `azureBlob` の単一の認証選択肢を配列として保持し、StrictMode で停止しないようにした。
+4. `publicHttp` の認証選択肢を既存 provider の契約に合わせ、`none` に限定した。
+5. GitHub Release のハッシュ取得にアセット ID の REST API と `Accept: application/octet-stream` を使い、public / private 両方に対応した。
+6. `Auth` と `Sha256` の順序によらずソースごとの認証情報を読み取り、複数ソース間で混在しないようにした。
+7. CSV のグループ・フィルター選択で、エクスポーターの `GroupName` / `GroupId` と `FilterName` / `FilterId` を受け付けるようにした。
+8. ヘッダーのみの CSV を候補 0 件として扱い、手入力へ戻れるようにした。
+
+[08-yamlcreate.md](08-yamlcreate.md) と [adr.md](adr.md) を更新し、オフラインの PowerShell 回帰テストを追加した。
+CI の Windows / Linux 両ジョブで実行する。サブエージェントによる本体差分とテストの独立レビューで追加指摘はなかった。
+
+### 検証結果
+
+- `pwsh -NoProfile -File tests/Tools/YamlCreate.Tests.ps1`: 9 ケース成功。修正前のスクリプトを一時ディレクトリに展開して実行した場合は 9 ケースとも失敗することも確認した。
+- `dotnet build IntuneLobPublisher.slnx --configuration Release`: 成功、警告 0、エラー 0。
+- `dotnet test IntuneLobPublisher.slnx --configuration Release --no-build`: 693 件成功、失敗 0、スキップ 0。
+- CI YAML の構文確認、`git diff --check`: 成功。
+
+private GitHub Release の実ダウンロードと Intune への実 publish は未実施。HTTP リクエストの URL・ヘッダー・ハッシュ計算はテスト用の応答で検証した。
+
 ## 2026-08-30: NuGet.org Trusted Publishing (OIDC) への移行
 
 **ブランチ**: `feature/131-nuget-trusted-publishing`

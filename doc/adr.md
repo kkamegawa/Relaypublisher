@@ -4,6 +4,15 @@
 
 このファイルが 200 行を超えた場合は phase 単位で分割します。
 
+## 2026-09-02: manifest 作成スクリプトのソース契約 (Issue #140)
+
+- **決定**: `tools/yamlcreate.ps1` の `publicHttp` は `Auth.Type: none` に限定する。
+  - **理由**: PR #139 の設計にあった `token` の選択肢は、既存の `PublicHttpSourceProvider` が認証付き取得を拒否する契約と矛盾していたため。新たな認証方式は追加せず、生成内容を既存の取得処理に合わせる。
+- **決定**: GitHub Release の自動ハッシュ取得は public / private ともアセット ID の REST API を使い、ソースの認証は YAML キー順に依存せず読み取る。
+  - **理由**: private release で利用できないブラウザー向け URL と、`Auth` が `Sha256` より前にある場合の認証情報の欠落を解消するため。
+- **決定**: 表示する URL の認証情報・クエリ・フラグメントは除去し、保存する manifest では元の値を保持する。
+  - **理由**: ダウンロード先の署名をログへ出さず、取得に必要な URL は維持するため。
+
 ## 2026-08-30: nuget.org Trusted Publishing (OIDC) への移行 (Issue #131)
 
 - **決定**: `nuget.org` への自動 publish は GitHub Actions の `.github/workflows/release-publish.yml` に一本化し、

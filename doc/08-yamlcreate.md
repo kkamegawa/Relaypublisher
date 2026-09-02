@@ -109,7 +109,7 @@ Windows の `ExternalFiles` 各項目と macOS の `Source` で共用する。
 
 | Type | 選択できる `Auth.Type` |
 |---|---|
-| `publicHttp` | `none`(既定) / `token` |
+| `publicHttp` | `none` 固定(匿名ダウンロードのみ) |
 | `githubRelease` | `none`(既定) / `token` |
 | `azureBlob` | `workloadIdentity` 固定 |
 
@@ -120,11 +120,14 @@ Windows の `ExternalFiles` 各項目と macOS の `Source` で共用する。
 | Type | 取得方法 |
 |---|---|
 | `publicHttp` | `Url` を一時ディレクトリにダウンロードして `Get-FileHash -Algorithm SHA256` |
-| `githubRelease` | release タグのアセット一覧を取得して `AssetName` を選択させ、そのアセットをダウンロードして計算。`Auth.Type: token` の場合は環境変数の値を Bearer に使う |
+| `githubRelease` | release タグのアセット一覧を取得して `AssetName` を選択させ、選択したアセット ID の REST API から `Accept: application/octet-stream` でダウンロードして計算。`Auth.Type: token` の場合は環境変数の値を Bearer に使う。public / private repository とも同じ取得経路を使う |
 | `azureBlob` | 自動取得しない(workload identity が必要なため)。手入力にフォールバックし、`az storage blob download` の手順を案内する |
 
 自動計算に失敗した場合は警告を出して手入力に切り替える。手入力値は 64 桁の 16 進数であることを検証する。
 ダウンロードした一時ファイルは必ず削除する。
+
+manifest のプレビュー、更新差分、旧バージョンの残存行、取得エラーでは URL の認証情報・クエリ・フラグメントを
+マスクする。保存する manifest 内の URL は保持する。
 
 ## 6. Assignments
 
@@ -146,6 +149,9 @@ Windows の `ExternalFiles` 各項目と macOS の `Source` で共用する。
 `-EntraGroupCsv` / `-AssignmentFilterCsv` に [`tools/export-intune-entra.ps1`](../tools/export-intune-entra.ps1)
 が出力した CSV を渡すと、GUID を直接入力する代わりに表示名から選択できる。CSV に想定する列名が無い場合は
 警告を出して GUID の手入力に戻る。
+
+エクスポートの列名はグループが `GroupName` / `GroupId`、フィルターが `FilterName` / `FilterId`。
+名前列の `DisplayName` / `Name` も受け付ける。ヘッダーだけの CSV は候補 0 件として手入力に戻る。
 
 `-GroupId` を指定した場合は assignment プロンプトを出さず、各 GUID に対して
 `Target: group` / `Mode: include` / `Intent: required` の assignment を作る。`-FilterId` を併用すると
@@ -176,11 +182,14 @@ Windows の `ExternalFiles` 各項目と macOS の `Source` で共用する。
 1. top-level `PackageVersion` を新バージョンにする。
 2. `Url` / `Tag` / `AssetName` / `BlobName` / `Destination` / `BundleVersion` の各行のうち、値に旧バージョン
    文字列を含むものを置換する。`v7.6.4` のような `v` プレフィックス付きタグも置換される。
-   `1.2` が `1.2.3` の一部として誤置換されないよう、前後が数字・ドットでない位置だけを対象にする。
+   `1.2` が `1.2.3` の一部として誤置換されないよう、前の数字・ドットと、後ろの数字・ドットに続く数字を除外する。
+   `tool-1.2.pkg` のようにバージョンの直後が拡張子の場合は置換する。
 3. すべての `Sha256` を再計算する。バージョンが変われば digest も必ず変わるため、更新漏れを許さない。
    `-NoDownload` / `-Sha256` / 自動取得の失敗時は手入力になる。
 4. 置換後もまだ旧バージョン文字列を含む行(コメント内の記述など)を一覧で警告する。自動では書き換えない。
 5. 変更行を旧 / 新の色付き diff で表示し、確認してから保存する(`-Force` で確認を省略)。
+
+ソースの認証情報は `Auth` と `Sha256` の並び順に依存せず読み取り、別のソース item の認証情報は混在させない。
 
 ### 8.2 書き換えないもの
 
@@ -233,3 +242,20 @@ Windows の `ExternalFiles` 各項目と macOS の `Source` で共用する。
   preflight で行われる(doc/01-manifest-schema.md §5.8)。
 - `azureBlob` の `Sha256` は自動計算しない。
 - Update モードは `Requirements` / `Assignments` / `Scripts` / `Categories` を変更しない。
+
+## 11. 回帰テスト
+
+`tests/Tools/YamlCreate.Tests.ps1` はネットワークや追加モジュールを必要とせず、作成・更新の出力、認証付き取得の
+リクエスト、CSV 選択、URL のマスクを検証する。CI では Windows / Linux の両方で実行する。
+
+PowerShell 7:
+
+```powershell
+pwsh -NoProfile -File ./tests/Tools/YamlCreate.Tests.ps1
+```
+
+bash(macOS / Linux、PowerShell 7 が必要):
+
+```bash
+pwsh -NoProfile -File ./tests/Tools/YamlCreate.Tests.ps1
+```

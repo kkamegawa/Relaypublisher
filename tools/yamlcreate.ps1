@@ -147,6 +147,30 @@ $VersionBearingKeys = @('Url', 'Tag', 'AssetName', 'BlobName', 'Destination', 'B
 
 #region Console helpers
 
+function Protect-ConsoleText {
+    param([AllowEmptyString()][string]$Text)
+
+    # Only sanitize display text. The manifest must retain its original download URL.
+    return [regex]::Replace($Text, '(?i)https?://[^\s<>]+', {
+        param($match)
+        # Quotes can occur inside a URL (for example in a query). Only trailing YAML
+        # delimiters are separated; stopping at an embedded quote would leak the suffix.
+        $urlText = $match.Value.TrimEnd([char[]]@("'", '"'))
+        $closingQuotes = $match.Value.Substring($urlText.Length)
+        $uri = $null
+        if (-not [uri]::TryCreate($urlText, [UriKind]::Absolute, [ref]$uri)) {
+            return '[redacted-url]' + $closingQuotes
+        }
+
+        $safeUri = [UriBuilder]::new($uri)
+        $safeUri.UserName = ''
+        $safeUri.Password = ''
+        $safeUri.Query = ''
+        $safeUri.Fragment = ''
+        return $safeUri.Uri.AbsoluteUri + $closingQuotes
+    })
+}
+
 function Write-Heading {
     param([Parameter(Mandatory = $true)][string]$Text)
 
@@ -485,7 +509,7 @@ function Get-GitHubReleaseAsset {
         }
     }
 
-    $uri = "$GitHubApiBaseUri/repos/$Owner/$Repository/releases/tags/$Tag"
+    $uri = "$GitHubApiBaseUri/repos/$([uri]::EscapeDataString($Owner))/$([uri]::EscapeDataString($Repository))/releases/tags/$([uri]::EscapeDataString($Tag))"
     # -Verbose:$false: verbose output would echo the request URI, which can carry a token.
     $release = Invoke-RestMethod -Uri $uri -Headers $headers -MaximumRedirection 5 -Verbose:$false
     if ($null -eq $release -or $null -eq $release.PSObject.Properties['assets']) {
@@ -499,19 +523,22 @@ function Get-RemoteFileSha256 {
     param(
         [Parameter(Mandatory = $true)][string]$Uri,
         [string]$SecretName,
-        [string]$DisplayName
+        [string]$DisplayName,
+        [string]$Accept
     )
 
     $headers = @{ 'User-Agent' = $UserAgent }
+    if (-not [string]::IsNullOrWhiteSpace($Accept)) {
+        $headers['Accept'] = $Accept
+    }
     if (-not [string]::IsNullOrWhiteSpace($SecretName)) {
         $token = [Environment]::GetEnvironmentVariable($SecretName)
         if (-not [string]::IsNullOrWhiteSpace($token)) {
             $headers['Authorization'] = "Bearer $token"
-            $headers['Accept'] = 'application/octet-stream'
         }
     }
 
-    $label = if ([string]::IsNullOrWhiteSpace($DisplayName)) { 'the asset' } else { $DisplayName }
+    $label = if ([string]::IsNullOrWhiteSpace($DisplayName)) { 'the asset' } else { Protect-ConsoleText $DisplayName }
     $temporaryDirectory = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ([guid]::NewGuid().ToString('n'))
     [System.IO.Directory]::CreateDirectory($temporaryDirectory) | Out-Null
     $temporaryFile = Join-Path -Path $temporaryDirectory -ChildPath 'download.bin'
@@ -566,7 +593,13 @@ function Resolve-SourceSha256 {
                     return $null
                 }
 
-                return Get-RemoteFileSha256 -Uri $asset.browser_download_url -SecretName $secretName -DisplayName $asset.name
+                $assetId = [long]$asset.id
+                if ($assetId -le 0) {
+                    throw 'The release asset has no valid ID.'
+                }
+
+                $assetUri = "$GitHubApiBaseUri/repos/$([uri]::EscapeDataString($Source['Owner']))/$([uri]::EscapeDataString($Source['Repository']))/releases/assets/$assetId"
+                return Get-RemoteFileSha256 -Uri $assetUri -SecretName $secretName -DisplayName $asset.name -Accept 'application/octet-stream'
             }
 
             'azureBlob' {
@@ -580,7 +613,8 @@ function Resolve-SourceSha256 {
         }
     }
     catch {
-        Write-Warning "Could not compute the digest automatically: $($_.Exception.Message)"
+        # HTTP error bodies can echo credentials, even without a complete URL to redact.
+        Write-Warning 'Could not compute the digest automatically. Check the source and credentials, or enter its SHA-256 manually.'
     }
 
     return $null
@@ -689,11 +723,11 @@ function Read-SourceItem {
     }
 
     # Auth comes before the asset choice so a private release can be listed with the token.
-    $allowedAuthTypes = switch ($type) {
-        'publicHttp' { @('none', 'token') }
+    $allowedAuthTypes = @(switch ($type) {
+        'publicHttp' { @('none') }
         'githubRelease' { @('none', 'token') }
         'azureBlob' { @('workloadIdentity') }
-    }
+    })
 
     if ($allowedAuthTypes.Count -eq 1) {
         $authType = $allowedAuthTypes[0]
@@ -721,7 +755,7 @@ function Read-SourceItem {
                 }
             }
             catch {
-                Write-Warning "Could not list the release assets: $($_.Exception.Message)"
+                Write-Warning 'Could not list the release assets. Check the repository, tag and credentials, or enter the asset name manually.'
             }
         }
 
@@ -823,7 +857,7 @@ function Import-NameLookupCsv {
         return $null
     }
 
-    $rows = Import-Csv -LiteralPath $CsvPath
+    $rows = @(Import-Csv -LiteralPath $CsvPath)
     if ($rows.Count -eq 0) {
         return $null
     }
@@ -947,8 +981,8 @@ function Read-AssignmentList {
         return , $assignments
     }
 
-    $groupEntries = Import-NameLookupCsv -CsvPath $EntraGroupCsv -IdColumns @('Id', 'GroupId', 'ObjectId') -NameColumns @('DisplayName', 'Name')
-    $filterEntries = Import-NameLookupCsv -CsvPath $AssignmentFilterCsv -IdColumns @('Id', 'FilterId') -NameColumns @('DisplayName', 'Name')
+    $groupEntries = Import-NameLookupCsv -CsvPath $EntraGroupCsv -IdColumns @('Id', 'GroupId', 'ObjectId') -NameColumns @('GroupName', 'DisplayName', 'Name')
+    $filterEntries = Import-NameLookupCsv -CsvPath $AssignmentFilterCsv -IdColumns @('Id', 'FilterId') -NameColumns @('FilterName', 'DisplayName', 'Name')
 
     while ($true) {
         $assignment = @{}
@@ -1507,38 +1541,46 @@ function Get-ManifestSourceBlock {
         $fields = @{}
         $authFields = @{}
 
-        # Walk up to the start of this source item.
-        for ($i = $info.Index - 1; $i -ge 0; $i--) {
-            $candidate = $LineInfos[$i]
-            if ($null -eq $candidate.Key) {
-                continue
-            }
-
-            if ($candidate.KeyIndent -lt $indent) {
-                break
-            }
-
-            if ($candidate.KeyIndent -eq $indent) {
-                if (-not $fields.ContainsKey($candidate.Key)) {
-                    $fields[$candidate.Key] = Get-YamlScalarValue $candidate.Value
+        # Find the complete item first: YAML key order does not constrain where Auth appears.
+        $start = $info.Index
+        if (-not $info.IsListItem) {
+            for ($i = $info.Index - 1; $i -ge 0; $i--) {
+                $candidate = $LineInfos[$i]
+                if ($null -eq $candidate.Key) {
+                    continue
                 }
 
-                if ($candidate.IsListItem) {
+                if ($candidate.KeyIndent -lt $indent) {
                     break
+                }
+
+                if ($candidate.KeyIndent -eq $indent) {
+                    $start = $i
+                    if ($candidate.IsListItem) {
+                        break
+                    }
                 }
             }
         }
 
-        # Walk down through the rest of the item, including the Auth sub-block.
-        $inAuth = $false
+        $end = $LineInfos.Count
         for ($i = $info.Index + 1; $i -lt $LineInfos.Count; $i++) {
             $candidate = $LineInfos[$i]
             if ($null -eq $candidate.Key) {
                 continue
             }
 
-            if ($candidate.KeyIndent -lt $indent -or $candidate.IsListItem) {
+            if ($candidate.KeyIndent -lt $indent -or ($candidate.IsListItem -and $candidate.KeyIndent -eq $indent)) {
+                $end = $i
                 break
+            }
+        }
+
+        $inAuth = $false
+        for ($i = $start; $i -lt $end; $i++) {
+            $candidate = $LineInfos[$i]
+            if ($null -eq $candidate.Key) {
+                continue
             }
 
             if ($candidate.KeyIndent -eq $indent) {
@@ -1631,9 +1673,9 @@ function Get-VersionBumpedManifest {
         }
     }
 
-    # 2. Version-bearing source and detection fields. The negative lookaround stops "1.2" from
-    #    matching inside "1.2.3"; a "v" prefix (v7.6.4) is matched because "v" is not a digit or dot.
-    $versionRegex = "(?<![\d.])$([regex]::Escape($oldVersion))(?![\d.])"
+    # 2. Do not match "1.2" inside "1.2.3", but do allow a following extension such as ".pkg".
+    #    A "v" prefix (v7.6.4) is allowed because "v" is not a digit or dot.
+    $versionRegex = "(?<![\d.])$([regex]::Escape($oldVersion))(?!\d|\.\d)"
     foreach ($info in $lineInfos) {
         if ($null -eq $info.Key -or $VersionBearingKeys -notcontains $info.Key) {
             continue
@@ -1680,7 +1722,8 @@ function Get-VersionBumpedManifest {
         }
 
         $indent = $currentLine.Substring(0, $currentLine.Length - $currentLine.TrimStart().Length)
-        $updated = "$indent" + 'Sha256: "' + $newHash + '"'
+        $listPrefix = if ($updatedInfos[$block.Sha256Index].IsListItem) { '- ' } else { '' }
+        $updated = "$indent$listPrefix" + 'Sha256: "' + $newHash + '"'
         if ($updated -ne $currentLine) {
             $changes.Add([pscustomobject]@{ Index = $block.Sha256Index; Old = $currentLine; New = $updated })
             $lines[$block.Sha256Index] = $updated
@@ -1700,7 +1743,7 @@ function Get-VersionBumpedManifest {
         Write-Host ''
         Write-Host '   Still mentions the old version; review by hand:' -ForegroundColor Yellow
         foreach ($leftover in $leftovers) {
-            Write-Host "     $leftover" -ForegroundColor Yellow
+            Write-Host (Protect-ConsoleText "     $leftover") -ForegroundColor Yellow
         }
     }
 
@@ -1711,8 +1754,8 @@ function Get-VersionBumpedManifest {
 
     Write-Host ''
     foreach ($change in ($changes | Sort-Object Index)) {
-        Write-Host "  - $($change.Old)" -ForegroundColor Red
-        Write-Host "  + $($change.New)" -ForegroundColor Green
+        Write-Host (Protect-ConsoleText "  - $($change.Old)") -ForegroundColor Red
+        Write-Host (Protect-ConsoleText "  + $($change.New)") -ForegroundColor Green
     }
 
     return [pscustomobject]@{
@@ -1859,7 +1902,7 @@ if ($selectedMode -eq 'New') {
     $directory = [System.IO.Path]::GetFullPath($directory)
 
     Write-Heading 'Preview'
-    Write-Host (($result.Lines -join "`n"))
+    Write-Host (Protect-ConsoleText ($result.Lines -join "`n"))
     Write-Host ''
     Write-Host "Target: $(Join-Path -Path $directory -ChildPath $result.FileName)"
 
