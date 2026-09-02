@@ -1,255 +1,255 @@
-# tools/yamlcreate.ps1 — manifest 作成 / バージョンアップスクリプト
+# tools/yamlcreate.ps1 — Manifest creation and version update script
 
-## 1. 目的と位置づけ
+## 1. Purpose and scope
 
-`tools/yamlcreate.ps1` は、Relaypublisher の YAML manifest を対話プロンプトで作成し、既存 manifest を
-新しいバージョンへ更新するためのスクリプトである。winget-pkgs の `Tools/YamlCreate.ps1` に相当する。
+`tools/yamlcreate.ps1` uses interactive prompts to create Relaypublisher YAML manifests and update existing manifests
+to a new version. It serves the same role as `Tools/YamlCreate.ps1` in winget-pkgs.
 
-- schema の正本は [`doc/01-manifest-schema.md`](01-manifest-schema.md)。本スクリプトは入力補助であり、schema を定義しない。
-- 検証の正本は `relaypublisher validate`。本スクリプトが保存前に行うチェックは早期フィードバックのための重複実装で、
-  保存後に CLI の `validate` を自動実行する。
-- バージョンアップ手順の正本は [`doc/05-operation.md`](05-operation.md) §4c。Update モードはその手順を機械化したもの。
+- The authoritative schema is [`doc/01-manifest-schema.md`](01-manifest-schema.md). This script assists with input; it does not define the schema.
+- The authoritative validator is `relaypublisher validate`. The script duplicates some checks before saving to provide
+  early feedback, then automatically runs the CLI's `validate` command after saving.
+- The authoritative version update procedure is [`doc/05-operation.md`](05-operation.md) §4c. Update mode automates that procedure.
 
-前提は PowerShell 7.3 以降。Windows / macOS / Linux のいずれでも動作する(bash 版は用意しない。
-対話 UI とハッシュ計算を二重に保守しないため)。
+PowerShell 7.3 or later is required. The script runs on Windows, macOS, and Linux. There is no bash implementation,
+to avoid maintaining separate implementations of the interactive UI and hash calculation.
 
-## 2. モード
+## 2. Modes
 
-| モード | 用途 |
+| Mode | Purpose |
 |---|---|
-| `New` | schema に沿ったプロンプトで manifest を新規作成する |
-| `Update` | 既存 manifest を新しい `PackageVersion` へ更新する |
+| `New` | Create a manifest using prompts that follow the schema |
+| `Update` | Update an existing manifest to a new `PackageVersion` |
 
-`-Mode` を省略した場合、`-Path` があれば `Update`、なければ対話で選択する。
+If `-Mode` is omitted, the script uses `Update` when `-Path` is provided; otherwise, it prompts for the mode.
 
-## 3. パラメーター
+## 3. Parameters
 
-| パラメーター | 対象モード | 説明 |
+| Parameter | Applicable modes | Description |
 |---|---|---|
-| `-Mode <New\|Update>` | 両方 | 省略時は `-Path` の有無、または対話で決定 |
-| `-Path <path>` | Update | 既存の `*.yaml`、またはバージョンフォルダー(配下の `*.yaml` を一括更新) |
-| `-PackageVersion <version>` | 両方 | Update では新バージョン(必須)。New では `PackageVersion` プロンプトの既定値 |
-| `-Platform <windows\|macos>` | 両方 | New では最初の分岐を決定。Update では対象 manifest の絞り込み |
-| `-Architecture <x64\|arm64>` | New | 省略時は対話で選択 |
-| `-OutputDirectory <dir>` | 両方 | 出力先。省略時は §7 の既定レイアウト |
-| `-RepoRoot <dir>` | 両方 | manifest 内の相対パスの基準。既定は `git rev-parse --show-toplevel` |
-| `-GroupId <guid[]>` | New | 指定すると assignment プロンプトを出さず、各 GUID に `Intent: required` の include assignment を作る。複数指定はカンマ区切り(`-GroupId 'a','b'`)。`pwsh -File` 経由では空白区切りが配列として渡らないため、複数渡すときは `pwsh -Command` を使う |
-| `-FilterId <guid>` | New | `-GroupId` で作る assignment に適用する assignment filter |
-| `-FilterMode <include\|exclude>` | New | `-FilterId` 指定時の filter mode。既定 `include` |
-| `-EntraGroupCsv <path>` | New | `tools/export-intune-entra.ps1` の `entra-groups.csv`。GUID を表示名から選べるようになる |
-| `-AssignmentFilterCsv <path>` | New | 同 `assignment-filters.csv` |
-| `-Sha256 <hash>` | Update | ダウンロードせずに digest を指定する。ソースが 1 つの manifest 1 ファイルにのみ適用可 |
-| `-NoDownload` | 両方 | ネットワークに一切アクセスしない。digest はすべて手入力 |
-| `-SkipValidate` | 両方 | 保存後の `relaypublisher validate` を実行しない |
-| `-Force` | 両方 | 既存ファイルを上書きし、最終確認プロンプトを省略する |
+| `-Mode <New\|Update>` | Both | If omitted, determined by whether `-Path` is provided or by an interactive prompt |
+| `-Path <path>` | Update | An existing `*.yaml` file or a version folder (updates all `*.yaml` files in the folder) |
+| `-PackageVersion <version>` | Both | The new version in Update mode (required). The default value for the `PackageVersion` prompt in New mode |
+| `-Platform <windows\|macos>` | Both | Selects the initial branch in New mode. Filters the target manifests in Update mode |
+| `-Architecture <x64\|arm64>` | New | Selected interactively if omitted |
+| `-OutputDirectory <dir>` | Both | Output directory. Uses the default layout in §7 if omitted |
+| `-RepoRoot <dir>` | Both | Base directory for relative paths in the manifest. Defaults to `git rev-parse --show-toplevel` |
+| `-GroupId <guid[]>` | New | Skips assignment prompts and creates an include assignment with `Intent: required` for each GUID. Separate multiple values with commas (`-GroupId 'a','b'`). Use `pwsh -Command` to pass multiple values, because space-separated values passed through `pwsh -File` are not treated as an array |
+| `-FilterId <guid>` | New | Assignment filter applied to the assignments created by `-GroupId` |
+| `-FilterMode <include\|exclude>` | New | Filter mode when `-FilterId` is specified. Defaults to `include` |
+| `-EntraGroupCsv <path>` | New | The `entra-groups.csv` file produced by `tools/export-intune-entra.ps1`. Enables selecting GUIDs by display name |
+| `-AssignmentFilterCsv <path>` | New | The `assignment-filters.csv` file produced by the same exporter |
+| `-Sha256 <hash>` | Update | Supplies a digest without downloading. Can only be used for a single manifest file with a single source |
+| `-NoDownload` | Both | Disables all network access. All digests are entered manually |
+| `-SkipValidate` | Both | Skips `relaypublisher validate` after saving |
+| `-Force` | Both | Overwrites existing files and skips the final confirmation prompt |
 
-`-WhatIf` / `-Confirm` にも対応する(ファイル書き込みのみが対象)。
+`-WhatIf` and `-Confirm` are also supported (for file writes only).
 
-## 4. New モード
+## 4. New mode
 
-### 4.1 最初に platform を確定する
+### 4.1 Select the platform first
 
-最初のプロンプト(または `-Platform`)で `windows` / `macos` を確定し、以降のプロンプト集合を切り替える。
-一方の platform でしか使えないフィールドは、質問もしないし出力もしない。
+The first prompt (or `-Platform`) selects `windows` or `macos` and determines the subsequent set of prompts.
+Fields that apply only to the other platform are neither prompted for nor written to the output.
 
-### 4.2 共通の top-level
+### 4.2 Common top-level fields
 
-| プロンプト | 必須 | 既定値 / 備考 |
+| Prompt | Required | Default / Notes |
 |---|---|---|
-| `PackageIdentifier` | 必須 | app identity の一部。バージョンをまたいで変更しない |
-| `PackageName` | 必須 | |
-| `Publisher` | 必須 | |
-| `Description` | 必須 | |
-| `PackageVersion` | 必須 | `-PackageVersion` が既定値になる |
-| `Owner` | 任意 | 空で省略 |
-| `Developer` | 任意 | 空で省略 |
-| `InformationUrl` | 任意 | 空で省略 |
-| `Icon` | 任意 | repository 相対パス。`AppType: lob` のときのみ必須。拡張子・1 MiB 上限・実在を検証 |
-| `RoleScopeTagIds` | 任意 | カンマ区切り。各要素は必ずクォートして出力 |
-| `AssignmentSync` | 任意 | 既定 `merge` |
-| `DisplayName` | 必須 | 既定 `<PackageName> [Windows x64]` 形式。`PackageVersion` を含む値は拒否 |
-| `Categories` | 任意 | 質問に `n` で答えるとキー自体を出力しない(既存の関連付けを変更しない)。`y` かつ空入力で `Categories: []` |
+| `PackageIdentifier` | Required | Part of the app identity. Must remain the same across versions |
+| `PackageName` | Required | |
+| `Publisher` | Required | |
+| `Description` | Required | |
+| `PackageVersion` | Required | Uses `-PackageVersion` as the default |
+| `Owner` | Optional | Omitted if empty |
+| `Developer` | Optional | Omitted if empty |
+| `InformationUrl` | Optional | Omitted if empty |
+| `Icon` | Optional | Repository-relative path. Required only for `AppType: lob`. Validates the extension, 1 MiB size limit, and file existence |
+| `RoleScopeTagIds` | Optional | Comma-separated. Each item is always quoted in the output |
+| `AssignmentSync` | Optional | Defaults to `merge` |
+| `DisplayName` | Required | Defaults to the format `<PackageName> [Windows x64]`. Values containing `PackageVersion` are rejected |
+| `Categories` | Optional | Answering `n` omits the key entirely (preserving existing associations). Answering `y` and leaving the input empty produces `Categories: []` |
 
-`SchemaVersion` は `"1.0"` 固定で、プロンプトは出ない。
+`SchemaVersion` is fixed at `"1.0"` and is not prompted for.
 
-### 4.3 Windows 固有
+### 4.3 Windows-specific fields
 
-| プロンプト | 既定値 / 備考 |
+| Prompt | Default / Notes |
 |---|---|
-| `Package.IntuneWin.SetupFile` | 既定 `install.ps1` |
-| `Package.RepositoryFiles[]` | `Source`(repository 相対、実在確認)と `Destination` の対を 0..n |
-| `Package.ExternalFiles[]` | §5 のソース item を 0..n |
-| `Install.CommandLine` | 既定 `powershell.exe -ExecutionPolicy Bypass -File .\install.ps1` |
-| `Install.UninstallCommandLine` | 既定 `powershell.exe -ExecutionPolicy Bypass -File .\uninstall.ps1` |
-| `Install.InstallExperience` | 既定 `system` |
-| `Install.RestartBehavior` | 既定 `suppress` |
-| `Install.ReturnCodes[]` | 任意。追加しなければキーごと出力せず、Intune 既定(0/1707 success、3010 softReboot、1641 hardReboot、1618 retry)に委ねる |
-| `Detection.ScriptFile` | `Type: script` は固定。repository 相対、実在確認 |
-| `Detection.RunAs32Bit` / `EnforceSignatureCheck` | 既定 false |
-| `Requirements.MinimumOSVersion` | `WindowsReleaseTable` のキーのみを release 名付きで一覧提示。既定 `10.0.19045` |
-| `Requirements.Architecture` | app の `Architecture` を自動設定 |
+| `Package.IntuneWin.SetupFile` | Defaults to `install.ps1` |
+| `Package.RepositoryFiles[]` | Zero or more pairs of `Source` (repository-relative; file existence is checked) and `Destination` |
+| `Package.ExternalFiles[]` | Zero or more source items as described in §5 |
+| `Install.CommandLine` | Defaults to `powershell.exe -ExecutionPolicy Bypass -File .\install.ps1` |
+| `Install.UninstallCommandLine` | Defaults to `powershell.exe -ExecutionPolicy Bypass -File .\uninstall.ps1` |
+| `Install.InstallExperience` | Defaults to `system` |
+| `Install.RestartBehavior` | Defaults to `suppress` |
+| `Install.ReturnCodes[]` | Optional. If no entries are added, the key is omitted and Intune defaults apply (0/1707 success, 3010 softReboot, 1641 hardReboot, 1618 retry) |
+| `Detection.ScriptFile` | `Type: script` is fixed. Repository-relative; file existence is checked |
+| `Detection.RunAs32Bit` / `EnforceSignatureCheck` | Default to false |
+| `Requirements.MinimumOSVersion` | Lists only the keys in `WindowsReleaseTable`, along with release names. Defaults to `10.0.19045` |
+| `Requirements.Architecture` | Automatically set to the app's `Architecture` |
 
-### 4.4 macOS 固有
+### 4.4 macOS-specific fields
 
-| プロンプト | 既定値 / 備考 |
+| Prompt | Default / Notes |
 |---|---|
-| `AppType` | 既定 `pkg`。`lob` を選ぶと top-level `Icon` が必須になる |
-| `Source` | §5 のソース item を 1 つ |
-| `Requirements.MinimumOSVersion` | `MacOsMinimumOperatingSystemTable` のキーのみを提示。`AppType: lob` では beta 専用の 14.0 / 15.0 / 26.0 を選択肢から除外する。常にクォートして出力する(裸の `14.0` は YAML が float として読み、version table のキーと一致しなくなる) |
-| `Detection.IgnoreAppVersion` | 既定 false |
-| `Detection.IncludedApps[]` | `BundleId` + `BundleVersion` を 1 件以上。`BundleVersion` の既定は `PackageVersion` |
-| `Scripts.PreInstall` / `PostInstall` | `AppType: pkg` のときだけ質問する。`.sh` / 実在 / 15360 文字未満 / BOM なし / `#!` 開始を検証。両方空なら `Scripts` ブロックを出力しない |
+| `AppType` | Defaults to `pkg`. Selecting `lob` makes the top-level `Icon` required |
+| `Source` | One source item as described in §5 |
+| `Requirements.MinimumOSVersion` | Lists only the keys in `MacOsMinimumOperatingSystemTable`. For `AppType: lob`, the beta-only values 14.0 / 15.0 / 26.0 are excluded. Always quoted in the output (YAML reads an unquoted `14.0` as a float, which no longer matches the version table key) |
+| `Detection.IgnoreAppVersion` | Defaults to false |
+| `Detection.IncludedApps[]` | One or more `BundleId` + `BundleVersion` pairs. `BundleVersion` defaults to `PackageVersion` |
+| `Scripts.PreInstall` / `PostInstall` | Prompted for only when `AppType: pkg`. Validates the `.sh` extension, file existence, length below 15360 characters, absence of a BOM, and a leading `#!`. Omits the `Scripts` block if both are empty |
 
-## 5. ソース item と Sha256
+## 5. Source items and Sha256
 
-`publicHttp` / `githubRelease` / `azureBlob` の統一 item shape(doc/01-manifest-schema.md §5.0.1)を
-Windows の `ExternalFiles` 各項目と macOS の `Source` で共用する。
+The unified item shape for `publicHttp` / `githubRelease` / `azureBlob` (doc/01-manifest-schema.md §5.0.1)
+is shared by each Windows `ExternalFiles` entry and the macOS `Source`.
 
-`Auth` の制約はスクリプトが強制する。
+The script enforces the following `Auth` constraints.
 
-| Type | 選択できる `Auth.Type` |
+| Type | Allowed `Auth.Type` values |
 |---|---|
-| `publicHttp` | `none` 固定(匿名ダウンロードのみ) |
-| `githubRelease` | `none`(既定) / `token` |
-| `azureBlob` | `workloadIdentity` 固定 |
+| `publicHttp` | Fixed at `none` (anonymous downloads only) |
+| `githubRelease` | `none` (default) / `token` |
+| `azureBlob` | Fixed at `workloadIdentity` |
 
-`Auth.Type: token` では**環境変数名**を入力する。トークンの値は manifest にもログにも出力しない。
+For `Auth.Type: token`, enter the **environment variable name**. The token value is never written to the manifest or logs.
 
-`Sha256` の取得経路は 3 つある(`-NoDownload` 指定時はいずれも行わず手入力)。
+`Sha256` is obtained as follows for each of the three source types (with `-NoDownload`, these steps are skipped and the digest is entered manually).
 
-| Type | 取得方法 |
+| Type | Method |
 |---|---|
-| `publicHttp` | `Url` を一時ディレクトリにダウンロードして `Get-FileHash -Algorithm SHA256` |
-| `githubRelease` | release タグのアセット一覧を取得して `AssetName` を選択させ、選択したアセット ID の REST API から `Accept: application/octet-stream` でダウンロードして計算。`Auth.Type: token` の場合は環境変数の値を Bearer に使う。public / private repository とも同じ取得経路を使う |
-| `azureBlob` | 自動取得しない(workload identity が必要なため)。手入力にフォールバックし、`az storage blob download` の手順を案内する |
+| `publicHttp` | Downloads `Url` to a temporary directory and runs `Get-FileHash -Algorithm SHA256` |
+| `githubRelease` | Retrieves the assets for the release tag, prompts for `AssetName`, downloads the selected asset through the asset ID REST API with `Accept: application/octet-stream`, and calculates the hash. For `Auth.Type: token`, the environment variable value is used as the Bearer token. Public and private repositories use the same download path |
+| `azureBlob` | No automatic download (workload identity is required). Falls back to manual input and provides instructions for `az storage blob download` |
 
-自動計算に失敗した場合は警告を出して手入力に切り替える。手入力値は 64 桁の 16 進数であることを検証する。
-ダウンロードした一時ファイルは必ず削除する。
+If automatic calculation fails, the script displays a warning and switches to manual input. Manually entered values must be 64 hexadecimal digits.
+Downloaded temporary files are always deleted.
 
-manifest のプレビュー、更新差分、旧バージョンの残存行、取得エラーでは URL の認証情報・クエリ・フラグメントを
-マスクする。保存する manifest 内の URL は保持する。
+URL credentials, query strings, and fragments are masked in manifest previews, update diffs, lines that still contain the old version,
+and download errors. URLs are preserved in the saved manifest.
 
 ## 6. Assignments
 
-`GroupId` / `FilterId` は**すべて任意**である。1 件も追加しなければ `Assignments: []` を出力する。これは
-テナント固有の ID を含まない形なので、`plan` → `validate` → `package` → `publish --dry-run` まで
-どのテナントでもそのまま通る。
+`GroupId` and `FilterId` are **both optional**. If no assignments are added, the script writes `Assignments: []`.
+This form contains no tenant-specific IDs, so it can pass through `plan` → `validate` → `package` → `publish --dry-run`
+unchanged in any tenant.
 
-| プロンプト | 既定値 / 備考 |
+| Prompt | Default / Notes |
 |---|---|
-| `Target` | 既定 `group`。`allDevices` / `allLicensedUsers` では `GroupId` を出力しない |
-| `GroupId` | `Target: group` のとき必須。GUID を検証 |
-| `Mode` | 既定 `include` |
-| `Intent` | `Mode: include` のとき必須。`AppType: pkg` では `uninstall` を選択肢から除外する |
-| `FilterId` | 任意。指定したときのみ `FilterMode` を質問する(必須) |
-| `Settings.Notifications` / `RestartGracePeriodMinutes` | Windows(win32)のときのみ |
+| `Target` | Defaults to `group`. `GroupId` is omitted for `allDevices` / `allLicensedUsers` |
+| `GroupId` | Required for `Target: group`. Validated as a GUID |
+| `Mode` | Defaults to `include` |
+| `Intent` | Required for `Mode: include`. For `AppType: pkg`, `uninstall` is excluded from the choices |
+| `FilterId` | Optional. `FilterMode` is prompted for (and required) only when a filter ID is specified |
+| `Settings.Notifications` / `RestartGracePeriodMinutes` | Windows (win32) only |
 
-同一 manifest 内で `Target` + `GroupId` + `Mode` が重複する assignment は追加しない。
+Assignments with duplicate `Target` + `GroupId` + `Mode` combinations are not added within the same manifest.
 
-`-EntraGroupCsv` / `-AssignmentFilterCsv` に [`tools/export-intune-entra.ps1`](../tools/export-intune-entra.ps1)
-が出力した CSV を渡すと、GUID を直接入力する代わりに表示名から選択できる。CSV に想定する列名が無い場合は
-警告を出して GUID の手入力に戻る。
+Passing CSV files produced by [`tools/export-intune-entra.ps1`](../tools/export-intune-entra.ps1) to `-EntraGroupCsv`
+and `-AssignmentFilterCsv` enables selection by display name instead of entering GUIDs directly. If the CSV does not contain
+the expected column names, the script warns and falls back to manual GUID input.
 
-エクスポートの列名はグループが `GroupName` / `GroupId`、フィルターが `FilterName` / `FilterId`。
-名前列の `DisplayName` / `Name` も受け付ける。ヘッダーだけの CSV は候補 0 件として手入力に戻る。
+The exported column names are `GroupName` / `GroupId` for groups and `FilterName` / `FilterId` for filters.
+`DisplayName` / `Name` are also accepted as name columns. A CSV containing only headers provides no choices, so the script falls back to manual input.
 
-`-GroupId` を指定した場合は assignment プロンプトを出さず、各 GUID に対して
-`Target: group` / `Mode: include` / `Intent: required` の assignment を作る。`-FilterId` を併用すると
-すべての assignment に同じ filter が付く。
+When `-GroupId` is specified, assignment prompts are skipped and an assignment with
+`Target: group` / `Mode: include` / `Intent: required` is created for each GUID. If `-FilterId` is also specified,
+the same filter is applied to every assignment.
 
-## 7. 出力先
+## 7. Output location
 
-`-OutputDirectory` を指定した場合はそのフォルダーに書き込む。省略した場合の既定は次のとおり。
+If `-OutputDirectory` is specified, files are written to that folder. Otherwise, the defaults are as follows.
 
-| モード | 既定の出力先 |
+| Mode | Default output location |
 |---|---|
 | New | `<RepoRoot>/manifests/<Publisher>/<PackageIdentifier>/<PackageVersion>/` |
-| Update(元ファイルの親フォルダー名が旧バージョンと一致) | 元フォルダーの兄弟 `<...>/<新バージョン>/` |
-| Update(それ以外) | `<RepoRoot>/manifests/<Publisher>/<PackageIdentifier>/<新バージョン>/` |
+| Update (the source file's parent folder name matches the old version) | A sibling of the source folder: `<...>/<new-version>/` |
+| Update (otherwise) | `<RepoRoot>/manifests/<Publisher>/<PackageIdentifier>/<new-version>/` |
 
-ファイル名は、New では `<packageidentifier>-<platform>-<architecture>.yaml`(小文字)、Update では元のファイル名。
-既存ファイルは `-Force` を付けない限り上書きしない。
+New mode uses the filename `<packageidentifier>-<platform>-<architecture>.yaml` (lowercase). Update mode keeps the original filename.
+Existing files are not overwritten unless `-Force` is specified.
 
-文字コードは UTF-8(BOM なし)。改行は New では LF、Update では**元ファイルの改行コードを保持**する
-(ローカルの diff がバージョンアップ分だけになるようにするため)。
+Files are encoded as UTF-8 without a BOM. New mode uses LF line endings. Update mode **preserves the original file's line endings**
+so that local diffs contain only the version update changes.
 
-## 8. Update モード(バージョンアップ)
+## 8. Update mode (version updates)
 
-### 8.1 書き換える対象
+### 8.1 Fields that are updated
 
-行ベースで書き換えるため、コメント・キー順・書式はそのまま残る。`PackageVersion`、ソースのバージョン関連フィールド、
-`Sha256` は値の範囲だけを編集し、引用符の種類や行末コメント(旧バージョンの記述を含む)は保持する。
+Updates are line-based, preserving comments, key order, and formatting. For `PackageVersion`, version-related source fields,
+and `Sha256`, only the value span is edited; quote styles and trailing comments (including references to the old version) are preserved.
 
-1. top-level `PackageVersion` を新バージョンにする。
-2. `Url` / `Tag` / `AssetName` / `BlobName` / `Destination` / `BundleVersion` の各行のうち、値に旧バージョン
-   文字列を含むものを置換する。`v7.6.4` のような `v` プレフィックス付きタグも置換される。
-   `1.2` が `1.2.3` の一部として誤置換されないよう、前の数字・ドットと、後ろの数字・ドットに続く数字を除外する。
-   `tool-1.2.pkg` のようにバージョンの直後が拡張子の場合は置換する。
-3. すべての `Sha256` を再計算する。バージョンが変われば digest も必ず変わるため、更新漏れを許さない。
-   `-NoDownload` / `-Sha256` / 自動取得の失敗時は手入力になる。
-4. 置換後もまだ旧バージョン文字列を含む行(コメント内の記述など)を一覧で警告する。自動では書き換えない。
-5. 変更行を旧 / 新の色付き diff で表示し、確認してから保存する(`-Force` で確認を省略)。
+1. Set the top-level `PackageVersion` to the new version.
+2. Replace the old version string in the values of `Url` / `Tag` / `AssetName` / `BlobName` / `Destination` / `BundleVersion` lines.
+   Tags with a `v` prefix, such as `v7.6.4`, are also updated.
+   To avoid replacing `1.2` within `1.2.3`, matches preceded by a digit or dot, or followed by a digit or a dot followed by a digit, are excluded.
+   A version immediately followed by a file extension, such as `tool-1.2.pkg`, is replaced.
+3. Recalculate every `Sha256`. A version change also changes the digest, so no hash update may be skipped.
+   `-NoDownload`, `-Sha256`, or a failed automatic download requires a manually supplied digest.
+4. Warn by listing lines that still contain the old version string after replacement, such as references in comments. These are not rewritten automatically.
+5. Display changed lines as a colored old/new diff, then save after confirmation (`-Force` skips confirmation).
 
-ソースの認証情報は `Auth` と `Sha256` の並び順に依存せず読み取り、別のソース item の認証情報は混在させない。
-単一行の引用符付き値では、単一引用符内の `''` と二重引用符内の YAML エスケープを復元してからソースや認証情報として使う。
-引用符内の `#` は値として扱い、引用符の外にある行末コメントと区別する。
+Source authentication is read independently of the order of `Auth` and `Sha256`, and credentials from different source items are kept separate.
+For single-line quoted values, `''` inside single quotes and YAML escapes inside double quotes are decoded before the values are used as sources or credentials.
+A `#` inside quotes is treated as part of the value, distinct from a trailing comment outside the quotes.
 
-### 8.2 書き換えないもの
+### 8.2 Fields that are not updated
 
-`PackageIdentifier` / `Platform` / `Architecture` / `DisplayName` は書き換えない。これらは app identity
-そのもので、変更すると Intune 上に別アプリが作られ、既存アプリが取り残される(AGENTS.md 設計上の不変条件)。
+`PackageIdentifier` / `Platform` / `Architecture` / `DisplayName` are not rewritten. These define the app identity;
+changing them creates a separate app in Intune and leaves the existing app behind (see the design invariants in AGENTS.md).
 
-`Requirements.MinimumOSVersion`、`Icon`、`Scripts`、`Assignments`、`Categories` も変更しない。新バージョンで
-これらを変えたい場合は、生成後に手で編集する。
+`Requirements.MinimumOSVersion`, `Icon`, `Scripts`, `Assignments`, and `Categories` are also left unchanged.
+To change these for a new version, edit the generated manifest manually.
 
-### 8.3 実行例
+### 8.3 Examples
 
 ```powershell
-# PowerShell 7.6.4 -> 7.6.5。フォルダー配下の *.yaml をまとめて更新し、兄弟の 7.6.5/ に出力する
+# PowerShell 7.6.4 -> 7.6.5. Update all *.yaml files in the folder and write them to the sibling 7.6.5/ folder.
 ./tools/yamlcreate.ps1 -Mode Update `
     -Path samples/manifests/Microsoft/Microsoft.PowerShell/7.6.4 `
     -PackageVersion 7.6.5
 ```
 
 ```powershell
-# ネットワークを使わず、digest を明示して 1 ファイルだけ更新する
+# Update a single file without network access, supplying the digest explicitly.
 ./tools/yamlcreate.ps1 -Mode Update `
     -Path manifests/Contoso/Contoso.Tool/1.2.3/contoso.tool-macos-arm64.yaml `
     -PackageVersion 1.2.4 -NoDownload -Sha256 <sha256> -Force
 ```
 
-## 9. 保存前の検証
+## 9. Validation before saving
 
-保存の直前に、Graph も CLI も使わずに次を検証する。いずれも `src/IntuneLobPublisher.Core/Validation/` の
-対応するルールと同じ内容である。
+Immediately before saving, the script performs the following checks without calling Graph or the CLI.
+Each check matches the corresponding rule in `src/IntuneLobPublisher.Core/Validation/`.
 
-- manifest 由来のパス(`Destination` / `Source` / `SetupFile` / `ScriptFile` / `Icon` / `Scripts.*`)の
-  path traversal・絶対パス・ドライブレター
-- `Sha256` が 64 桁の 16 進数であること
-- `GroupId` / `FilterId` が GUID であること
-- `DisplayName` が `PackageVersion` を含まないこと
-- `Icon` の拡張子(`.png` / `.jpg` / `.jpeg`)、1 MiB 上限、実在
-- macOS `Scripts` の `.sh` 拡張子、実在、15360 文字未満、BOM なし、`#!` 開始
-- `AppType: lob` で `Icon` が指定されていること、macOS 14 以降を選べないこと
-- `AppType: pkg` で `Intent: uninstall` を選べないこと
+- Check manifest-derived paths (`Destination` / `Source` / `SetupFile` / `ScriptFile` / `Icon` / `Scripts.*`)
+  for path traversal, absolute paths, and drive letters
+- Ensure `Sha256` contains 64 hexadecimal digits
+- Ensure `GroupId` / `FilterId` are GUIDs
+- Ensure `DisplayName` does not contain `PackageVersion`
+- Validate the `Icon` extension (`.png` / `.jpg` / `.jpeg`), 1 MiB size limit, and file existence
+- Validate macOS `Scripts`: `.sh` extension, file existence, length below 15360 characters, no BOM, and a leading `#!`
+- Ensure `AppType: lob` has an `Icon` and cannot select macOS 14 or later
+- Ensure `AppType: pkg` cannot select `Intent: uninstall`
 
-保存後、`relaypublisher` が PATH にあれば `relaypublisher validate --manifest <保存先> --repo-root <RepoRoot>`
-を実行する。見つからない場合は実行すべきコマンドを表示する。`-SkipValidate` で抑止できる。
+After saving, if `relaypublisher` is on PATH, the script runs `relaypublisher validate --manifest <saved-path> --repo-root <RepoRoot>`.
+If it is not found, the script displays the command to run. `-SkipValidate` suppresses this step.
 
-## 10. 制限事項
+## 10. Limitations
 
-- YAML の完全なパースは行わない。Update モードは §8.1 のキーだけを対象とした行編集である。手で大きく崩した
-  インデントや、フロースタイル(`{ }` / `[ ]`)で書かれた manifest は対象外。
-- `AssignmentSync` の意味論(merge / replace)には関与しない。値を書き込むだけである。
-- `Categories` に指定した名前がテナントに存在するかは検証できない。検出は publish / dry-run の Graph
-  preflight で行われる(doc/01-manifest-schema.md §5.8)。
-- `azureBlob` の `Sha256` は自動計算しない。
-- Update モードは `Requirements` / `Assignments` / `Scripts` / `Categories` を変更しない。
+- The script does not fully parse YAML. Update mode edits lines only for the keys listed in §8.1. Manifests with severely malformed
+  indentation or written in flow style (`{ }` / `[ ]`) are not supported.
+- The script does not implement `AssignmentSync` semantics (merge / replace); it only writes the value.
+- It cannot verify whether the names in `Categories` exist in the tenant. This is checked during the Graph preflight
+  in publish / dry-run (doc/01-manifest-schema.md §5.8).
+- `Sha256` is not calculated automatically for `azureBlob`.
+- Update mode does not change `Requirements` / `Assignments` / `Scripts` / `Categories`.
 
-## 11. 回帰テスト
+## 11. Regression tests
 
-`tests/Tools/YamlCreate.Tests.ps1` はネットワークや追加モジュールを必要とせず、作成・更新の出力、認証付き取得の
-リクエスト、CSV 選択、URL のマスクを検証する。CI では Windows / Linux の両方で実行する。
+`tests/Tools/YamlCreate.Tests.ps1` verifies creation and update output, authenticated download requests, CSV selection,
+and URL masking without network access or additional modules. CI runs these tests on both Windows and Linux.
 
 PowerShell 7:
 
@@ -257,7 +257,7 @@ PowerShell 7:
 pwsh -NoProfile -File ./tests/Tools/YamlCreate.Tests.ps1
 ```
 
-bash(macOS / Linux、PowerShell 7 が必要):
+bash (macOS / Linux; requires PowerShell 7):
 
 ```bash
 pwsh -NoProfile -File ./tests/Tools/YamlCreate.Tests.ps1
