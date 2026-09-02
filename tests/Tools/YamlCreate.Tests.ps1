@@ -4,7 +4,13 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $testRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
-$toolPath = Join-Path $testRepoRoot 'tools/yamlcreate.ps1'
+$configuredToolPath = [System.Environment]::GetEnvironmentVariable('YAMLCREATE_TEST_TOOL_PATH')
+$toolPath = if ([string]::IsNullOrWhiteSpace($configuredToolPath)) {
+    Join-Path $testRepoRoot 'tools/yamlcreate.ps1'
+}
+else {
+    (Resolve-Path -LiteralPath $configuredToolPath).Path
+}
 $toolText = [System.IO.File]::ReadAllText($toolPath)
 $entryMarker = '#region Entry point'
 $entryOffset = $toolText.IndexOf($entryMarker, [System.StringComparison]::Ordinal)
@@ -409,6 +415,130 @@ Apps:
     Assert-Contains $saved ('Sha256: "' + ('c' * 64) + '"') 'First source hash was not updated.'
     Assert-Contains $saved ('Sha256: "' + ('d' * 64) + '"') 'Second source hash was not updated.'
     Assert-True ($saved.IndexOf('Auth:', [System.StringComparison]::Ordinal) -lt $saved.IndexOf('Sha256:', [System.StringComparison]::Ordinal)) 'The first Auth/Sha256 order changed.'
+}
+
+Invoke-Case 'YAML scalar decoding preserves quoted source and auth values during Update' {
+    Assert-Equal "O'Reilly # vendor" (Get-YamlScalarValue "'O''Reilly # vendor' # trailing comment") 'Single-quoted YAML scalar was not decoded.'
+    Assert-Equal 'a"b\c#d' (Get-YamlScalarValue '"a\"b\\c#d" # trailing comment') 'Double-quoted YAML escapes or embedded # were not decoded.'
+    Assert-Equal 'https://example.com/a#b' (Get-YamlScalarValue 'https://example.com/a#b # trailing comment') 'Plain YAML scalar did not retain # inside the value.'
+    Assert-Equal ('caf' + [char]0xe9 + '-A-' + [char]::ConvertFromUtf32(0x1f4e6)) (Get-YamlScalarValue '"caf\u00E9-\x41-\U0001F4E6"') 'Unicode escapes in a quoted scalar were not decoded.'
+    Assert-Equal ([string][char]0x85 + "`n") (Get-YamlScalarValue '"\N\n"') 'Case-sensitive YAML newline escapes were not decoded.'
+
+    $manifest = @'
+SchemaVersion: "1.0"
+PackageIdentifier: Contoso.Tool
+PackageName: Contoso Tool
+Publisher: Contoso
+Description: test
+PackageVersion: 1.2
+Apps:
+  - Platform: windows
+    Architecture: x64
+    Package:
+      ExternalFiles:
+        - Type: githubRelease
+          Owner: 'Contoso''Owner'
+          Repository: "tool\\repo"
+          Tag: 'release-1.2 # stable'
+          AssetName: "tool-1.2\"pkg.exe"
+          Destination: 'tool-1.2.pkg # destination'
+          Sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          Auth:
+            Type: "token"
+            SecretName: 'SEC''RET#NAME'
+'@
+
+    $script:NoDownload = $false
+    $script:Sha256 = $null
+    $script:CapturedSource = $null
+    $script:CapturedDownload = $null
+    function script:Get-GitHubReleaseAsset {
+        param([string]$Owner, [string]$Repository, [string]$Tag, [string]$SecretName)
+        $script:CapturedSource = [pscustomobject]@{
+            Owner = $Owner
+            Repository = $Repository
+            Tag = $Tag
+            SecretName = $SecretName
+        }
+        return [pscustomobject]@{ name = 'tool-1.3"pkg.exe'; id = 99 }
+    }
+    function script:Get-RemoteFileSha256 {
+        param([string]$Uri, [string]$SecretName, [string]$DisplayName, [string]$Accept)
+        $script:CapturedDownload = [pscustomobject]@{
+            Uri = $Uri
+            SecretName = $SecretName
+            DisplayName = $DisplayName
+        }
+        return 'c' * 64
+    }
+
+    $case = Invoke-UpdateFixture -ManifestText $manifest -NewVersion '1.3' -Sha256 $null
+    Assert-Equal "Contoso'Owner" $script:CapturedSource.Owner 'The doubled apostrophe in Owner was not decoded before source resolution.'
+    Assert-Equal 'tool\repo' $script:CapturedSource.Repository 'The escaped backslash in Repository was not decoded before source resolution.'
+    Assert-Equal 'release-1.3 # stable' $script:CapturedSource.Tag 'The quoted # in Tag was truncated or not version-bumped.'
+    Assert-Equal 'SEC''RET#NAME' $script:CapturedSource.SecretName 'The quoted # and doubled apostrophe in Auth.SecretName were not preserved.'
+    Assert-Equal 'tool-1.3"pkg.exe' $script:CapturedDownload.DisplayName 'The quoted AssetName value was not passed completely to hashing.'
+    Assert-Equal 'SEC''RET#NAME' $script:CapturedDownload.SecretName 'The complete Auth.SecretName was not passed to hashing.'
+    $saved = [System.IO.File]::ReadAllText($case.OutputPath)
+    Assert-Contains $saved 'AssetName: "tool-1.3\"pkg.exe"' 'The escaped quote in AssetName was not preserved while updating the version.'
+    Assert-Contains $saved "Destination: 'tool-1.3.pkg # destination'" 'The quoted Destination comment or value was not preserved.'
+}
+
+Invoke-Case 'Update changes only PackageVersion scalar and preserves inline comments on related fields' {
+    foreach ($versionScalar in @(
+        @{ Text = '1.2'; Comment = ' # plain package 1.2 other=1.20' },
+        @{ Text = "'1.2'"; Comment = "`t# single package 1.2 other=1.20" },
+        @{ Text = '"1.2"'; Comment = '  # double package 1.2 other=1.20' }
+    )) {
+        $manifest = @"
+SchemaVersion: 1.0
+PackageIdentifier: Contoso.Tool
+PackageName: Contoso Tool
+Publisher: Contoso
+Description: test
+PackageVersion: $($versionScalar.Text)$($versionScalar.Comment)
+Apps:
+  - Platform: macos
+    Architecture: x64
+    Source:
+      Type: githubRelease
+      Owner: contoso
+      Repository: tool
+      Tag: 'v1.2'  # tag 1.2
+      AssetName: tool-1.2.pkg  # asset 1.2
+      Destination: tool-1.2.pkg`t# destination 1.2
+      Sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`t# hash 1.2
+    Detection:
+      IncludedApps:
+        - BundleId: com.contoso.tool
+          BundleVersion: "1.2"  # bundle 1.2
+# stale version 1.2 and unrelated 1.20 remain for review
+"@
+        $root = New-TestRoot
+        $inputPath = Join-Path $root 'quoted-version.yaml'
+        $outputDirectory = Join-Path $root 'out'
+        Write-TestText -Path $inputPath -Text $manifest
+        $script:Platform = 'macos'
+        $script:NoDownload = $true
+        $script:Sha256 = 'f' * 64
+        Assert-Contains ([System.IO.File]::ReadAllText($inputPath)) $versionScalar.Comment 'Test fixture did not retain the requested PackageVersion comment.'
+        $messages = @(Get-VersionBumpedManifest -FilePath $inputPath -NewVersion '1.3' 6>&1)
+        $result = $messages | Where-Object { $_.PSObject.Properties.Name -contains 'Lines' } | Select-Object -Last 1
+        Assert-True ($null -ne $result) 'Update did not return a manifest result for the quoted PackageVersion.'
+        Save-ManifestFile -Lines $result.Lines -Directory $outputDirectory -FileName $result.FileName -NewLine $result.NewLine | Out-Null
+        $saved = [System.IO.File]::ReadAllText((Join-Path $outputDirectory 'quoted-version.yaml'))
+
+        Assert-Contains $saved "PackageVersion: $($versionScalar.Text.Replace('1.2', '1.3'))$($versionScalar.Comment)" 'PackageVersion did not retain its quote style and inline comment.'
+        Assert-Contains $saved "Tag: 'v1.3'  # tag 1.2" 'Tag inline comment was not preserved.'
+        Assert-Contains $saved 'AssetName: tool-1.3.pkg  # asset 1.2' 'AssetName inline comment was not preserved.'
+        Assert-Contains $saved "Destination: tool-1.3.pkg`t# destination 1.2" 'Destination inline comment was not preserved.'
+        Assert-Contains $saved ('Sha256: "' + ('f' * 64) + '"' + "`t# hash 1.2") 'Sha256 inline comment was not preserved.'
+        Assert-Contains $saved 'BundleVersion: "1.3"  # bundle 1.2' 'BundleVersion inline comment was not preserved.'
+        Assert-Contains $saved '# stale version 1.2 and unrelated 1.20 remain for review' 'The unrelated old version comment was unexpectedly changed.'
+        $display = ($messages | ForEach-Object { $_.ToString() }) -join "`n"
+        Assert-Contains $display 'stale version 1.2' 'The remaining old version was not included in the review warning.'
+        Assert-Contains $display "line 6: PackageVersion: $($versionScalar.Text.Replace('1.2', '1.3'))$($versionScalar.Comment)" 'The PackageVersion inline comment was not included in the remaining-version warning.'
+    }
 }
 
 Invoke-Case 'Exporter GroupName and FilterName columns are recognized for one and many rows' {

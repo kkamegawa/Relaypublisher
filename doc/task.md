@@ -33,6 +33,18 @@ CI の Windows / Linux 両ジョブで実行する。サブエージェントに
 
 private GitHub Release の実ダウンロードと Intune への実 publish は未実施。HTTP リクエストの URL・ヘッダー・ハッシュ計算はテスト用の応答で検証した。
 
+### 2026-09-02 追記: Copilot レビュー対応
+
+PR #139 の追加コメント 2 件を、同じ Issue #140 のレビュー修正として対応した。
+
+- `Get-YamlScalarValue` がエスケープされた引用符で値を切り詰める問題を修正した。単一行の引用符付き値を切り出し、単一引用符の `''` と二重引用符の YAML エスケープを復元して Source / Auth へ渡す。
+- `PackageVersion` の行全体を置換する問題を修正した。ソースのバージョン関連フィールドと `Sha256` も値の範囲だけを編集し、引用符・空白・行末コメントを保持する。コメント中の旧バージョンは残存警告の対象になる。
+- [08-yamlcreate.md](08-yamlcreate.md) に既存のコメント保持仕様の具体的な動作を明記し、回帰テストを追加した。本体差分の独立レビューで追加指摘はなかった。
+
+`dotnet build IntuneLobPublisher.slnx --configuration Release` は成功(既存の CS8631 警告 2 件、エラー 0)、
+`dotnet test IntuneLobPublisher.slnx --configuration Release --no-build` は 693 件成功(失敗・スキップ 0)。
+`pwsh -NoProfile -File tests/Tools/YamlCreate.Tests.ps1` は 11 ケース成功。追加した 2 ケースは今回の修正前には失敗することも確認した。
+
 ## 2026-08-30: NuGet.org Trusted Publishing (OIDC) への移行
 
 **ブランチ**: `feature/131-nuget-trusted-publishing`

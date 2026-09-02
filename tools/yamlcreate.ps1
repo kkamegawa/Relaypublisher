@@ -1495,32 +1495,102 @@ function Get-ManifestValue {
     return $null
 }
 
+function Get-YamlScalarToken {
+    param([AllowEmptyString()][string]$Value)
+
+    # Locate only the single-line scalar, preserving whitespace and comments around it.
+    $start = $Value.Length - $Value.TrimStart().Length
+    $trimmed = $Value.Trim()
+    $quote = ''
+    if ($trimmed.StartsWith('"') -or $trimmed.StartsWith("'")) {
+        $quote = [string]$trimmed[0]
+        $pattern = if ($quote -eq '"') { '^"(?:[^"\\]|\\.)*"' } else { "^'(?:[^']|'')*'" }
+        $match = [regex]::Match($trimmed, $pattern)
+        if (-not $match.Success -or $trimmed.Substring($match.Length) -notmatch '^(?:[ \t]+#.*|[ \t]*)$') {
+            throw 'Expected a complete single-line quoted YAML scalar.'
+        }
+
+        $token = $match.Value
+    }
+    else {
+        $comment = [regex]::Match($trimmed, '(?:^|[ \t]+)#')
+        $token = if ($comment.Success) { $trimmed.Substring(0, $comment.Index).TrimEnd() } else { $trimmed }
+    }
+
+    return [pscustomobject]@{ Start = $start; Length = $token.Length; Text = $token; Quote = $quote }
+}
+
 function Get-YamlScalarValue {
     param([AllowEmptyString()][string]$Value)
 
-    if ($null -eq $Value) {
-        return $null
+    $scalar = Get-YamlScalarToken $Value
+    if ($scalar.Quote -eq '') {
+        return $scalar.Text
     }
 
-    $trimmed = $Value.Trim()
+    $content = $scalar.Text.Substring(1, $scalar.Text.Length - 2)
+    if ($scalar.Quote -eq "'") {
+        return $content.Replace("''", "'")
+    }
 
-    # Strip a trailing inline comment before unquoting, but only outside a quoted scalar.
-    if (-not $trimmed.StartsWith('"') -and -not $trimmed.StartsWith("'")) {
-        $commentIndex = $trimmed.IndexOf(' #')
-        if ($commentIndex -ge 0) {
-            $trimmed = $trimmed.Substring(0, $commentIndex).Trim()
+    # YAML double-quoted escapes are case-sensitive and include more forms than JSON.
+    return [regex]::Replace($content, '\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)', {
+        param($escapeMatch)
+        $escape = $escapeMatch.Groups[1].Value
+        switch -CaseSensitive ($escape) {
+            '0' { return [string][char]0 }
+            'a' { return "`a" }
+            'b' { return "`b" }
+            't' { return "`t" }
+            "`t" { return "`t" }
+            'n' { return "`n" }
+            'v' { return "`v" }
+            'f' { return "`f" }
+            'r' { return "`r" }
+            'e' { return [string][char]0x1b }
+            ' ' { return ' ' }
+            '"' { return '"' }
+            '/' { return '/' }
+            '\' { return '\' }
+            'N' { return [string][char]0x85 }
+            '_' { return [string][char]0xa0 }
+            'L' { return [string][char]0x2028 }
+            'P' { return [string][char]0x2029 }
+            default {
+                if ($escape -cmatch '^(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})$') {
+                    return [char]::ConvertFromUtf32([Convert]::ToInt32($escape.Substring(1), 16))
+                }
+
+                throw 'Invalid escape in a double-quoted YAML scalar.'
+            }
         }
+    })
+}
 
-        return $trimmed
+function Set-ManifestScalarValue {
+    param(
+        [Parameter(Mandatory = $true)][pscustomobject]$LineInfo,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value,
+        [string]$Pattern
+    )
+
+    $scalar = Get-YamlScalarToken $LineInfo.Value
+    $replacement = switch ($scalar.Quote) {
+        '"' { $Value.Replace('\', '\\').Replace('"', '\"') }
+        "'" { $Value.Replace("'", "''") }
+        default { $Value }
     }
 
-    $quote = $trimmed[0]
-    $closing = $trimmed.IndexOf($quote, 1)
-    if ($closing -lt 0) {
-        return $trimmed
+    $token = if ([string]::IsNullOrEmpty($Pattern)) {
+        $scalar.Quote + $replacement + $scalar.Quote
+    }
+    else {
+        # A callback keeps dollar signs in version text literal, rather than regex substitutions.
+        [regex]::Replace($scalar.Text, $Pattern, { param($match) $replacement })
     }
 
-    return $trimmed.Substring(1, $closing - 1)
+    $start = $LineInfo.Text.Length - $LineInfo.Value.Length + $scalar.Start
+    return $LineInfo.Text.Substring(0, $start) + $token + $LineInfo.Text.Substring($start + $scalar.Length)
 }
 
 <#
@@ -1666,7 +1736,7 @@ function Get-VersionBumpedManifest {
     # 1. PackageVersion itself.
     foreach ($info in $lineInfos) {
         if ($info.Key -eq 'PackageVersion' -and $info.KeyIndent -eq 0) {
-            $updated = $lines[$info.Index] -replace ([regex]::Escape($oldVersion)), $NewVersion
+            $updated = Set-ManifestScalarValue -LineInfo $info -Value $NewVersion
             $changes.Add([pscustomobject]@{ Index = $info.Index; Old = $lines[$info.Index]; New = $updated })
             $lines[$info.Index] = $updated
             break
@@ -1682,11 +1752,11 @@ function Get-VersionBumpedManifest {
         }
 
         $current = $lines[$info.Index]
-        if ($current -notmatch $versionRegex) {
+        $updated = Set-ManifestScalarValue -LineInfo $info -Value $NewVersion -Pattern $versionRegex
+        if ($updated -eq $current) {
             continue
         }
 
-        $updated = [regex]::Replace($current, $versionRegex, $NewVersion)
         $changes.Add([pscustomobject]@{ Index = $info.Index; Old = $current; New = $updated })
         $lines[$info.Index] = $updated
     }
@@ -1721,9 +1791,7 @@ function Get-VersionBumpedManifest {
             $newHash = Read-Sha256Value -Prompt "Sha256 for $label"
         }
 
-        $indent = $currentLine.Substring(0, $currentLine.Length - $currentLine.TrimStart().Length)
-        $listPrefix = if ($updatedInfos[$block.Sha256Index].IsListItem) { '- ' } else { '' }
-        $updated = "$indent$listPrefix" + 'Sha256: "' + $newHash + '"'
+        $updated = Set-ManifestScalarValue -LineInfo $updatedInfos[$block.Sha256Index] -Value $newHash
         if ($updated -ne $currentLine) {
             $changes.Add([pscustomobject]@{ Index = $block.Sha256Index; Old = $currentLine; New = $updated })
             $lines[$block.Sha256Index] = $updated
