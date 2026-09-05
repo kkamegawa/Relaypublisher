@@ -37,7 +37,7 @@ Production Intune publishing remains a separate approval boundary.
 Implementation and documentation are delivered by PR #145, and the follow-up CS8631 nullability warning fix by
 PR #146. Both are merged into `main`.
 
-The `v1.1.0` annotated tag was created on `main` (`33bed3e`) and `release-draft.yml` produced the draft release
+The `v1.1.0` annotated tag was created on `main` (`33bed3ef`) and `release-draft.yml` produced the draft release
 with `relaypublisher.1.1.0.nupkg`, the win-x64 / win-arm64 / osx-arm64 archives, and `SHA256SUMS.txt`. The draft
 package was downloaded, checksum-verified against `SHA256SUMS.txt`, installed to a local tool path, and used to
 validate the `Type: file` sample and to reject an invalid `Operator: notConfigured` variant, which confirms the

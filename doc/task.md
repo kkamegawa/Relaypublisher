@@ -57,17 +57,25 @@
    nullable property を返すため `IValidator<T?>` が要求され、`AbstractValidator<T>` の validator と型引数の
    nullability が一致しなかった。null 許容解除を validator instance から property 式へ移した(#146)。
    `!` は expression tree に現れないため、報告される property 名と `NotNull()` の runtime 検証は変わらない。
-2. **`v1.1.0` tag の作成**: main の `33bed3e` に annotated tag を付与し、既存の `release-draft.yml` を起動した。
+2. **`v1.1.0` tag の作成**: main の `33bed3ef` に annotated tag を付与し、既存の `release-draft.yml` を起動した。
 3. **draft release の検証**: run 33953565705 が成功。draft `v1.1.0` は `targetCommitish: main`、`isDraft: true` で、
    `relaypublisher.1.1.0.nupkg`、win-x64 / win-arm64 / osx-arm64 の zip、`SHA256SUMS.txt` の 5 asset を持つ。
 
 **検証結果**
 
 ```
-dotnet build IntuneLobPublisher.slnx --configuration Release   → 成功、warning 0
-dotnet test  IntuneLobPublisher.slnx --configuration Release   → 合格 735 / 失敗 0
-dotnet pack  ... -p:Version=1.1.0                              → relaypublisher.1.1.0.nupkg
-dotnet list package --vulnerable --include-transitive          → 脆弱な package なし
+dotnet build IntuneLobPublisher.slnx --configuration Release
+  → 成功、warning 0
+
+dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
+  → 合格 735 / 失敗 0 / スキップ 0
+
+dotnet pack src\IntuneLobPublisher.Cli\IntuneLobPublisher.Cli.csproj --configuration Release
+  -p:ContinuousIntegrationBuild=true -p:Version=1.1.0 --output .\artifacts\nuget
+  → relaypublisher.1.1.0.nupkg
+
+dotnet list IntuneLobPublisher.slnx package --vulnerable --include-transitive
+  → Cli / Core / Core.Tests のいずれにも脆弱な package なし
 ```
 
 - nuspec: id `relaypublisher`、version `1.1.0`、MIT expression、README 同梱、`DotnetTool` packageType、
