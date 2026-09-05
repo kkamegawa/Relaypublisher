@@ -430,8 +430,9 @@ Steps:
    this is left at the old value, Intune's detection rule keeps checking for the previous version after
    the update, which can make already-managed devices report as not installed/not up to date even though
    the new content was published.
-5. Windows only: check `SetupFile`, `RepositoryFiles`, and any detection script for version references
-   that also need to change.
+5. Windows only: check `SetupFile`, `RepositoryFiles`, any detection script, or the
+   `ComparisonValue` of `Detection.Type: file` for version references that also need to change. File
+   detection uses target-device `Path` and `FileOrFolderName`, never a repository-relative path.
 6. Do not change `PackageIdentifier`, `Platform`, `Architecture`, or `DisplayName` when bumping a
    version. Changing any of these breaks identity resolution (doc/00-overview.md §6.1): `publish` will
    not find the existing app and creates a new one instead, leaving the old app and its assignments

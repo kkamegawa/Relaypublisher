@@ -54,7 +54,7 @@ GitHub Packages / Azure Artifacts からの install 手順は
 | package サイズ上限 | - | 8 GB | 2 GB |
 | Icon | 任意 | 任意 | 必須 |
 | `Intent: uninstall` | 対応 | 非対応 | 対応 |
-| 検出方法 | PowerShell script | `IncludedApps`(bundleId + version) | `IncludedApps`(bundleId + version) |
+| 検出方法 | PowerShell script または file system rule (`exists` / `version`) | `IncludedApps`(bundleId + version) | `IncludedApps`(bundleId + version) |
 | pre/post install script | 対象外 | 対応(`Scripts`、任意) | 非対応 |
 
 macOS manifest の詳細な形式と validation ルールは [doc/01-manifest-schema.md](doc/01-manifest-schema.md) §5.3-5.4 を、
@@ -107,6 +107,8 @@ bash の場合も同じコマンドを使えます。
 - App identity は `PackageIdentifier + Platform + Architecture` です。
 - Management metadata は Intune app の `notes` field に保存します。
 - Changed manifest detection は `plan` で一度だけ確定し、CI では `manifest-list.json` を引き回します。
+- Windows の `Detection.Type: file` は対象端末で `exists` または `version` rule を評価します。`Path` は repository path
+  ではないため、repository path validation に渡しません。
 - app entry の任意フィールド `Categories` は Intune app category の desired set そのものです。省略時は app の
   現在の category を維持し、tenant の category 自体の作成・改名・削除は行いません
   ([doc/05-operation_ja.md](doc/05-operation_ja.md#4d-intune-app-category) を参照)。

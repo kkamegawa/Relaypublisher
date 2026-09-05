@@ -350,7 +350,7 @@ internal sealed class InstallManifestValidator : AbstractValidator<InstallManife
 }
 
 /// <summary>
-/// Windows uses script detection (<see cref="DetectionManifest.Type"/> / <see cref="DetectionManifest.ScriptFile"/>).
+/// Windows uses script or file-system detection (<see cref="DetectionManifest.Type"/>).
 /// macOS has no script detection: it always requires <see cref="DetectionManifest.IncludedApps"/>
 /// and forbids the Windows-only fields (doc/01-manifest-schema.md §5.3/§5.4).
 /// </summary>
@@ -377,6 +377,111 @@ internal sealed class DetectionManifestValidator : AbstractValidator<DetectionMa
             .When(d => isWindows && d.Type == "script")
             .WithMessage("Detection.ScriptFile is required when Detection.Type is 'script'.");
 
+        RuleFor(d => d.Path)
+            .NotEmpty()
+            .When(d => isWindows && d.Type == "file")
+            .WithMessage("Detection.Path is required when Detection.Type is 'file'.");
+
+        RuleFor(d => d.Path)
+            .Must(v => v is null || ManifestValues.IsValidTargetDevicePath(v))
+            .When(d => isWindows && d.Type == "file" && d.Path is not null)
+            .WithMessage("Detection.Path must be a non-wildcard target-device drive-rooted, root-relative, UNC, or environment-variable-rooted path without traversal segments.");
+
+        RuleFor(d => d.FileOrFolderName)
+            .NotEmpty()
+            .When(d => isWindows && d.Type == "file")
+            .WithMessage("Detection.FileOrFolderName is required when Detection.Type is 'file'.");
+
+        RuleFor(d => d.FileOrFolderName)
+            .Must(v => v is null || ManifestValues.IsValidTargetDeviceLeafName(v))
+            .When(d => isWindows && d.Type == "file" && d.FileOrFolderName is not null)
+            .WithMessage("Detection.FileOrFolderName must be a single non-wildcard target-device leaf name.");
+
+        RuleFor(d => d.OperationType)
+            .NotEmpty()
+            .When(d => isWindows && d.Type == "file")
+            .WithMessage("Detection.OperationType is required when Detection.Type is 'file'.");
+
+        RuleFor(d => d.OperationType)
+            .Must(v => v is null || ManifestValues.FileSystemOperationTypes.Contains(v))
+            .When(d => isWindows && d.Type == "file" && d.OperationType is not null)
+            .WithMessage(d => $"Detection.OperationType '{d.OperationType}' is not supported. Allowed values: {string.Join(", ", ManifestValues.FileSystemOperationTypes)}. 'notConfigured' is a Graph unset sentinel and is not valid manifest input.");
+
+        RuleFor(d => d.Operator)
+            .Null()
+            .When(d => isWindows && d.Type == "file" && d.OperationType == "exists")
+            .WithMessage("Detection.Operator must not be set when Detection.OperationType is 'exists'.");
+
+        RuleFor(d => d.ComparisonValue)
+            .Null()
+            .When(d => isWindows && d.Type == "file" && d.OperationType == "exists")
+            .WithMessage("Detection.ComparisonValue must not be set when Detection.OperationType is 'exists'.");
+
+        RuleFor(d => d.Operator)
+            .NotEmpty()
+            .When(d => isWindows && d.Type == "file" && d.OperationType == "version")
+            .WithMessage("Detection.Operator is required when Detection.OperationType is 'version'.");
+
+        RuleFor(d => d.Operator)
+            .Must(v => v is null || ManifestValues.FileSystemOperators.Contains(v))
+            .When(d => isWindows && d.Type == "file" && d.OperationType == "version" && d.Operator is not null)
+            .WithMessage(d => $"Detection.Operator '{d.Operator}' is not supported. Allowed values: {string.Join(", ", ManifestValues.FileSystemOperators)}. 'notConfigured' is a Graph unset sentinel and is not valid manifest input.");
+
+        RuleFor(d => d.ComparisonValue)
+            .NotEmpty()
+            .When(d => isWindows && d.Type == "file" && d.OperationType == "version")
+            .WithMessage("Detection.ComparisonValue is required when Detection.OperationType is 'version'.");
+
+        RuleFor(d => d.ComparisonValue)
+            .Must(v => v is null || ManifestValues.IsValidFileSystemVersion(v))
+            .When(d => isWindows && d.Type == "file" && d.OperationType == "version" && d.ComparisonValue is not null)
+            .WithMessage("Detection.ComparisonValue must be a numeric version with one to four parts of one to five digits each.");
+
+        RuleFor(d => d.ScriptFile)
+            .Null()
+            .When(d => isWindows && d.Type == "file")
+            .WithMessage("Detection.ScriptFile must not be set when Detection.Type is 'file'.");
+
+        RuleFor(d => d.RunAs32Bit)
+            .Null()
+            .When(d => isWindows && d.Type == "file")
+            .WithMessage("Detection.RunAs32Bit must not be set when Detection.Type is 'file'.");
+
+        RuleFor(d => d.EnforceSignatureCheck)
+            .Null()
+            .When(d => isWindows && d.Type == "file")
+            .WithMessage("Detection.EnforceSignatureCheck must not be set when Detection.Type is 'file'.");
+
+        RuleFor(d => d.Path)
+            .Null()
+            .When(d => isWindows && d.Type == "script")
+            .WithMessage("Detection.Path must not be set when Detection.Type is 'script'.");
+
+        RuleFor(d => d.FileOrFolderName)
+            .Null()
+            .When(d => isWindows && d.Type == "script")
+            .WithMessage("Detection.FileOrFolderName must not be set when Detection.Type is 'script'.");
+
+        RuleFor(d => d.OperationType)
+            .Null()
+            .When(d => isWindows && d.Type == "script")
+            .WithMessage("Detection.OperationType must not be set when Detection.Type is 'script'.");
+
+        RuleFor(d => d.Operator)
+            .Null()
+            .When(d => isWindows && d.Type == "script")
+            .WithMessage("Detection.Operator must not be set when Detection.Type is 'script'.");
+
+        RuleFor(d => d.ComparisonValue)
+            .Null()
+            .When(d => isWindows && d.Type == "script")
+            .WithMessage("Detection.ComparisonValue must not be set when Detection.Type is 'script'.");
+
+        RuleFor(d => d.Check32BitOn64System)
+            .Null()
+            .When(d => isWindows && d.Type == "script")
+            .WithMessage("Detection.Check32BitOn64System must not be set when Detection.Type is 'script'.");
+
         RuleFor(d => d.Type)
             .Null()
             .When(_ => isMacOs)
@@ -386,6 +491,36 @@ internal sealed class DetectionManifestValidator : AbstractValidator<DetectionMa
             .Null()
             .When(_ => isMacOs)
             .WithMessage("Detection.ScriptFile must not be set for Platform 'macos'.");
+
+        RuleFor(d => d.Path)
+            .Null()
+            .When(_ => isMacOs)
+            .WithMessage("Detection.Path must not be set for Platform 'macos'.");
+
+        RuleFor(d => d.FileOrFolderName)
+            .Null()
+            .When(_ => isMacOs)
+            .WithMessage("Detection.FileOrFolderName must not be set for Platform 'macos'.");
+
+        RuleFor(d => d.OperationType)
+            .Null()
+            .When(_ => isMacOs)
+            .WithMessage("Detection.OperationType must not be set for Platform 'macos'.");
+
+        RuleFor(d => d.Operator)
+            .Null()
+            .When(_ => isMacOs)
+            .WithMessage("Detection.Operator must not be set for Platform 'macos'.");
+
+        RuleFor(d => d.ComparisonValue)
+            .Null()
+            .When(_ => isMacOs)
+            .WithMessage("Detection.ComparisonValue must not be set for Platform 'macos'.");
+
+        RuleFor(d => d.Check32BitOn64System)
+            .Null()
+            .When(_ => isMacOs)
+            .WithMessage("Detection.Check32BitOn64System must not be set for Platform 'macos'.");
 
         RuleFor(d => d.IncludedApps)
             .NotEmpty()

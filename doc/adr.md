@@ -4,6 +4,30 @@
 
 このファイルが 200 行を超えた場合は phase 単位で分割します。
 
+## 2026-09-05: Windows file-system detection (Issue #141)
+
+- **決定**: Windows `Detection.Type` は既存の `script` に加えて `file` を受け付け、`exists` と `version` の
+  `win32LobAppFileSystemRule` だけを生成する。
+  - **理由**: file version による Intune 検出では PowerShell detection script を repository に追加・管理する必要が
+    ない。一方、Graph の `modifiedDate`、`createdDate`、`sizeInMB` は comparison value の形式を別途定義・検証する
+    必要があるため、この変更には含めない。
+  - **影響**: `exists` の manifest は `Operator` / `ComparisonValue` を持たず、mapper が Graph の
+    `operator: notConfigured` を生成する。`version` は 6 つの比較演算子と 1～4 part の数値 comparison value を
+    必須とする。Graph の unset sentinel `notConfigured` は manifest 入力として許可しない。
+- **決定**: file detection の `Path` / `FileOrFolderName` は target-device value として validation し、
+  `PathSafety` を使わない。
+  - **理由**: drive-rooted、root-relative、UNC、environment-variable-rooted の path は Intune が管理対象端末上で
+    評価する正当な値であり、repository root の下に解決する `PathSafety` に渡すと誤って拒否されるため。
+  - **影響**: file detection は detection script を読み取りも staging もしない。script 用と file 用の fields は
+    相互排他にし、macOS は既存の `IncludedApps` 検出を維持する。
+- **決定**: Graph の `rules` は System.Text.Json polymorphic payload とし、derived rule に手書きの
+  `@odata.type` property を持たせない。
+  - **理由**: base-typed collection では derived property が失われる。polymorphic discriminator と同名 property
+    を併用すると serialization failure になるため。
+  - **影響**: script rule は `Win32LobAppPowerShellScriptRulePayload` に改名する。既存 script manifest の
+    canonical hash を維持するため、file 用の全 fields は nullable・初期値なしで定義する。file criteria の変更は
+    manifest hash / inputHash を変更するが、script body は引き続き hash に含めない。
+
 ## 2026-08-30: nuget.org Trusted Publishing (OIDC) への移行 (Issue #131)
 
 - **決定**: `nuget.org` への自動 publish は GitHub Actions の `.github/workflows/release-publish.yml` に一本化し、

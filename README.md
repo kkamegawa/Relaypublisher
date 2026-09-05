@@ -40,7 +40,7 @@ The Japanese translation is available in [README_ja.md](README_ja.md).
 | Max package size | - | 8 GB | 2 GB |
 | Icon | Optional | Optional | Required |
 | `Intent: uninstall` | Supported | Not supported | Supported |
-| Detection | PowerShell script | `IncludedApps` (bundleId + version) | `IncludedApps` (bundleId + version) |
+| Detection | PowerShell script or file system rule (`exists` / `version`) | `IncludedApps` (bundleId + version) | `IncludedApps` (bundleId + version) |
 | Pre/post install script | Not applicable | Supported (`Scripts`, optional) | Not supported |
 
 See [doc/01-manifest-schema.md](doc/01-manifest-schema.md) §5.3-5.4 for the full macOS manifest shape
@@ -117,6 +117,8 @@ For bash, use the same commands.
 - App identity is `PackageIdentifier + Platform + Architecture`.
 - Management metadata is stored in the Intune app `notes` field.
 - Changed manifest detection is resolved once by `plan` and passed through CI as `manifest-list.json`.
+- Windows `Detection.Type: file` evaluates an `exists` or `version` rule on the target device; its
+  `Path` is not a repository path and must not be passed through repository path validation.
 - An app entry's optional `Categories` list is the exact desired set of Intune app categories; omitting it
   preserves the app's current categories, and the tool never creates, renames, or deletes a tenant category
   (see [doc/05-operation.md](doc/05-operation.md#4d-intune-app-categories)).

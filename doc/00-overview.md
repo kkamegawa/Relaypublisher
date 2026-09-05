@@ -296,6 +296,28 @@ manifest schema に optional field を追加するときの hash 互換性(#99):
 - 逆に、field を宣言した manifest の hash は変わる。カテゴリだけを変更した manifest でも content 再package /
   再upload が発生し得る(6.20)。
 
+### 6.7.1 Windows file-system detection (Issue #141)
+
+Windows の `Detection.Type` は既存の `script` に加えて `file` をサポートする。`file` は Graph v1.0 の
+`win32LobAppFileSystemRule` を使い、対象端末上の file / folder の存在または file version で検出する。
+
+- このリリースで許可する `OperationType` は `exists` と `version` だけとする。`modifiedDate`、`createdDate`、
+  `sizeInMB` は comparison value の形式と十分な検証を定義してから追加する。
+- `exists` では manifest に `Operator` と `ComparisonValue` を指定しない。Graph payload には mapper が
+  `operator: notConfigured` と null の `comparisonValue` を設定する。
+- `version` では `Operator` を `equal`、`notEqual`、`greaterThan`、`greaterThanOrEqual`、`lessThan`、
+  `lessThanOrEqual` のいずれかにし、`ComparisonValue` は各 part が 1～5 桁、全体で 1～4 part の数値 version
+  (`^\d{1,5}(\.\d{1,5}){0,3}$`)とする。
+- `notConfigured` は Graph 上の unset sentinel であり、manifest 入力としては `OperationType`、`Operator` の
+  どちらでも許可しない。
+- `Detection.Path` と `Detection.FileOrFolderName` は repository path ではなく**対象端末の path**である。
+  `PathSafety` に渡さず、ドライブ起点、root-relative、UNC、環境変数起点の形式だけを validation で判定する。
+  `%ProgramFiles%` と `%ProgramFiles(x86)%` を含め、Windows の backslash path を使う。`FileOrFolderName` は
+  directory separator や wildcard を含まない単一の leaf name とする。
+- `file` の検出条件は manifest の fields なので、その変更は manifest hash / inputHash を変更する。`script` の
+  script body は従来どおり hash の入力に含めない。file 用に追加する fields はすべて nullable かつ初期値なしとし、
+  script manifest を再 hash しない。
+
 ### 6.8 ダウングレード防止とバージョンフォルダのライフサイクル
 
 manifest はバージョン別フォルダで管理するが、app identity はバージョンを含まないため以下を仕様とする。
