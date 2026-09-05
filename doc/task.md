@@ -39,7 +39,8 @@
 
 ### 保留事項
 
-- PR #145 の CI を確認する。
+- PR #145 は Ready for review に更新済み。Ubuntu / Windows build-test、NuGet pack、3 RID の single-file
+  publish、CodeQL、静的解析、NuGet submit が成功。
 - #145 の merge 後、別途承認を得て `v1.1.0` tag、draft release、3 feed への publish を実施する。
 - `intuneapps` の Global Secure Access manifest 更新、Azure Pipelines dry-run、本番 Intune publish は別 repository /
   別承認のままとする。
