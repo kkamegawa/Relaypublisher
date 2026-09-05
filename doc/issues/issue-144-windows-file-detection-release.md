@@ -34,7 +34,16 @@ Production Intune publishing remains a separate approval boundary.
 
 ## Release boundary
 
-Implementation and documentation are delivered by PR #145. Tagging, draft-release generation, package
-publication, and Intune validation remain deferred. The release follow-up must use the existing draft-release
-and Trusted Publishing workflows. Publishing the draft release and publishing to Intune each remain separately
-reviewable operations.
+Implementation and documentation are delivered by PR #145, and the follow-up CS8631 nullability warning fix by
+PR #146. Both are merged into `main`.
+
+The `v1.1.0` annotated tag was created on `main` (`33bed3e`) and `release-draft.yml` produced the draft release
+with `relaypublisher.1.1.0.nupkg`, the win-x64 / win-arm64 / osx-arm64 archives, and `SHA256SUMS.txt`. The draft
+package was downloaded, checksum-verified against `SHA256SUMS.txt`, installed to a local tool path, and used to
+validate the `Type: file` sample and to reject an invalid `Operator: notConfigured` variant, which confirms the
+released package contains the file-detection implementation.
+
+Publishing the draft release is the human review gate and is still pending. Publishing it triggers
+`release-publish.yml`, which pushes the reviewed package to nuget.org, GitHub Packages, and Azure Artifacts.
+Verifying reachability across all three feeds, and publishing to Intune, each remain separately reviewable
+operations.

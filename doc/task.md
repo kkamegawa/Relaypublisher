@@ -45,6 +45,49 @@
 - `intuneapps` の Global Secure Access manifest 更新、Azure Pipelines dry-run、本番 Intune publish は別 repository /
   別承認のままとする。
 
+### 2026-09-05 追記: Issue #144 の release 準備を完了
+
+**対応 Issue**: [#144](https://github.com/kkamegawa/Relaypublisher/issues/144)
+
+#145 と、その後の CS8631 warning 修正 [#146](https://github.com/kkamegawa/Relaypublisher/pull/146) が main に merge
+されたので、#144 の残作業である release 検証と draft release 生成を実施した。documentation / sample / ADR の作業は
+#145 で完了済みのため、本追記では package と release の検証結果のみを記録する。
+
+1. **CS8631 warning の解消**: `ManifestValidator` の `RuleFor(a => a.Detection)` / `RuleFor(a => a.Requirements)` は
+   nullable property を返すため `IValidator<T?>` が要求され、`AbstractValidator<T>` の validator と型引数の
+   nullability が一致しなかった。null 許容解除を validator instance から property 式へ移した(#146)。
+   `!` は expression tree に現れないため、報告される property 名と `NotNull()` の runtime 検証は変わらない。
+2. **`v1.1.0` tag の作成**: main の `33bed3e` に annotated tag を付与し、既存の `release-draft.yml` を起動した。
+3. **draft release の検証**: run 33953565705 が成功。draft `v1.1.0` は `targetCommitish: main`、`isDraft: true` で、
+   `relaypublisher.1.1.0.nupkg`、win-x64 / win-arm64 / osx-arm64 の zip、`SHA256SUMS.txt` の 5 asset を持つ。
+
+**検証結果**
+
+```
+dotnet build IntuneLobPublisher.slnx --configuration Release   → 成功、warning 0
+dotnet test  IntuneLobPublisher.slnx --configuration Release   → 合格 735 / 失敗 0
+dotnet pack  ... -p:Version=1.1.0                              → relaypublisher.1.1.0.nupkg
+dotnet list package --vulnerable --include-transitive          → 脆弱な package なし
+```
+
+- nuspec: id `relaypublisher`、version `1.1.0`、MIT expression、README 同梱、`DotnetTool` packageType、
+  repository commit `33bed3ef`。`tools/net10.0/any/` に CLI / Core assemblies と `DotnetToolSettings.xml` を含む。
+- draft release から download した `.nupkg` の SHA-256 は `SHA256SUMS.txt` と一致
+  (`8a5b9f1f5bedb9aa67bddbf16a0103219ce8cc02d887ac1a78409b63f8f15d0f`)。
+- **release asset の package に file detection 実装が含まれることを確認**: download した `.nupkg` を tool-path に
+  install し、`--version` が `1.1.0+33bed3ef...` を返すこと、`contoso-tool-windows-file-detection.yaml` が valid と
+  判定されること、`Operator: notConfigured` に改変した manifest が exit code 1 で reject されることを確認した。
+- sample manifest 4 件が valid。`apple-container-macos-arm64.yaml` は仕様どおり reference-only として reject される
+  ため対象外。
+
+**残る承認境界**
+
+- draft release の publish は人によるレビュー gate であり、本作業では実施しない。publish により
+  `release-publish.yml` が起動し、レビュー済みの同一 package が nuget.org / GitHub Packages / Azure Artifacts の
+  3 feed へ push される。publish 後に 3 feed への到達と package の同一性を確認して #144 / #141 を close する。
+- `intuneapps` の Global Secure Access manifest 更新、Azure Pipelines dry-run、本番 Intune publish は引き続き別
+  repository / 別承認とする。
+
 ## 2026-08-30: NuGet.org Trusted Publishing (OIDC) への移行
 
 **ブランチ**: `feature/131-nuget-trusted-publishing`
