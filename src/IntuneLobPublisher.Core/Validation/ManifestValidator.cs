@@ -127,13 +127,15 @@ internal sealed class AppManifestValidator : AbstractValidator<AppManifest>
             .WithMessage("Install must not be set for Platform 'macos'; PKG apps have no install command line.")
             .SetValidator(new InstallManifestValidator()!);
 
-        RuleFor(a => a.Detection)
+        // The null-forgiving operator only removes the CS8631 nullability mismatch on the
+        // generic SetValidator constraint; NotNull() still rejects a missing section at runtime.
+        RuleFor(a => a.Detection!)
             .NotNull()
-            .SetValidator(a => new DetectionManifestValidator(a.Platform)!);
+            .SetValidator(a => new DetectionManifestValidator(a.Platform));
 
-        RuleFor(a => a.Requirements)
+        RuleFor(a => a.Requirements!)
             .NotNull()
-            .SetValidator(a => new RequirementsManifestValidator(a.Platform)!);
+            .SetValidator(a => new RequirementsManifestValidator(a.Platform));
 
         // Pre/post-install scripts only exist on the Graph macOSPkgApp resource
         // (doc/00-overview.md §6.13); AppType: lob and Platform: windows have no such property.
