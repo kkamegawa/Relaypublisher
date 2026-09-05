@@ -38,4 +38,5 @@ Relaypublisher's part of this work is complete when `v1.1.0` has reached all thr
 - Requirement rules; only detection rules are generated.
 - Printing the detection rule in `plan` or `publish --dry-run` output.
 
-Implementation is intentionally deferred. This document records the reviewable scope for the follow-up change.
+Implemented by PR #145. This document remains the reviewable scope and acceptance record; release publication
+and consumer-repository validation remain deferred as described above.

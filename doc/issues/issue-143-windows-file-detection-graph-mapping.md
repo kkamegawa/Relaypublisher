@@ -29,4 +29,4 @@ Map validated Windows `Detection.Type: file` manifests to Microsoft Graph v1.0 `
 - Manifest schema and validation: GitHub #142
 - Documentation, validation, and release: GitHub #144
 
-Implementation is intentionally deferred. This document records the reviewable scope for the follow-up change.
+Implemented by PR #145. This document remains the reviewable scope and acceptance record.

@@ -34,4 +34,7 @@ Production Intune publishing remains a separate approval boundary.
 
 ## Release boundary
 
-Implementation, tagging, draft-release generation, package publication, and Intune validation are intentionally deferred. The follow-up implementation must use the existing draft-release and Trusted Publishing workflows. Publishing the draft release and publishing to Intune each remain separately reviewable operations.
+Implementation and documentation are delivered by PR #145. Tagging, draft-release generation, package
+publication, and Intune validation remain deferred. The release follow-up must use the existing draft-release
+and Trusted Publishing workflows. Publishing the draft release and publishing to Intune each remain separately
+reviewable operations.

@@ -449,25 +449,25 @@ public sealed class InstallManifest
 public sealed class DetectionManifest
 {
     // Windows only: script | file. macOS uses IncludedApps instead.
-    public string? Type { get; init; }
+    public string? Type { get; set; }
 
     // Windows Type: script only; repository-relative path.
-    public string? ScriptFile { get; init; }
-    public bool? RunAs32Bit { get; init; }
-    public bool? EnforceSignatureCheck { get; init; }
+    public string? ScriptFile { get; set; }
+    public bool? RunAs32Bit { get; set; }
+    public bool? EnforceSignatureCheck { get; set; }
 
     // Windows Type: file only; target-device values, never repository paths.
     // Nullable with no initializer to preserve existing script manifest hashes.
-    public string? Path { get; init; }
-    public string? FileOrFolderName { get; init; }
-    public string? OperationType { get; init; }
-    public string? Operator { get; init; }
-    public string? ComparisonValue { get; init; }
-    public bool? Check32BitOn64System { get; init; }
+    public string? Path { get; set; }
+    public string? FileOrFolderName { get; set; }
+    public string? OperationType { get; set; }
+    public string? Operator { get; set; }
+    public string? ComparisonValue { get; set; }
+    public bool? Check32BitOn64System { get; set; }
 
     // macOS only.
-    public List<IncludedAppManifest>? IncludedApps { get; init; }
-    public bool? IgnoreAppVersion { get; init; }
+    public List<IncludedAppManifest>? IncludedApps { get; set; }
+    public bool? IgnoreAppVersion { get; set; }
 }
 ```
 

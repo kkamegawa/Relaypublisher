@@ -30,4 +30,4 @@ Extend the manifest model and validators with a Windows `Detection.Type: file` s
 - Microsoft Graph mapping: GitHub #143
 - Documentation, validation, and release: GitHub #144
 
-Implementation is intentionally deferred. This document records the reviewable scope for the follow-up change.
+Implemented by PR #145. This document remains the reviewable scope and acceptance record.

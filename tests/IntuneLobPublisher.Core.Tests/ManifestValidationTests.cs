@@ -308,6 +308,8 @@ public sealed class ManifestValidationTests
     [DataRow(@"%ProgramFiles\Contoso Tool")]
     [DataRow(@"C:\Program Files\..\Contoso Tool")]
     [DataRow(@"C:\Program Files/Contoso Tool")]
+    [DataRow(@"\C:\Program Files\Contoso Tool")]
+    [DataRow(@"C:\Program Files\Contoso Tool:stream")]
     public void Validate_FileDetectionWithInvalidTargetPath_Fails(string path)
     {
         var manifest = TestManifests.CreateValid();

@@ -81,6 +81,7 @@ public static partial class ManifestValues
     public static bool IsValidTargetDevicePath(string value)
         => !HasInvalidFileSystemText(value)
             && TargetDevicePathRootRegex().IsMatch(value)
+            && HasValidTargetDevicePathColonPlacement(value)
             && !HasTraversalSegment(value);
 
     /// <summary>Checks that a Graph file-system rule name is exactly one target-device leaf name.</summary>
@@ -110,4 +111,10 @@ public static partial class ManifestValues
         => value.Split('\\', StringSplitOptions.None)
             .Any(segment => string.Equals(segment, ".", StringComparison.Ordinal)
                 || string.Equals(segment, "..", StringComparison.Ordinal));
+
+    private static bool HasValidTargetDevicePathColonPlacement(string value)
+    {
+        var colonIndex = value.IndexOf(':');
+        return colonIndex < 0 || (colonIndex == 1 && value.Count(c => c == ':') == 1);
+    }
 }
