@@ -199,6 +199,156 @@ public sealed class ManifestValidationTests
     }
 
     [TestMethod]
+    public void Validate_ValidFileVersionDetection_Passes()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidFileDetectionApp()];
+
+        var result = _validator.Validate(manifest);
+
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => e.ErrorMessage)));
+    }
+
+    [TestMethod]
+    public void Validate_ValidFileExistsDetection_Passes()
+    {
+        var manifest = TestManifests.CreateValid();
+        var app = TestManifests.CreateValidFileDetectionApp();
+        app.Detection!.OperationType = "exists";
+        app.Detection.Operator = null;
+        app.Detection.ComparisonValue = null;
+        manifest.Apps = [app];
+
+        var result = _validator.Validate(manifest);
+
+        Assert.IsTrue(result.IsValid, string.Join(" / ", result.Errors.Select(e => e.ErrorMessage)));
+    }
+
+    [TestMethod]
+    [DataRow("notConfigured")]
+    [DataRow("modifiedDate")]
+    public void Validate_UnsupportedFileOperationType_Fails(string operationType)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidFileDetectionApp()];
+        manifest.Apps[0].Detection!.OperationType = operationType;
+
+        AssertInvalid(manifest, "OperationType");
+    }
+
+    [TestMethod]
+    [DataRow("notConfigured")]
+    [DataRow("contains")]
+    public void Validate_UnsupportedFileOperator_Fails(string comparisonOperator)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidFileDetectionApp()];
+        manifest.Apps[0].Detection!.Operator = comparisonOperator;
+
+        AssertInvalid(manifest, "Operator");
+    }
+
+    [TestMethod]
+    public void Validate_FileExistsWithComparisonFields_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidFileDetectionApp()];
+        manifest.Apps[0].Detection!.OperationType = "exists";
+
+        AssertInvalid(manifest, "Operator");
+        AssertInvalid(manifest, "ComparisonValue");
+    }
+
+    [TestMethod]
+    [DataRow("1")]
+    [DataRow("1.2.3.4")]
+    [DataRow("12345.12345.12345.12345")]
+    public void Validate_FileVersionWithSupportedComparisonValue_Passes(string comparisonValue)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidFileDetectionApp()];
+        manifest.Apps[0].Detection!.ComparisonValue = comparisonValue;
+
+        Assert.IsTrue(_validator.Validate(manifest).IsValid);
+    }
+
+    [TestMethod]
+    [DataRow("1.2.3.4.5")]
+    [DataRow("123456")]
+    [DataRow("1.a")]
+    [DataRow("1.2 ")]
+    public void Validate_FileVersionWithInvalidComparisonValue_Fails(string comparisonValue)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidFileDetectionApp()];
+        manifest.Apps[0].Detection!.ComparisonValue = comparisonValue;
+
+        AssertInvalid(manifest, "ComparisonValue");
+    }
+
+    [TestMethod]
+    [DataRow(@"C:\Program Files\Contoso Tool")]
+    [DataRow(@"\Program Files\Contoso Tool")]
+    [DataRow(@"\\server\share\Contoso Tool")]
+    [DataRow(@"%ProgramFiles%\Contoso Tool")]
+    [DataRow(@"%ProgramFiles(x86)%\Contoso Tool")]
+    public void Validate_FileDetectionWithSupportedTargetPath_Passes(string path)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidFileDetectionApp()];
+        manifest.Apps[0].Detection!.Path = path;
+
+        Assert.IsTrue(_validator.Validate(manifest).IsValid);
+    }
+
+    [TestMethod]
+    [DataRow(@"Program Files\Contoso Tool")]
+    [DataRow(@"C:Program Files\Contoso Tool")]
+    [DataRow(@"C:\Program Files\*\Contoso Tool")]
+    [DataRow(@"%ProgramFiles\Contoso Tool")]
+    [DataRow(@"C:\Program Files\..\Contoso Tool")]
+    [DataRow(@"C:\Program Files/Contoso Tool")]
+    public void Validate_FileDetectionWithInvalidTargetPath_Fails(string path)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidFileDetectionApp()];
+        manifest.Apps[0].Detection!.Path = path;
+
+        AssertInvalid(manifest, "Path");
+    }
+
+    [TestMethod]
+    [DataRow(@"folder\contoso-tool.exe")]
+    [DataRow("contoso-*.exe")]
+    public void Validate_FileDetectionWithInvalidLeafName_Fails(string leafName)
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidFileDetectionApp()];
+        manifest.Apps[0].Detection!.FileOrFolderName = leafName;
+
+        AssertInvalid(manifest, "FileOrFolderName");
+    }
+
+    [TestMethod]
+    public void Validate_FileDetectionWithScriptFields_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps = [TestManifests.CreateValidFileDetectionApp()];
+        manifest.Apps[0].Detection!.RunAs32Bit = false;
+
+        AssertInvalid(manifest, "RunAs32Bit");
+    }
+
+    [TestMethod]
+    public void Validate_ScriptDetectionWithFileFields_Fails()
+    {
+        var manifest = TestManifests.CreateValid();
+        manifest.Apps[0].Detection!.Path = @"C:\Program Files\Contoso Tool";
+
+        AssertInvalid(manifest, "Path");
+    }
+
+    [TestMethod]
     public void Validate_MissingMinimumOSVersion_Fails()
     {
         var manifest = TestManifests.CreateValid();

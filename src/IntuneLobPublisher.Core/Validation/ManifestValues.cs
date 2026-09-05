@@ -23,7 +23,10 @@ public static partial class ManifestValues
     public const string DefaultMacOsAppType = "pkg";
     public static readonly IReadOnlyList<string> InstallExperiences = ["system", "user"];
     public static readonly IReadOnlyList<string> RestartBehaviors = ["suppress", "allow", "force"];
-    public static readonly IReadOnlyList<string> DetectionTypes = ["script"];
+    public static readonly IReadOnlyList<string> DetectionTypes = ["script", "file"];
+    public static readonly IReadOnlyList<string> FileSystemOperationTypes = ["exists", "version"];
+    public static readonly IReadOnlyList<string> FileSystemOperators =
+        ["equal", "notEqual", "greaterThan", "greaterThanOrEqual", "lessThan", "lessThanOrEqual"];
     public static readonly IReadOnlyList<string> AssignmentTargets = ["group", "allDevices", "allLicensedUsers"];
     public static readonly IReadOnlyList<string> AssignmentModes = ["include", "exclude"];
     public static readonly IReadOnlyList<string> AssignmentIntents = ["required", "available", "uninstall"];
@@ -61,7 +64,33 @@ public static partial class ManifestValues
     [GeneratedRegex("^[0-9a-fA-F]{64}$")]
     private static partial Regex Sha256Regex();
 
+    [GeneratedRegex(@"^\d{1,5}(\.\d{1,5}){0,3}$")]
+    private static partial Regex FileSystemVersionRegex();
+
+    [GeneratedRegex(@"^[A-Za-z]:\\|^\\[^\\]|^\\\\[^\\]+\\[^\\]+(?:\\.*)?$|^%[A-Za-z_][A-Za-z0-9_()]*%\\")]
+    private static partial Regex TargetDevicePathRootRegex();
+
     public static bool IsValidSha256(string value) => Sha256Regex().IsMatch(value);
+
+    public static bool IsValidFileSystemVersion(string value) => FileSystemVersionRegex().IsMatch(value);
+
+    /// <summary>
+    /// Checks a Graph file-system rule path without treating it as a repository path. The value is
+    /// evaluated on the target Windows device, so rooted and environment-variable paths are valid.
+    /// </summary>
+    public static bool IsValidTargetDevicePath(string value)
+        => !HasInvalidFileSystemText(value)
+            && TargetDevicePathRootRegex().IsMatch(value)
+            && !HasTraversalSegment(value);
+
+    /// <summary>Checks that a Graph file-system rule name is exactly one target-device leaf name.</summary>
+    public static bool IsValidTargetDeviceLeafName(string value)
+        => !HasInvalidFileSystemText(value)
+            && !value.Contains('\\')
+            && !value.Contains('/')
+            && !string.Equals(value, ".", StringComparison.Ordinal)
+            && !string.Equals(value, "..", StringComparison.Ordinal)
+            && !value.Contains(':');
 
     /// <summary>Returns true when the SchemaVersion string has a parsable, supported major version.</summary>
     public static bool HasSupportedSchemaMajor(string schemaVersion)
@@ -70,4 +99,15 @@ public static partial class ManifestValues
         var majorText = dotIndex < 0 ? schemaVersion : schemaVersion[..dotIndex];
         return int.TryParse(majorText, out var major) && major == SupportedSchemaMajor;
     }
+
+    private static bool HasInvalidFileSystemText(string value)
+        => string.IsNullOrWhiteSpace(value)
+            || !string.Equals(value, value.Trim(), StringComparison.Ordinal)
+            || value.IndexOfAny(['*', '?', '<', '>', '"', '|', '/']) >= 0
+            || value.Any(char.IsControl);
+
+    private static bool HasTraversalSegment(string value)
+        => value.Split('\\', StringSplitOptions.None)
+            .Any(segment => string.Equals(segment, ".", StringComparison.Ordinal)
+                || string.Equals(segment, "..", StringComparison.Ordinal));
 }

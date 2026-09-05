@@ -446,6 +446,32 @@ public sealed class InstallManifest
 ```
 
 ```csharp
+public sealed class DetectionManifest
+{
+    // Windows only: script | file. macOS uses IncludedApps instead.
+    public string? Type { get; init; }
+
+    // Windows Type: script only; repository-relative path.
+    public string? ScriptFile { get; init; }
+    public bool? RunAs32Bit { get; init; }
+    public bool? EnforceSignatureCheck { get; init; }
+
+    // Windows Type: file only; target-device values, never repository paths.
+    // Nullable with no initializer to preserve existing script manifest hashes.
+    public string? Path { get; init; }
+    public string? FileOrFolderName { get; init; }
+    public string? OperationType { get; init; }
+    public string? Operator { get; init; }
+    public string? ComparisonValue { get; init; }
+    public bool? Check32BitOn64System { get; init; }
+
+    // macOS only.
+    public List<IncludedAppManifest>? IncludedApps { get; init; }
+    public bool? IgnoreAppVersion { get; init; }
+}
+```
+
+```csharp
 public sealed class AssignmentManifest
 {
     public string Target { get; init; } = "group"; // group | allDevices | allLicensedUsers
