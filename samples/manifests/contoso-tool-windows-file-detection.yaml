@@ -1,0 +1,43 @@
+SchemaVersion: "1.0"
+PackageIdentifier: Contoso.Tool.FileDetection
+PackageName: Contoso Tool File Detection
+Publisher: Contoso Ltd.
+Description: Demonstrates Windows file-system detection without a detection script.
+PackageVersion: 1.2.3
+AssignmentSync: merge
+
+Apps:
+  - Platform: windows
+    Architecture: x64
+    InstallerType: win32
+    DisplayName: Contoso Tool File Detection [Windows x64]
+
+    Package:
+      IntuneWin:
+        SetupFile: install.ps1
+      RepositoryFiles:
+        - Source: scripts/windows/x64/install.ps1
+          Destination: install.ps1
+        - Source: scripts/windows/common/uninstall.ps1
+          Destination: uninstall.ps1
+
+    Install:
+      CommandLine: powershell.exe -ExecutionPolicy Bypass -File .\install.ps1
+      UninstallCommandLine: powershell.exe -ExecutionPolicy Bypass -File .\uninstall.ps1
+      InstallExperience: system
+      RestartBehavior: suppress
+
+    Detection:
+      Type: file
+      Path: 'C:\Program Files\Contoso Tool'
+      FileOrFolderName: contoso-tool.exe
+      OperationType: version
+      Operator: greaterThanOrEqual
+      ComparisonValue: "1.2.3"
+      Check32BitOn64System: false
+
+    Requirements:
+      MinimumOSVersion: 10.0.19045
+      Architecture: x64
+
+    Assignments: []

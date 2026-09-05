@@ -2,6 +2,48 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-09-05: Windows file-system detection (Issue #141)
+
+**ブランチ**: `feature/141-windows-file-detection`
+
+**対応 Issue / PR**:
+
+- 親 Issue: [#141](https://github.com/kkamegawa/Relaypublisher/issues/141)
+- Manifest / validation: [#142](https://github.com/kkamegawa/Relaypublisher/issues/142)
+- Microsoft Graph mapping: [#143](https://github.com/kkamegawa/Relaypublisher/issues/143)
+- Documentation / release: [#144](https://github.com/kkamegawa/Relaypublisher/issues/144)
+- Pull request: [#145](https://github.com/kkamegawa/Relaypublisher/pull/145)
+
+### 実施内容
+
+1. Windows の `Detection.Type: file` を追加し、`exists` と `version` の validation、target-device path / leaf name
+   validation、script/file fields の相互排他、macOS の file fields 拒否を実装した。
+2. Graph v1.0 `win32LobAppFileSystemRule` を追加した。rules collection は System.Text.Json の polymorphic contract に
+   変更し、PowerShell rule は discriminator と衝突しない `Win32LobAppPowerShellScriptRulePayload` とした。
+3. Windows publisher は `Type: file` の場合に detection script を read せず、preflight / create / update のすべてで
+   file rule を mapping する。script detection の repository-relative path と欠落時の failure は維持した。
+4. existing script manifest hash の固定値、file criteria による hash 変化、validation、YAML load、payload JSON、
+   publisher、staging の regression test を追加した。
+5. 正本、日英の operation / troubleshooting / local E2E docs、README、sample catalog を更新し、file detection sample
+   を追加した。
+
+### 検証結果
+
+- `dotnet test IntuneLobPublisher.slnx --configuration Release`: 733 passed、0 failed、0 skipped。
+- `dotnet pack src\IntuneLobPublisher.Cli\IntuneLobPublisher.Cli.csproj --configuration Release
+  -p:ContinuousIntegrationBuild=true -p:Version=1.1.0`: `relaypublisher.1.1.0.nupkg` を生成。
+- `dotnet run ... validate --repo-root samples --manifest manifests\contoso-tool-windows-file-detection.yaml`:
+  1 manifest が valid。
+- `dotnet list IntuneLobPublisher.slnx package --vulnerable --include-transitive`: 脆弱な package なし。
+- `git diff --check`: 成功。
+
+### 保留事項
+
+- PR #145 の CI を確認する。
+- #145 の merge 後、別途承認を得て `v1.1.0` tag、draft release、3 feed への publish を実施する。
+- `intuneapps` の Global Secure Access manifest 更新、Azure Pipelines dry-run、本番 Intune publish は別 repository /
+  別承認のままとする。
+
 ## 2026-08-30: NuGet.org Trusted Publishing (OIDC) への移行
 
 **ブランチ**: `feature/131-nuget-trusted-publishing`

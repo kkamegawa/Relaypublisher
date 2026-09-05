@@ -243,6 +243,7 @@ Rollback 後は Intune で app を確認し、assignments が意図した manife
 | run が `skipped (downgrade)` と報告した | manifest の version が Intune 側 metadata に保存された version より低い | 上記 §3 を参照 |
 | `Invalid operation: app's PublishingState is not 'Published'` で失敗した | Intune が app を処理中だった、または committed content version がまだ activate されていない状態で metadata / category を更新しようとした | 現在の CLI で同じ publish を再実行する。`processing` は `published` になるまで待機し、`notPublished` は `inputHash` が一致していても content を upload する。polling が timeout した場合は Intune の処理完了後に再実行する。app は削除・再作成しない |
 | `publish` は成功したが content が変わらない | `inputHash` が保存値と一致し、content upload が skip された(doc/00-overview.md §6.7) | manifest または入力ファイルが実際に変わっているか確認する。`inputHash` が変わっていなければ再アップロードを skip するのは仕様どおり |
+| Windows file detection が validation で落ちる、または常に失敗する | `Path` を repository path として扱った、未対応の operation / operator を使った、または version 値が不正 | `exists` / `version` だけを使用する。対象端末の drive-rooted / root-relative / UNC / environment-variable path を設定し、`version` の `ComparisonValue` は 1～4 part の数値にする |
 | macOS: publish 後もデバイス側の検出バージョンが変わらない | `Detection.IncludedApps[].BundleVersion` を新リリースに合わせて更新していない | manifest を修正して再 publish する |
 | ログに旧バージョンの `superseded by version X` が出る | 解決された set に同一 identity の複数バージョンが含まれる場合の仕様(doc/00-overview.md §6.8) | 対処不要 — 最高バージョンのみが publish される |
 

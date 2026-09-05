@@ -421,7 +421,9 @@ Intune の supersedence 関係を設定したりはしない。
 4. macOS のみ: `Detection.IncludedApps[].BundleVersion` を新リリースの bundle version に更新する。これを旧値の
    ままにすると、更新後も Intune の検出ルールが旧バージョンを探し続けるため、新しい content が publish されても
    既存管理下のデバイスが「未インストール/未更新」と判定されることがある。
-5. Windows のみ: `SetupFile`、`RepositoryFiles`、検出スクリプトの中に版数依存の参照が残っていないか確認する。
+5. Windows のみ: `SetupFile`、`RepositoryFiles`、検出スクリプト、または `Detection.Type: file` の
+   `ComparisonValue` に版数依存の参照が残っていないか確認する。file detection では target-device `Path` と
+   `FileOrFolderName` を使い、repository-relative path を指定しない。
 6. バージョンを上げる際に `PackageIdentifier`・`Platform`・`Architecture`・`DisplayName` を変更しない。
    これらを変更すると identity 解決が壊れ(doc/00-overview.md §6.1)、`publish` は既存 app を見つけられずに
    別 app を新規作成してしまい、旧 app と assignment は移行されないまま残る。

@@ -21,10 +21,19 @@
 | `Microsoft/Microsoft.PowerShell/7.6.4/powershell-macos-x64.yaml` | E2E 実行可能・旧バージョン | 通る | 通る(GitHub から約 73 MB をダウンロードし SHA-256 を検証) | 上記と同様 |
 | `contoso-tool-windows-x64.yaml` | E2E 実行可能 | 通る | 通る(ローカルの `RepositoryFiles` を staging し、実際に `.intunewin` を生成 — Windows マシン/runner が必要) | 外部ダウンロードは無し。`.intunewin` 生成には `IntuneWinAppUtil.exe` が必要だが自動ダウンロードされる |
 | `contoso-tool-windows-arm64.yaml` | E2E 実行可能 | 通る | 通る(上記と同様) | |
+| `contoso-tool-windows-file-detection.yaml` | E2E 実行可能(file detection 例) | 通る | 通る(同じローカル Windows packaging 経路) | detection script を使わない file-version detection の `Detection.Type: file` を示す |
 | `contoso-tool-macos-arm64.yaml` | 参照専用(schema 例) | 通る | **落ちる** — `Source` が架空の Azure Blob account(`contosopackages`)と、全ゼロのプレースホルダ `Sha256` を指している | [doc/01-manifest-schema.md §5.3](../../doc/01-manifest-schema.md) の `azureBlob` の形を示すためのもの。解決される想定ではない |
 | `apple-container-macos-arm64.yaml` | 参照専用(意図的な失敗) | **落ちる** — `Detection.IncludedApps` が空 | — | Apple Container の PKG は `.app` バンドルを一切インストールしないため、架空の bundleId を捏造しない限り `IncludedApps` を実値で埋められない。Intune の macOS 検出における実際の制約を記録したもの。ファイル冒頭のコメントと [doc/01-manifest-schema.md §5.4](../../doc/01-manifest-schema.md) を参照 |
 
 ## PowerShell サンプルが E2E fixture として成立する理由
+
+## Windows file-system detection サンプル
+
+`contoso-tool-windows-file-detection.yaml` は Windows script sample と同じローカル installer input を
+package しますが、検出 rule は repository から読み込むのではなく managed device 上で評価されます。したがって
+`Detection.Path` は `--repo-root` の input ではなく Windows target-device path です。sample は対応済みの
+`version` operation を使っています。version 比較が不要な場合は `exists` を使い、`Operator` と
+`ComparisonValue` の両方を省略します。
 
 Intune の macOS `Detection.IncludedApps` には、PKG が**実際にインストールする**アプリケーションの bundleId + version を列挙する必要があります([Add an Unmanaged macOS PKG App to Microsoft Intune](https://learn.microsoft.com/intune/app-management/deployment/add-unmanaged-pkg-macos#step-4-%E2%80%93-detection-rules) 参照)。Apple Container のような CLI 専用の PKG には、指す先がありません。
 
