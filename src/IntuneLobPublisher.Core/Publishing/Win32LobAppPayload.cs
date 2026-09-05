@@ -83,9 +83,9 @@ public sealed class Win32LobAppPayload
     [JsonPropertyName("returnCodes")]
     public required List<Win32LobAppReturnCodePayload> ReturnCodes { get; init; }
 
-    /// <summary>Detection (and, in future, requirement) rules. Only PowerShell script detection is modeled today.</summary>
+    /// <summary>Detection (and, in future, requirement) rules.</summary>
     [JsonPropertyName("rules")]
-    public required List<Win32LobAppDetectionRulePayload> Rules { get; init; }
+    public required List<Win32LobAppRulePayload> Rules { get; init; }
 
     [JsonPropertyName("displayVersion")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -129,16 +129,19 @@ public sealed class Win32LobAppReturnCodePayload
     public required string Type { get; init; }
 }
 
-/// <summary>A Win32 detection rule. Only the PowerShell script rule shape is modeled (the only
-/// detection type the manifest schema supports today).</summary>
-public sealed class Win32LobAppDetectionRulePayload
+/// <summary>Base payload for a Graph Win32 LOB app rule.</summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "@odata.type")]
+[JsonDerivedType(typeof(Win32LobAppPowerShellScriptRulePayload), "#microsoft.graph.win32LobAppPowerShellScriptRule")]
+[JsonDerivedType(typeof(Win32LobAppFileSystemRulePayload), "#microsoft.graph.win32LobAppFileSystemRule")]
+public abstract class Win32LobAppRulePayload
 {
-    [JsonPropertyName("@odata.type")]
-    public string ODataType { get; init; } = "#microsoft.graph.win32LobAppPowerShellScriptRule";
-
     [JsonPropertyName("ruleType")]
     public string RuleType { get; init; } = "detection";
+}
 
+/// <summary>A Win32 PowerShell detection rule.</summary>
+public sealed class Win32LobAppPowerShellScriptRulePayload : Win32LobAppRulePayload
+{
     [JsonPropertyName("enforceSignatureCheck")]
     public required bool EnforceSignatureCheck { get; init; }
 
@@ -148,6 +151,29 @@ public sealed class Win32LobAppDetectionRulePayload
     /// <summary>Base64-encoded script content. The script is embedded in the Graph payload, not distributed with the package.</summary>
     [JsonPropertyName("scriptContent")]
     public required string ScriptContent { get; init; }
+}
+
+/// <summary>A Win32 file-system detection rule.</summary>
+public sealed class Win32LobAppFileSystemRulePayload : Win32LobAppRulePayload
+{
+    [JsonPropertyName("path")]
+    public required string Path { get; init; }
+
+    [JsonPropertyName("fileOrFolderName")]
+    public required string FileOrFolderName { get; init; }
+
+    [JsonPropertyName("check32BitOn64System")]
+    public required bool Check32BitOn64System { get; init; }
+
+    [JsonPropertyName("operationType")]
+    public required string OperationType { get; init; }
+
+    [JsonPropertyName("operator")]
+    public required string Operator { get; init; }
+
+    [JsonPropertyName("comparisonValue")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ComparisonValue { get; init; }
 }
 
 /// <summary>Used for `largeIcon`. Note the Graph JSON example omits the leading `#` on this nested type's `@odata.type`.</summary>

@@ -24,7 +24,7 @@ public static class Win32LobAppPayloadMapper
 
     /// <param name="manifest">The root manifest, for top-level app info (description/publisher/owner/etc).</param>
     /// <param name="app">The platform/architecture-specific entry being published.</param>
-    /// <param name="detectionScriptContent">Raw (not base64) content of `Detection.ScriptFile`, already read from the repository.</param>
+    /// <param name="detectionScriptContent">Raw (not base64) content of `Detection.ScriptFile`, already read from the repository for script detection.</param>
     /// <param name="iconBytes">Raw icon bytes read from the repository, or null when the manifest has no `Icon` / it was not supplied.</param>
     /// <param name="notes">Management metadata JSON for the `notes` field, set only on create requests (see <see cref="Win32LobAppPayload.Notes"/>).</param>
     /// <exception cref="UnsupportedWindowsBuildException">`Requirements.MinimumOSVersion` has no known release mapping.</exception>
@@ -32,7 +32,7 @@ public static class Win32LobAppPayloadMapper
     public static Win32LobAppPayload Map(
         IntunePackageManifest manifest,
         AppManifest app,
-        string detectionScriptContent,
+        string? detectionScriptContent,
         byte[]? iconBytes,
         string? notes = null)
     {
@@ -73,11 +73,34 @@ public static class Win32LobAppPayloadMapper
             ? returnCodes.Select(rc => new Win32LobAppReturnCodePayload { ReturnCode = rc.Code, Type = rc.Type! }).ToList()
             : DefaultReturnCodes.ToList();
 
-    private static Win32LobAppDetectionRulePayload MapDetectionRule(DetectionManifest? detection, string detectionScriptContent)
-        => new()
+    private static Win32LobAppRulePayload MapDetectionRule(DetectionManifest? detection, string? detectionScriptContent)
+        => detection?.Type switch
         {
-            EnforceSignatureCheck = detection?.EnforceSignatureCheck ?? false,
-            RunAs32Bit = detection?.RunAs32Bit ?? false,
-            ScriptContent = Convert.ToBase64String(Encoding.UTF8.GetBytes(detectionScriptContent)),
+            "script" when detectionScriptContent is not null => new Win32LobAppPowerShellScriptRulePayload
+            {
+                EnforceSignatureCheck = detection.EnforceSignatureCheck ?? false,
+                RunAs32Bit = detection.RunAs32Bit ?? false,
+                ScriptContent = Convert.ToBase64String(Encoding.UTF8.GetBytes(detectionScriptContent)),
+            },
+            "script" => throw new InvalidOperationException("Detection.Type 'script' requires detection script content."),
+            "file" => new Win32LobAppFileSystemRulePayload
+            {
+                Path = detection.Path ?? throw new InvalidOperationException("Detection.Type 'file' requires Detection.Path."),
+                FileOrFolderName = detection.FileOrFolderName
+                    ?? throw new InvalidOperationException("Detection.Type 'file' requires Detection.FileOrFolderName."),
+                Check32BitOn64System = detection.Check32BitOn64System ?? false,
+                OperationType = detection.OperationType
+                    ?? throw new InvalidOperationException("Detection.Type 'file' requires Detection.OperationType."),
+                Operator = detection.OperationType == "exists"
+                    ? "notConfigured"
+                    : detection.Operator ?? throw new InvalidOperationException(
+                        "Detection.Type 'file' with OperationType 'version' requires Detection.Operator."),
+                ComparisonValue = detection.OperationType == "exists"
+                    ? null
+                    : detection.ComparisonValue ?? throw new InvalidOperationException(
+                        "Detection.Type 'file' with OperationType 'version' requires Detection.ComparisonValue."),
+            },
+            null => throw new InvalidOperationException("Windows app detection is required."),
+            _ => throw new InvalidOperationException($"Detection.Type '{detection.Type}' has no Graph mapping."),
         };
 }

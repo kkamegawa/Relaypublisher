@@ -65,16 +65,21 @@ public sealed class WindowsAppPublisher : IPlatformAppPublisher
             useBeta: false,
             cancellationToken);
 
-    private static async Task<(string DetectionScript, byte[]? IconBytes)> ReadAssetsAsync(PublishRequest request, CancellationToken cancellationToken)
+    private static async Task<(string? DetectionScript, byte[]? IconBytes)> ReadAssetsAsync(PublishRequest request, CancellationToken cancellationToken)
     {
         var detectionScript = await ReadDetectionScriptAsync(request, cancellationToken).ConfigureAwait(false);
         var iconBytes = await ManifestAssetReader.ReadIconAsync(request, request.Manifest, cancellationToken).ConfigureAwait(false);
         return (detectionScript, iconBytes);
     }
 
-    private static async Task<string> ReadDetectionScriptAsync(PublishRequest request, CancellationToken cancellationToken)
+    private static async Task<string?> ReadDetectionScriptAsync(PublishRequest request, CancellationToken cancellationToken)
     {
         var app = request.App;
+        if (app.Detection?.Type == "file")
+        {
+            return null;
+        }
+
         var scriptPath = PathSafety.ResolveWithin(request.RepositoryRoot, app.Detection!.ScriptFile!, "Detection.ScriptFile");
         if (!File.Exists(scriptPath))
         {
