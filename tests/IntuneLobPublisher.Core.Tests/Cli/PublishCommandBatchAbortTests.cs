@@ -362,7 +362,10 @@ public sealed class PublishCommandBatchAbortTests
         var orchestrator = new SequencedOrchestrator(
             request =>
             {
-                // The first entry completes normally, then the caller cancels before the second entry starts.
+                // The first entry completes normally and cancels the token as a side effect. The loop
+                // still begins the second iteration (session creation, request setup) before the
+                // cancellation is actually observed - it surfaces once the second entry's PublishAsync
+                // checks the token (Copilot review, PR #151).
                 cts.Cancel();
                 return SequencedOrchestrator.Published(request);
             },

@@ -348,6 +348,53 @@ public sealed class AzureStorageBlockBlobUploaderTests
     }
 
     [TestMethod]
+    public async Task UploadAsync_SasAuthenticationFailure_RetryDelayLongerThanSameSasWindow_DoesNotOvershootWindow()
+    {
+        // Regression test (Copilot review, PR #151): the same-SAS phase used to always wait the full
+        // SasActivationRetryDelay before checking whether SasActivationSameSasWindow had elapsed, so a
+        // retry delay longer than (or close to) the window could overshoot it by up to one full delay.
+        var timeProvider = new ManualTimeProvider();
+        var start = timeProvider.GetUtcNow();
+        var recordedDelays = new List<TimeSpan>();
+        DateTimeOffset? renewedAt = null;
+        var handler = new RecordingHandler(request =>
+            request.Query.Contains("sv=renewed-sas", StringComparison.Ordinal) ? Success() : Create403AuthenticationFailedResponse());
+        var uploader = CreateUploader(
+            handler,
+            timeProvider,
+            delayAsync: (delay, _) =>
+            {
+                recordedDelays.Add(delay);
+                timeProvider.Advance(delay);
+                return Task.CompletedTask;
+            });
+        using var content = new MemoryStream([1, 2, 3, 4]);
+
+        await uploader.UploadAsync(
+            SasUri,
+            start.AddHours(1),
+            content,
+            _ =>
+            {
+                renewedAt = timeProvider.GetUtcNow();
+                return Task.FromResult(new SasUriRenewal(RenewedSasUri, timeProvider.GetUtcNow().AddHours(1)));
+            },
+            new ContentUploadOptions
+            {
+                BlockSizeBytes = 1024,
+                SasActivationRetryDelay = TimeSpan.FromSeconds(20),
+                SasActivationSameSasWindow = TimeSpan.FromSeconds(5),
+                SasActivationMaxRenewals = 1,
+            },
+            CancellationToken.None);
+
+        // The renewal must happen exactly when the window elapses (t=5s), not after a full retry delay
+        // (t=20s), and no single wait may exceed the window.
+        Assert.AreEqual(start + TimeSpan.FromSeconds(5), renewedAt);
+        Assert.IsTrue(recordedDelays.All(d => d <= TimeSpan.FromSeconds(5)));
+    }
+
+    [TestMethod]
     public async Task UploadAsync_SasAuthenticationFailure_RenewalLimitExceeded_ThrowsWithoutLivelocking()
     {
         var timeProvider = new ManualTimeProvider();

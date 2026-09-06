@@ -229,7 +229,18 @@ public sealed class AzureStorageBlockBlobUploader : IAzureStorageBlockBlobUpload
                     var sameSasDeadline = _timeProvider.GetUtcNow() + options.SasActivationSameSasWindow;
                     while (true)
                     {
-                        await _delayAsync(options.SasActivationRetryDelay, recoveryToken).ConfigureAwait(false);
+                        // Bound the wait by the window remaining, and skip it entirely once the window is
+                        // already gone: waiting the full SasActivationRetryDelay unconditionally (Copilot
+                        // review, PR #151) could overshoot the documented window by up to one retry delay
+                        // when the delay is close to or larger than the window itself.
+                        var remainingWindow = sameSasDeadline - _timeProvider.GetUtcNow();
+                        if (remainingWindow <= TimeSpan.Zero)
+                        {
+                            break;
+                        }
+
+                        var delay = remainingWindow < options.SasActivationRetryDelay ? remainingWindow : options.SasActivationRetryDelay;
+                        await _delayAsync(delay, recoveryToken).ConfigureAwait(false);
                         attempt++;
 
                         try
