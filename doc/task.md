@@ -2,6 +2,46 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-09-06: manifest 作成スクリプトを Windows file detection に追従させる
+
+**ブランチ**: `feature/yamlcreate-manifest-tool`
+
+**対応 Issue / PR**: [#140](https://github.com/kkamegawa/Relaypublisher/issues/140) / [#139](https://github.com/kkamegawa/Relaypublisher/pull/139)(仕様変更元: [#141](https://github.com/kkamegawa/Relaypublisher/issues/141))
+
+### 実施内容
+
+PR #139 は `Detection` が script 固定だった頃の schema に対して書かれており、Issue #141 で入った
+`Detection.Type` の discriminator に追従していなかった。決定事項は [adr.md](adr.md) の同日エントリに記録した。
+
+1. `origin/main` を merge した(rebase・force push はしない)。衝突は `doc/adr.md` と `doc/task.md` の 2 ファイルのみで、
+   どちらもヘッダー直下への新 section 追加だったため、両者を日付降順で残して解決した。
+2. `tools/yamlcreate.ps1` に `$DetectionTypes` / `$FileSystemOperationTypes` / `$FileSystemOperators` と、
+   `ManifestValues` 由来の `$FileSystemVersionPattern` / `$TargetDevicePathRootPattern` /
+   `$TargetDeviceInvalidChars` を追加した。`notConfigured` は Graph の unset sentinel なので選択肢に含めない。
+3. `Test-TargetDeviceText` / `Test-TargetDevicePath` / `Test-TargetDeviceLeafName` と、再入力ループ付きの
+   `Read-TargetDevicePath` / `Read-TargetDeviceLeafName` / `Read-FileSystemVersion` を追加した。C# の
+   `HasInvalidFileSystemText` は invalid で true を返すため、本スクリプトの `Test-*` 規約に合わせて反転してある。
+4. `ConvertTo-YamlScalar` / `Add-YamlPair` に `-SingleQuote` を追加し、`Path` をシングルクォートで出力するようにした。
+5. Windows Detection の対話を `Type` の選択から始め、`script` は従来どおり、`file` は
+   `Path` / `FileOrFolderName` / `OperationType`(+ `version` のときだけ `Operator` / `ComparisonValue`)/
+   `Check32BitOn64System` を出力するようにした。「script 検出のみ対応」の注記は削除した。
+6. `$VersionBearingKeys` に `ComparisonValue` を追加し、comment-based help の更新対象フィールドを直した。
+7. [08-yamlcreate.md](08-yamlcreate.md) / [08-yamlcreate_ja.md](08-yamlcreate_ja.md) の §1 / §4.3 / §8.1 / §8.2 / §9 / §10 を
+   日英同時に更新した(283 行で一致、見出し位置も一致)。
+8. 回帰テストを 11 → 16 ケースに増やした。あわせて、応答されない必須プロンプトが無限ループでスイートを止めず
+   ケースの失敗になるよう、Windows 用レスポンダに同一プロンプトの反復ガードを入れた。
+
+### 検証結果
+
+- `pwsh -NoProfile -File tests/Tools/YamlCreate.Tests.ps1`: 16 ケース成功。
+- `YAMLCREATE_TEST_TOOL_PATH` で変更前の `tools/yamlcreate.ps1` を指した実行では、追加した 5 ケースのうち 4 ケースが失敗する
+  ことを確認した。残る 1 ケース(`New Windows script detection is unchanged by the Type discriminator`)は変更していない
+  経路の回帰ガードなので、変更前後どちらでも成功するのが正しい。
+- `dotnet build IntuneLobPublisher.slnx --configuration Release` / `dotnet test ... --no-build`: 後述の実行結果を参照。
+- `git diff --check`: 成功。
+
+Intune への実 publish は未実施。
+
 ## 2026-09-06: Fail publish when result-file output fails (Issue #150 review follow-up)
 
 - Issue: [#150](https://github.com/kkamegawa/Relaypublisher/issues/150)

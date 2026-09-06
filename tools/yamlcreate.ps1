@@ -10,7 +10,8 @@
 
     Update mode performs the version bump described in doc/05-operation.md section 4c: it rewrites
     PackageVersion, the version-bearing source fields (Url / Tag / AssetName / BlobName /
-    Destination) and macOS Detection.IncludedApps[].BundleVersion, then recomputes every Sha256.
+    Destination), macOS Detection.IncludedApps[].BundleVersion and Windows
+    Detection.ComparisonValue, then recomputes every Sha256.
     The rewrite is line based, so comments, key order and formatting survive untouched. App identity
     (PackageIdentifier / Platform / Architecture / DisplayName) is never rewritten.
 
@@ -83,6 +84,19 @@ $ErrorActionPreference = 'Stop'
 
 $SchemaVersionValue = '1.0'
 $Sha256Pattern = '^[0-9a-fA-F]{64}$'
+
+# Mirrors ManifestValues.FileSystemVersionRegex: one to four parts of one to five digits.
+$FileSystemVersionPattern = '^\d{1,5}(\.\d{1,5}){0,3}$'
+
+# Mirrors ManifestValues.TargetDevicePathRootRegex: drive-rooted, root-relative, UNC or
+# environment-variable-rooted. Single quoted so every backslash stays literal and the pattern
+# matches the C# verbatim string character for character.
+$TargetDevicePathRootPattern = '^[A-Za-z]:\\|^\\[^\\]|^\\\\[^\\]+\\[^\\]+(?:\\.*)?$|^%[A-Za-z_][A-Za-z0-9_()]*%\\'
+
+# Mirrors the character set rejected by ManifestValues.HasInvalidFileSystemText. The [char[]] cast
+# is required: String.IndexOfAny does not bind to an Object[].
+$TargetDeviceInvalidChars = [char[]]@('*', '?', '<', '>', '"', '|', '/')
+
 $MaxIconBytes = 1 * 1024 * 1024
 $MaxMacOsAppScriptChars = 15360
 $GitHubApiBaseUri = 'https://api.github.com'
@@ -93,6 +107,11 @@ $Architectures = @('x64', 'arm64')
 $MacOsAppTypes = @('pkg', 'lob')
 $InstallExperiences = @('system', 'user')
 $RestartBehaviors = @('suppress', 'allow', 'force')
+# doc/01-manifest-schema.md 5.2/5.2.1. 'notConfigured' is Graph's unset sentinel and is rejected as
+# manifest input, so it is deliberately absent from the operation type and operator lists.
+$DetectionTypes = @('script', 'file')
+$FileSystemOperationTypes = @('exists', 'version')
+$FileSystemOperators = @('equal', 'notEqual', 'greaterThan', 'greaterThanOrEqual', 'lessThan', 'lessThanOrEqual')
 $ReturnCodeTypes = @('success', 'softReboot', 'hardReboot', 'retry', 'failed')
 $AssignmentTargets = @('group', 'allDevices', 'allLicensedUsers')
 $AssignmentModes = @('include', 'exclude')
@@ -141,7 +160,11 @@ $MacOsVersions = [ordered]@{
 }
 
 # Manifest keys whose value carries the package version and is rewritten by a version bump.
-$VersionBearingKeys = @('Url', 'Tag', 'AssetName', 'BlobName', 'Destination', 'BundleVersion')
+# ComparisonValue is included because a Windows 'OperationType: version' rule left at the old
+# version silently reports the new package as already installed (greaterThanOrEqual) or as never
+# installed (equal). Only an exact occurrence of the old version is replaced, so a deliberate floor
+# such as 1.0 is left alone.
+$VersionBearingKeys = @('Url', 'Tag', 'AssetName', 'BlobName', 'Destination', 'BundleVersion', 'ComparisonValue')
 
 #endregion
 
@@ -427,6 +450,138 @@ function Read-RelativePath {
     }
 }
 
+<#
+    The helpers below validate Windows Detection.Type 'file' values. Those are evaluated by the
+    Intune agent on the managed device, not resolved against the repository root, so they must not
+    go through Test-SafeRelativePath / Read-RelativePath: every legal drive-rooted, root-relative or
+    UNC path is rejected by the repository rules. They mirror ManifestValues instead
+    (doc/01-manifest-schema.md 5.2.1). Note the inverted polarity: the C# HasInvalidFileSystemText
+    returns true for invalid text, while these follow this script's Test-* convention and return
+    true when the value is usable.
+#>
+function Test-TargetDeviceText {
+    param([AllowNull()][AllowEmptyString()][string]$Value)
+
+    # Must come first: under StrictMode a null value would throw on Trim().
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $false
+    }
+
+    if ($Value -cne $Value.Trim()) {
+        return $false
+    }
+
+    if ($Value.IndexOfAny($TargetDeviceInvalidChars) -ge 0) {
+        return $false
+    }
+
+    # ToCharArray is required: enumerating a string yields the whole string, and [char]::IsControl
+    # would then bind its (string, int) overload and fail.
+    foreach ($character in $Value.ToCharArray()) {
+        if ([char]::IsControl($character)) {
+            return $false
+        }
+    }
+
+    return $true
+}
+
+function Test-TargetDevicePath {
+    param([AllowNull()][AllowEmptyString()][string]$Value)
+
+    if (-not (Test-TargetDeviceText -Value $Value)) {
+        return $false
+    }
+
+    # -cnotmatch, mirroring the case-sensitive [GeneratedRegex] on the publisher side.
+    if ($Value -cnotmatch $TargetDevicePathRootPattern) {
+        return $false
+    }
+
+    # A colon is allowed only as the drive separator, and only once.
+    $colonIndex = $Value.IndexOf(':')
+    if ($colonIndex -ge 0 -and ($colonIndex -ne 1 -or $Value.LastIndexOf(':') -ne 1)) {
+        return $false
+    }
+
+    # [char[]] is required for the same reason as in Test-SafeRelativePath. "/" is already rejected
+    # by Test-TargetDeviceText, so splitting on the backslash alone is enough.
+    foreach ($segment in $Value.Split([char[]]@('\'))) {
+        if ($segment -ceq '.' -or $segment -ceq '..') {
+            return $false
+        }
+    }
+
+    return $true
+}
+
+function Test-TargetDeviceLeafName {
+    param([AllowNull()][AllowEmptyString()][string]$Value)
+
+    if (-not (Test-TargetDeviceText -Value $Value)) {
+        return $false
+    }
+
+    # "/" is already covered by the invalid character set.
+    if ($Value.Contains('\') -or $Value.Contains(':')) {
+        return $false
+    }
+
+    if ($Value -ceq '.' -or $Value -ceq '..') {
+        return $false
+    }
+
+    return $true
+}
+
+function Read-TargetDevicePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Prompt,
+        [string]$Hint
+    )
+
+    while ($true) {
+        $value = Read-Text -Prompt $Prompt -Required -Hint $Hint
+        if (Test-TargetDevicePath -Value $value) {
+            return $value
+        }
+
+        Write-Host 'Enter a target-device folder such as C:\Program Files\Contoso, %ProgramFiles%\Contoso or \\server\share\Contoso. Wildcards, "." and ".." segments and "/" are not allowed.' -ForegroundColor Yellow
+    }
+}
+
+function Read-TargetDeviceLeafName {
+    param(
+        [Parameter(Mandatory = $true)][string]$Prompt,
+        [string]$Hint
+    )
+
+    while ($true) {
+        $value = Read-Text -Prompt $Prompt -Required -Hint $Hint
+        if (Test-TargetDeviceLeafName -Value $value) {
+            return $value
+        }
+
+        Write-Host 'Enter a single file or folder name such as contoso-tool.exe. Path separators, wildcards and ":" are not allowed.' -ForegroundColor Yellow
+    }
+}
+
+function Read-FileSystemVersion {
+    param(
+        [Parameter(Mandatory = $true)][string]$Prompt,
+        [string]$Default
+    )
+
+    while ($true) {
+        $value = Read-Text -Prompt $Prompt -Default $Default -Required -Hint 'One to four numeric parts of one to five digits each, for example 1.2.3.'
+        if ($value -cmatch $FileSystemVersionPattern) {
+            return $value
+        }
+
+        Write-Host 'ComparisonValue must be one to four numeric parts of one to five digits each, for example 1.2.3.' -ForegroundColor Yellow
+    }
+}
+
 function Test-IconFile {
     param(
         [Parameter(Mandatory = $true)][string]$RelativePath,
@@ -628,12 +783,23 @@ function Resolve-SourceSha256 {
     Quotes a scalar only when YAML would otherwise reinterpret it. Callers pass -AlwaysQuote for
     values that must stay strings: MinimumOSVersion "14.0" read as a float becomes "14" and no
     longer matches MacOsMinimumOperatingSystemTable.
+
+    -SingleQuote is for target-device Windows paths. Double quotes would escape every backslash, so
+    %ProgramFiles%\Contoso (a leading indicator, hence always quoted) would be written as
+    "%ProgramFiles%\\Contoso" while C:\Contoso stayed bare - three spellings for one kind of value.
+    Single quotes suppress escape processing and match doc/01-manifest-schema.md 5.2.1. They cannot
+    carry a control character, which Test-TargetDeviceText already rejects for the only caller.
 #>
 function ConvertTo-YamlScalar {
     param(
         [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value,
-        [switch]$AlwaysQuote
+        [switch]$AlwaysQuote,
+        [switch]$SingleQuote
     )
+
+    if ($SingleQuote -and -not [string]::IsNullOrEmpty($Value)) {
+        return "'" + $Value.Replace("'", "''") + "'"
+    }
 
     $needsQuote = $AlwaysQuote -or
         [string]::IsNullOrEmpty($Value) -or
@@ -674,11 +840,12 @@ function Add-YamlPair {
         [Parameter(Mandatory = $true)][string]$Key,
         [AllowEmptyString()][string]$Value,
         [switch]$AlwaysQuote,
+        [switch]$SingleQuote,
         [switch]$Raw,
         [string]$ListPrefix
     )
 
-    $rendered = if ($Raw) { $Value } else { ConvertTo-YamlScalar -Value $Value -AlwaysQuote:$AlwaysQuote }
+    $rendered = if ($Raw) { $Value } else { ConvertTo-YamlScalar -Value $Value -AlwaysQuote:$AlwaysQuote -SingleQuote:$SingleQuote }
     $prefix = if ([string]::IsNullOrEmpty($ListPrefix)) { '' } else { $ListPrefix }
     Add-YamlLine -Lines $Lines -Indent $Indent -Text "$prefix$Key`: $rendered"
 }
@@ -1304,17 +1471,58 @@ function Read-ManifestContent {
         }
 
         Write-Heading 'Detection (Windows)'
-        Write-Note 'Only script detection is supported.'
-        $detectionScript = Read-RelativePath -Prompt 'Detection ScriptFile (repository-relative)' -Root $Root -Required -MustExist
-        $runAs32Bit = Read-YesNo -Prompt 'RunAs32Bit?'
-        $enforceSignatureCheck = Read-YesNo -Prompt 'EnforceSignatureCheck?'
+        $detectionType = Read-Choice -Prompt 'Detection type' -Options $DetectionTypes -Default 'script' -Annotations @{
+            'script' = 'PowerShell detection script kept in the repository'
+            'file'   = 'file or folder checked on the target device, with no script to maintain'
+        }
+
+        if ($detectionType -eq 'script') {
+            $detectionScript = Read-RelativePath -Prompt 'Detection ScriptFile (repository-relative)' -Root $Root -Required -MustExist
+            $runAs32Bit = Read-YesNo -Prompt 'RunAs32Bit?'
+            $enforceSignatureCheck = Read-YesNo -Prompt 'EnforceSignatureCheck?'
+        }
+        else {
+            Write-Note 'Path and FileOrFolderName are evaluated on the managed device. They are not repository-relative.'
+            $detectionPath = Read-TargetDevicePath -Prompt 'Detection Path (target device folder)' -Hint 'For example C:\Program Files\Contoso Tool, %ProgramFiles%\Contoso Tool or \\server\share\Contoso Tool.'
+            $fileOrFolderName = Read-TargetDeviceLeafName -Prompt 'Detection FileOrFolderName' -Hint 'A single file or folder name, for example contoso-tool.exe.'
+            $operationType = Read-Choice -Prompt 'OperationType' -Options $FileSystemOperationTypes -Default 'version' -Annotations @{
+                'exists'  = 'the file or folder exists; no Operator or ComparisonValue'
+                'version' = 'compare the installed file version against ComparisonValue'
+            }
+
+            if ($operationType -eq 'version') {
+                $fileOperator = Read-Choice -Prompt 'Operator' -Options $FileSystemOperators -Default 'greaterThanOrEqual'
+                # Offer PackageVersion as the default only when it already satisfies the stricter
+                # ComparisonValue format, so "v1.2.3" or "1.2.3-beta" is not proposed.
+                $comparisonDefault = if ($versionValue -cmatch $FileSystemVersionPattern) { $versionValue } else { '' }
+                $comparisonValue = Read-FileSystemVersion -Prompt 'ComparisonValue' -Default $comparisonDefault
+            }
+
+            $check32BitOn64System = Read-YesNo -Prompt 'Check32BitOn64System?'
+        }
 
         Add-YamlLine -Lines $lines -Text ''
         Add-YamlLine -Lines $lines -Indent 4 -Text 'Detection:'
-        Add-YamlPair -Lines $lines -Indent 6 -Key 'Type' -Value 'script'
-        Add-YamlPair -Lines $lines -Indent 6 -Key 'ScriptFile' -Value $detectionScript
-        Add-YamlPair -Lines $lines -Indent 6 -Key 'RunAs32Bit' -Value $runAs32Bit.ToString().ToLowerInvariant() -Raw
-        Add-YamlPair -Lines $lines -Indent 6 -Key 'EnforceSignatureCheck' -Value $enforceSignatureCheck.ToString().ToLowerInvariant() -Raw
+        Add-YamlPair -Lines $lines -Indent 6 -Key 'Type' -Value $detectionType
+
+        if ($detectionType -eq 'script') {
+            Add-YamlPair -Lines $lines -Indent 6 -Key 'ScriptFile' -Value $detectionScript
+            Add-YamlPair -Lines $lines -Indent 6 -Key 'RunAs32Bit' -Value $runAs32Bit.ToString().ToLowerInvariant() -Raw
+            Add-YamlPair -Lines $lines -Indent 6 -Key 'EnforceSignatureCheck' -Value $enforceSignatureCheck.ToString().ToLowerInvariant() -Raw
+        }
+        else {
+            Add-YamlPair -Lines $lines -Indent 6 -Key 'Path' -Value $detectionPath -SingleQuote
+            Add-YamlPair -Lines $lines -Indent 6 -Key 'FileOrFolderName' -Value $fileOrFolderName
+            Add-YamlPair -Lines $lines -Indent 6 -Key 'OperationType' -Value $operationType
+
+            if ($operationType -eq 'version') {
+                Add-YamlPair -Lines $lines -Indent 6 -Key 'Operator' -Value $fileOperator
+                # Always quoted: a bare 1.2 is a YAML float.
+                Add-YamlPair -Lines $lines -Indent 6 -Key 'ComparisonValue' -Value $comparisonValue -AlwaysQuote
+            }
+
+            Add-YamlPair -Lines $lines -Indent 6 -Key 'Check32BitOn64System' -Value $check32BitOn64System.ToString().ToLowerInvariant() -Raw
+        }
 
         Write-Heading 'Requirements (Windows)'
         $releaseOptions = @($WindowsReleases.Keys)

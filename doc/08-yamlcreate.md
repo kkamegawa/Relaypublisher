@@ -5,7 +5,8 @@
 `tools/yamlcreate.ps1` uses interactive prompts to create Relaypublisher YAML manifests and update existing manifests
 to a new version. It serves the same role as `Tools/YamlCreate.ps1` in winget-pkgs.
 
-- The authoritative schema is [`doc/01-manifest-schema.md`](01-manifest-schema.md). This script assists with input; it does not define the schema.
+- The authoritative schema is [`doc/01-manifest-schema.md`](01-manifest-schema.md) (Windows file detection: §5.2.1). This script
+  assists with input; it does not define the schema.
 - The authoritative validator is `relaypublisher validate`. The script duplicates some checks before saving to provide
   early feedback, then automatically runs the CLI's `validate` command after saving.
 - The authoritative version update procedure is [`doc/05-operation.md`](05-operation.md) §4c. Update mode automates that procedure.
@@ -84,8 +85,13 @@ Fields that apply only to the other platform are neither prompted for nor writte
 | `Install.InstallExperience` | Defaults to `system` |
 | `Install.RestartBehavior` | Defaults to `suppress` |
 | `Install.ReturnCodes[]` | Optional. If no entries are added, the key is omitted and Intune defaults apply (0/1707 success, 3010 softReboot, 1641 hardReboot, 1618 retry) |
-| `Detection.ScriptFile` | `Type: script` is fixed. Repository-relative; file existence is checked |
-| `Detection.RunAs32Bit` / `EnforceSignatureCheck` | Default to false |
+| `Detection.Type` | `script` (default) or `file`. Windows only; the macOS branch never writes this key |
+| `Detection.ScriptFile` | `Type: script` only. Repository-relative; file existence is checked |
+| `Detection.RunAs32Bit` / `EnforceSignatureCheck` | `Type: script` only. Default to false |
+| `Detection.Path` / `FileOrFolderName` | `Type: file` only. Evaluated on the managed device, so they are **not** repository-relative and are never resolved against `-RepoRoot`. `Path` must be drive-rooted (`C:\...`), root-relative (`\...`), UNC (`\\server\share\...`) or environment-variable-rooted (`%ProgramFiles%\...`). Wildcards, `.` / `..` segments, control characters, leading or trailing whitespace and `<` `>` `"` `\|` `/` are rejected; `FileOrFolderName` additionally rejects `\` and `:`. `Path` is written single-quoted |
+| `Detection.OperationType` | `Type: file` only. `exists` or `version`, defaulting to `version`. `notConfigured` is a Graph unset sentinel and is not offered |
+| `Detection.Operator` / `ComparisonValue` | `OperationType: version` only, where both are required. `Operator` defaults to `greaterThanOrEqual`. `ComparisonValue` must be one to four numeric parts of one to five digits each, defaults to `PackageVersion` when that already matches the format, and is always quoted in the output. `OperationType: exists` writes neither key |
+| `Detection.Check32BitOn64System` | `Type: file` only. Defaults to false and is always written |
 | `Requirements.MinimumOSVersion` | Lists only the keys in `WindowsReleaseTable`, along with release names. Defaults to `10.0.19045` |
 | `Requirements.Architecture` | Automatically set to the app's `Architecture` |
 
@@ -181,7 +187,8 @@ Updates are line-based, preserving comments, key order, and formatting. For `Pac
 and `Sha256`, only the value span is edited; quote styles and trailing comments (including references to the old version) are preserved.
 
 1. Set the top-level `PackageVersion` to the new version.
-2. Replace the old version string in the values of `Url` / `Tag` / `AssetName` / `BlobName` / `Destination` / `BundleVersion` lines.
+2. Replace the old version string in the values of `Url` / `Tag` / `AssetName` / `BlobName` / `Destination` / `BundleVersion` /
+   `ComparisonValue` lines.
    Tags with a `v` prefix, such as `v7.6.4`, are also updated.
    To avoid replacing `1.2` within `1.2.3`, matches preceded by a digit or dot, or followed by a digit or a dot followed by a digit, are excluded.
    A version immediately followed by a file extension, such as `tool-1.2.pkg`, is replaced.
@@ -194,12 +201,19 @@ Source authentication is read independently of the order of `Auth` and `Sha256`,
 For single-line quoted values, `''` inside single quotes and YAML escapes inside double quotes are decoded before the values are used as sources or credentials.
 A `#` inside quotes is treated as part of the value, distinct from a trailing comment outside the quotes.
 
+Windows `Detection.ComparisonValue` is included because a `greaterThanOrEqual` rule left at the old version makes Intune treat the
+previous release as already satisfying the new package, so the upgrade never installs; an `equal` rule leaves the new release
+undetected instead. Only an exact occurrence of the old version is replaced, so a deliberate floor such as `1.0` is left untouched.
+If the new `PackageVersion` is not a plain numeric version, the resulting `ComparisonValue` is rejected by `relaypublisher validate`.
+
 ### 8.2 Fields that are not updated
 
 `PackageIdentifier` / `Platform` / `Architecture` / `DisplayName` are not rewritten. These define the app identity;
 changing them creates a separate app in Intune and leaves the existing app behind (see the design invariants in AGENTS.md).
 
 `Requirements.MinimumOSVersion`, `Icon`, `Scripts`, `Assignments`, and `Categories` are also left unchanged.
+Windows `Detection.Path` / `FileOrFolderName` / `OperationType` / `Operator` / `Check32BitOn64System` are left unchanged as well;
+`ComparisonValue` is the only detection field that takes part in the version bump.
 To change these for a new version, edit the generated manifest manually.
 
 ### 8.3 Examples
@@ -225,6 +239,9 @@ Each check matches the corresponding rule in `src/IntuneLobPublisher.Core/Valida
 
 - Check manifest-derived paths (`Destination` / `Source` / `SetupFile` / `ScriptFile` / `Icon` / `Scripts.*`)
   for path traversal, absolute paths, and drive letters
+- Check Windows `Detection.Type: file` values as target-device values rather than repository paths: the `Path` root form
+  (drive-rooted / root-relative / UNC / environment-variable-rooted), `FileOrFolderName` as a single leaf name, the absence of
+  wildcards, traversal segments and control characters, and the `ComparisonValue` numeric format
 - Ensure `Sha256` contains 64 hexadecimal digits
 - Ensure `GroupId` / `FilterId` are GUIDs
 - Ensure `DisplayName` does not contain `PackageVersion`
@@ -244,7 +261,9 @@ If it is not found, the script displays the command to run. `-SkipValidate` supp
 - It cannot verify whether the names in `Categories` exist in the tenant. This is checked during the Graph preflight
   in publish / dry-run (doc/01-manifest-schema.md §5.8).
 - `Sha256` is not calculated automatically for `azureBlob`.
-- Update mode does not change `Requirements` / `Assignments` / `Scripts` / `Categories`.
+- Update mode does not change `Requirements` / `Assignments` / `Scripts` / `Categories`, apart from `Detection.ComparisonValue`.
+- `Type: file` detection stages no detection script. The script-specific and file-specific fields are mutually exclusive, and the
+  script cannot produce a manifest that mixes them.
 
 ## 11. Regression tests
 

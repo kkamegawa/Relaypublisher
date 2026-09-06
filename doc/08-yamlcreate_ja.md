@@ -5,7 +5,8 @@
 `tools/yamlcreate.ps1` は、Relaypublisher の YAML manifest を対話プロンプトで作成し、既存 manifest を
 新しいバージョンへ更新するためのスクリプトである。winget-pkgs の `Tools/YamlCreate.ps1` に相当する。
 
-- schema の正本は [`doc/01-manifest-schema.md`](01-manifest-schema.md)。本スクリプトは入力補助であり、schema を定義しない。
+- schema の正本は [`doc/01-manifest-schema.md`](01-manifest-schema.md)(Windows の file detection は §5.2.1)。
+  本スクリプトは入力補助であり、schema を定義しない。
 - 検証の正本は `relaypublisher validate`。本スクリプトが保存前に行うチェックは早期フィードバックのための重複実装で、
   保存後に CLI の `validate` を自動実行する。
 - バージョンアップ手順の正本は [`doc/05-operation.md`](05-operation.md) §4c。Update モードはその手順を機械化したもの。
@@ -84,8 +85,13 @@
 | `Install.InstallExperience` | 既定 `system` |
 | `Install.RestartBehavior` | 既定 `suppress` |
 | `Install.ReturnCodes[]` | 任意。追加しなければキーごと出力せず、Intune 既定(0/1707 success、3010 softReboot、1641 hardReboot、1618 retry)に委ねる |
-| `Detection.ScriptFile` | `Type: script` は固定。repository 相対、実在確認 |
-| `Detection.RunAs32Bit` / `EnforceSignatureCheck` | 既定 false |
+| `Detection.Type` | `script`(既定)または `file`。Windows 専用で、macOS ではこのキーを出力しない |
+| `Detection.ScriptFile` | `Type: script` のときだけ。repository 相対、実在確認 |
+| `Detection.RunAs32Bit` / `EnforceSignatureCheck` | `Type: script` のときだけ。既定 false |
+| `Detection.Path` / `FileOrFolderName` | `Type: file` のときだけ。管理対象端末上で評価される値であり、repository 相対**ではなく**、`-RepoRoot` 配下での解決も実在確認も行わない。`Path` は drive-rooted(`C:\...`)、root-relative(`\...`)、UNC(`\\server\share\...`)、environment-variable-rooted(`%ProgramFiles%\...`)のいずれか。wildcard、`.` / `..` セグメント、制御文字、前後の空白、`<` `>` `"` `\|` `/` は拒否する。`FileOrFolderName` はさらに `\` と `:` を拒否する。`Path` はシングルクォートで出力する |
+| `Detection.OperationType` | `Type: file` のときだけ。`exists` または `version` で、既定は `version`。`notConfigured` は Graph の unset sentinel なので選択肢に出さない |
+| `Detection.Operator` / `ComparisonValue` | `OperationType: version` のときだけで、そのときは両方必須。`Operator` の既定は `greaterThanOrEqual`。`ComparisonValue` は各 part 1〜5 桁、全体で 1〜4 part の数値で、`PackageVersion` がこの形式を満たす場合はそれを既定値にする。常にクォートして出力する。`OperationType: exists` ではどちらも出力しない |
+| `Detection.Check32BitOn64System` | `Type: file` のときだけ。既定 false で、常に出力する |
 | `Requirements.MinimumOSVersion` | `WindowsReleaseTable` のキーのみを release 名付きで一覧提示。既定 `10.0.19045` |
 | `Requirements.Architecture` | app の `Architecture` を自動設定 |
 
@@ -181,8 +187,8 @@ manifest のプレビュー、更新差分、旧バージョンの残存行、�
 `Sha256` は値の範囲だけを編集し、引用符の種類や行末コメント(旧バージョンの記述を含む)は保持する。
 
 1. top-level `PackageVersion` を新バージョンにする。
-2. `Url` / `Tag` / `AssetName` / `BlobName` / `Destination` / `BundleVersion` の各行のうち、値に旧バージョン
-   文字列を含むものを置換する。`v7.6.4` のような `v` プレフィックス付きタグも置換される。
+2. `Url` / `Tag` / `AssetName` / `BlobName` / `Destination` / `BundleVersion` / `ComparisonValue` の各行のうち、
+   値に旧バージョン文字列を含むものを置換する。`v7.6.4` のような `v` プレフィックス付きタグも置換される。
    `1.2` が `1.2.3` の一部として誤置換されないよう、前の数字・ドットと、後ろの数字・ドットに続く数字を除外する。
    `tool-1.2.pkg` のようにバージョンの直後が拡張子の場合は置換する。
 3. すべての `Sha256` を再計算する。バージョンが変われば digest も必ず変わるため、更新漏れを許さない。
@@ -194,12 +200,20 @@ manifest のプレビュー、更新差分、旧バージョンの残存行、�
 単一行の引用符付き値では、単一引用符内の `''` と二重引用符内の YAML エスケープを復元してからソースや認証情報として使う。
 引用符内の `#` は値として扱い、引用符の外にある行末コメントと区別する。
 
+Windows の `Detection.ComparisonValue` を対象に含めるのは、`greaterThanOrEqual` のルールを旧バージョンのまま残すと、
+旧リリースが新パッケージの条件を満たしていると Intune が判定して更新が一切適用されなくなるため(`equal` の場合は逆に
+新リリースが未検出になる)。置換するのは旧バージョンと完全に一致する箇所だけなので、`1.0` のように意図的に置いた
+下限値はそのまま残る。新しい `PackageVersion` が数値バージョンでない場合、結果の `ComparisonValue` は
+`relaypublisher validate` で拒否される。
+
 ### 8.2 書き換えないもの
 
 `PackageIdentifier` / `Platform` / `Architecture` / `DisplayName` は書き換えない。これらは app identity
 そのもので、変更すると Intune 上に別アプリが作られ、既存アプリが取り残される(AGENTS.md 設計上の不変条件)。
 
-`Requirements.MinimumOSVersion`、`Icon`、`Scripts`、`Assignments`、`Categories` も変更しない。新バージョンで
+`Requirements.MinimumOSVersion`、`Icon`、`Scripts`、`Assignments`、`Categories` も変更しない。Windows の
+`Detection.Path` / `FileOrFolderName` / `OperationType` / `Operator` / `Check32BitOn64System` も変更せず、
+バージョン更新の対象になる detection の field は `ComparisonValue` だけである。新バージョンで
 これらを変えたい場合は、生成後に手で編集する。
 
 ### 8.3 実行例
@@ -225,6 +239,9 @@ manifest のプレビュー、更新差分、旧バージョンの残存行、�
 
 - manifest 由来のパス(`Destination` / `Source` / `SetupFile` / `ScriptFile` / `Icon` / `Scripts.*`)の
   path traversal・絶対パス・ドライブレター
+- Windows `Detection.Type: file` の値を repository パスではなく target-device の値として検証する。`Path` の root 形式
+  (drive-rooted / root-relative / UNC / environment-variable-rooted)、`FileOrFolderName` が単一の leaf name であること、
+  wildcard・traversal セグメント・制御文字がないこと、`ComparisonValue` の数値形式
 - `Sha256` が 64 桁の 16 進数であること
 - `GroupId` / `FilterId` が GUID であること
 - `DisplayName` が `PackageVersion` を含まないこと
@@ -244,7 +261,9 @@ manifest のプレビュー、更新差分、旧バージョンの残存行、�
 - `Categories` に指定した名前がテナントに存在するかは検証できない。検出は publish / dry-run の Graph
   preflight で行われる(doc/01-manifest-schema.md §5.8)。
 - `azureBlob` の `Sha256` は自動計算しない。
-- Update モードは `Requirements` / `Assignments` / `Scripts` / `Categories` を変更しない。
+- Update モードは `Detection.ComparisonValue` を除き、`Requirements` / `Assignments` / `Scripts` / `Categories` を変更しない。
+- `Type: file` の検出では detection script を staging しない。script 用と file 用の field は相互排他であり、両者が混在した
+  manifest を本スクリプトが生成することはない。
 
 ## 11. 回帰テスト
 

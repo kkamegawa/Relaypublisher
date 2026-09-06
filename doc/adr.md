@@ -4,6 +4,30 @@
 
 このファイルが 200 行を超えた場合は phase 単位で分割します。
 
+## 2026-09-06: manifest 作成スクリプトの Windows file detection 対応 (Issue #140)
+
+- **決定**: `tools/yamlcreate.ps1` の Windows Detection は `Type` を選択させ、`script` と `file` の両方を生成する。
+  - **理由**: Issue #141 で `Detection.Type` の discriminator が manifest schema に入り(v1.1.0)、script 固定の生成では
+    doc/01-manifest-schema.md §5.2.1 を満たす manifest を作れなくなったため。PR #139 はこの変更より前に書かれている。
+  - **影響**: `Type: script` の出力は一切変えない。既存 manifest の canonical hash に影響しないことは、script 経路の
+    回帰ケースで固定する。
+- **決定**: `Detection.Path` / `FileOrFolderName` は `Test-SafeRelativePath` / `Read-RelativePath` を通さず、
+  `ManifestValues.IsValidTargetDevicePath` / `IsValidTargetDeviceLeafName` を移植した専用の検証を使う。
+  - **理由**: 2026-09-05 の ADR と同じ理由で、これらは管理対象端末上で評価される値であり、repository path の規則で
+    検証すると drive letter・UNC・root-relative のいずれも必ず誤って拒否されるため。
+- **決定**: `Detection.Path` はシングルクォート、`ComparisonValue` はダブルクォートで出力する。
+  - **理由**: 既定の quoting では `%` が leading indicator に該当するため `%ProgramFiles%\Contoso` だけが
+    `"%ProgramFiles%\\Contoso"` になり、同じ意味の path が 3 通りの表記で出力される。doc/01-manifest-schema.md §5.2.1 と
+    `samples/manifests/contoso-tool-windows-file-detection.yaml` の表記に揃える。Update モードの scalar decoder は
+    既にシングルクォートと `''` を復号できるため、読み取り側の変更は不要。
+- **決定**: version bump の対象キーに `ComparisonValue` を追加する。
+  - **理由**: `greaterThanOrEqual` のルールを旧バージョンのまま残すと、旧リリースが条件を満たすと Intune が判定して
+    更新が適用されない(`equal` では逆に新リリースが未検出になる)。置換は旧バージョンと完全一致する箇所だけなので、
+    意図的に置いた下限値は保持される。新バージョンが数値形式でない場合は保存後の `validate` が弾く。
+- **決定**: `-DetectionType` パラメーターは追加しない。
+  - **理由**: New モードは `PackageIdentifier` などを必ず対話で聞くため非対話実行はそもそもできず、同じ構造分岐を持つ
+    `Source type` にもパラメーターがない。テストは `Read-Host` の差し替えで分岐を駆動できる。
+
 ## 2026-09-06: publish の SAS 認証 403 回復・result file 一本化・manifest エントリ単位の Graph セッション (Issue #150)
 
 - **決定**: `AzureStorageBlockBlobUploader` の `StageBlockAsync` / `CommitBlockListAsync` が Azure Storage

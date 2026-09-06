@@ -314,6 +314,169 @@ Invoke-Case 'New publicHttp offers only none and does not produce a token auth b
     Assert-Equal 0 $authChoice.Count 'publicHttp must not offer an unsupported auth choice.'
 }
 
+# Answers every prompt of a Windows New run. Detection answers are layered on top by each case.
+# "Add a repository file?" defaults to yes on the first pass, so it must be answered explicitly or
+# the run falls into the repository file sub-prompts.
+function New-WindowsPromptResponder {
+    param([hashtable]$Detection = @{})
+
+    $script:Prompts = [System.Collections.Generic.List[string]]::new()
+    $script:DetectionAnswers = $Detection
+    function script:Read-Host {
+        param([string]$Prompt)
+        $script:Prompts.Add($Prompt)
+        # A required prompt this responder does not answer would otherwise re-ask forever and hang
+        # the suite instead of failing the case.
+        if (@($script:Prompts | Where-Object { $_ -eq $Prompt }).Count -gt 5) {
+            throw "Unanswered interactive prompt: $Prompt"
+        }
+        foreach ($key in $script:DetectionAnswers.Keys) {
+            if ($Prompt -match $key) { return $script:DetectionAnswers[$key] }
+        }
+        switch -Regex ($Prompt) {
+            '^PackageIdentifier' { return 'Contoso.Tool' }
+            '^PackageName' { return 'Contoso Tool' }
+            '^Publisher' { return 'Contoso' }
+            '^Description' { return 'test' }
+            '^PackageVersion' { return '1.2.3' }
+            '^Add a repository file' { return 'n' }
+            default { return '' }
+        }
+    }
+}
+
+Invoke-Case 'New Windows file detection writes a Type: file rule and no script fields' {
+    New-WindowsPromptResponder -Detection @{
+        '^Detection type' = 'file'
+        '^Detection Path' = 'C:\Program Files\Contoso Tool'
+        '^Detection FileOrFolderName' = 'contoso-tool.exe'
+    }
+    $rendered = (Read-ManifestContent -Root $testRepoRoot).Lines -join "`n"
+
+    Assert-Contains $rendered 'Type: file' 'The file detection discriminator was not rendered.'
+    Assert-Contains $rendered "Path: 'C:\Program Files\Contoso Tool'" 'Path was not rendered single quoted.'
+    Assert-Contains $rendered 'FileOrFolderName: contoso-tool.exe' 'FileOrFolderName was not rendered.'
+    Assert-Contains $rendered 'OperationType: version' 'OperationType did not default to version.'
+    Assert-Contains $rendered 'Operator: greaterThanOrEqual' 'Operator did not default to greaterThanOrEqual.'
+    Assert-Contains $rendered 'ComparisonValue: "1.2.3"' 'ComparisonValue did not default to the quoted PackageVersion.'
+    Assert-Contains $rendered 'Check32BitOn64System: false' 'Check32BitOn64System was not rendered.'
+    Assert-NotContains $rendered 'ScriptFile' 'A file detection rule must not carry ScriptFile.'
+    Assert-NotContains $rendered 'RunAs32Bit' 'A file detection rule must not carry RunAs32Bit.'
+    Assert-NotContains $rendered 'EnforceSignatureCheck' 'A file detection rule must not carry EnforceSignatureCheck.'
+}
+
+Invoke-Case 'New Windows exists detection omits Operator and ComparisonValue' {
+    New-WindowsPromptResponder -Detection @{
+        '^Detection type' = 'file'
+        '^Detection Path' = '%ProgramFiles%\Contoso Tool'
+        '^Detection FileOrFolderName' = 'contoso-tool.exe'
+        '^OperationType' = 'exists'
+    }
+    $rendered = (Read-ManifestContent -Root $testRepoRoot).Lines -join "`n"
+
+    Assert-Contains $rendered 'OperationType: exists' 'OperationType exists was not rendered.'
+    Assert-Contains $rendered "Path: '%ProgramFiles%\Contoso Tool'" 'An environment-variable path was not rendered single quoted.'
+    Assert-NotContains $rendered 'Operator:' 'exists must not render an Operator.'
+    Assert-NotContains $rendered 'ComparisonValue' 'exists must not render a ComparisonValue.'
+    Assert-Contains $rendered 'Check32BitOn64System: false' 'Check32BitOn64System was not rendered for exists.'
+    Assert-Equal 0 @($script:Prompts | Where-Object { $_ -like 'Operator*' }).Count 'exists must not ask for an Operator.'
+    Assert-Equal 0 @($script:Prompts | Where-Object { $_ -like 'ComparisonValue*' }).Count 'exists must not ask for a ComparisonValue.'
+}
+
+Invoke-Case 'New Windows script detection is unchanged by the Type discriminator' {
+    New-WindowsPromptResponder -Detection @{
+        '^Detection ScriptFile' = 'tools/yamlcreate.ps1'
+    }
+    $rendered = (Read-ManifestContent -Root $testRepoRoot).Lines -join "`n"
+
+    Assert-Contains $rendered 'Type: script' 'Detection type did not default to script.'
+    Assert-Contains $rendered 'ScriptFile: tools/yamlcreate.ps1' 'ScriptFile was not rendered.'
+    Assert-Contains $rendered 'RunAs32Bit: false' 'RunAs32Bit was not rendered.'
+    Assert-Contains $rendered 'EnforceSignatureCheck: false' 'EnforceSignatureCheck was not rendered.'
+    Assert-NotContains $rendered 'FileOrFolderName' 'A script detection rule must not carry FileOrFolderName.'
+    Assert-NotContains $rendered 'OperationType' 'A script detection rule must not carry OperationType.'
+    Assert-NotContains $rendered 'Check32BitOn64System' 'A script detection rule must not carry Check32BitOn64System.'
+}
+
+Invoke-Case 'Target-device detection values are validated without the repository path rules' {
+    # The load-bearing contrast: every legal target-device path is rejected by the repository rules,
+    # so file detection must not be routed through them.
+    foreach ($rooted in @('C:\Program Files\Contoso Tool', '\\server\share\App')) {
+        Assert-True (-not (Test-SafeRelativePath $rooted)) "The repository path check must keep rejecting $rooted."
+        Assert-True (Test-TargetDevicePath -Value $rooted) "The target-device check must accept $rooted."
+    }
+
+    foreach ($valid in @('\Windows', '%ProgramFiles%\Contoso', '%ProgramFiles(x86)%\Contoso')) {
+        Assert-True (Test-TargetDevicePath -Value $valid) "Rejected a valid target-device path: $valid"
+    }
+
+    foreach ($invalid in @('C:\a\..\b', 'C:\a\.\b', 'relative\p', 'C:\a*', 'C:\a?', 'C:\a|b', 'C:\a/b', "C:\a`tb", ' C:\a', 'C:\a\C:\b', '', 'x')) {
+        Assert-True (-not (Test-TargetDevicePath -Value $invalid)) "Accepted an invalid target-device path: '$invalid'"
+    }
+
+    foreach ($valid in @('contoso-tool.exe', 'Contoso Tool')) {
+        Assert-True (Test-TargetDeviceLeafName -Value $valid) "Rejected a valid leaf name: $valid"
+    }
+
+    foreach ($invalid in @('..', '.', 'a\b', 'a/b', 'a:b', 'a*', '', '  x')) {
+        Assert-True (-not (Test-TargetDeviceLeafName -Value $invalid)) "Accepted an invalid leaf name: '$invalid'"
+    }
+
+    foreach ($valid in @('1', '1.2', '1.2.3', '1.2.3.4', '12345.12345')) {
+        Assert-True ($valid -cmatch $FileSystemVersionPattern) "Rejected a valid ComparisonValue: $valid"
+    }
+
+    foreach ($invalid in @('1.2.3.4.5', '123456', '1.', 'v1.2', '1.2.3-beta', '')) {
+        Assert-True (-not ($invalid -cmatch $FileSystemVersionPattern)) "Accepted an invalid ComparisonValue: '$invalid'"
+    }
+
+    Assert-Equal "'C:\Program Files\Contoso Tool'" (ConvertTo-YamlScalar -Value 'C:\Program Files\Contoso Tool' -SingleQuote) 'Path was not single quoted.'
+    Assert-Equal "'C:\Users\O''Brien\App'" (ConvertTo-YamlScalar -Value "C:\Users\O'Brien\App" -SingleQuote) 'An apostrophe in a path was not doubled.'
+    Assert-Equal 'C:\Program Files\Contoso Tool' (Get-YamlScalarValue "'C:\Program Files\Contoso Tool'") 'A single quoted path did not round-trip through the update decoder.'
+    Assert-Equal "C:\Users\O'Brien\App" (Get-YamlScalarValue "'C:\Users\O''Brien\App'") 'A doubled apostrophe did not round-trip.'
+}
+
+Invoke-Case 'Update bumps Detection.ComparisonValue but leaves an unrelated floor alone' {
+    $template = @'
+SchemaVersion: "1.0"
+PackageIdentifier: Contoso.Tool
+PackageName: Contoso Tool
+Publisher: Contoso
+Description: test
+PackageVersion: 1.2.3
+
+Apps:
+  - Platform: windows
+    Architecture: x64
+    InstallerType: win32
+    DisplayName: Contoso Tool [Windows x64]
+
+    Package:
+      IntuneWin:
+        SetupFile: install.ps1
+
+    Detection:
+      Type: file
+      Path: 'C:\Program Files\Contoso Tool'
+      FileOrFolderName: contoso-tool.exe
+      OperationType: version
+      Operator: greaterThanOrEqual
+      ComparisonValue: "__COMPARISON__"
+      Check32BitOn64System: false
+'@
+
+    $bumped = Invoke-UpdateFixture -ManifestText ($template.Replace('__COMPARISON__', '1.2.3')) -NewVersion '1.2.4' -NoDownload
+    $bumpedText = [System.IO.File]::ReadAllText($bumped.OutputPath)
+    Assert-Contains $bumpedText 'ComparisonValue: "1.2.4"' 'ComparisonValue was not bumped with PackageVersion.'
+    Assert-Contains $bumpedText "Path: 'C:\Program Files\Contoso Tool'" 'The target-device path must not be rewritten.'
+    Assert-Contains $bumpedText 'FileOrFolderName: contoso-tool.exe' 'FileOrFolderName must not be rewritten.'
+    Assert-Contains $bumpedText 'Operator: greaterThanOrEqual' 'Operator must not be rewritten.'
+
+    $floor = Invoke-UpdateFixture -ManifestText ($template.Replace('__COMPARISON__', '1.0')) -NewVersion '1.2.4' -NoDownload
+    $floorText = [System.IO.File]::ReadAllText($floor.OutputPath)
+    Assert-Contains $floorText 'ComparisonValue: "1.0"' 'A deliberate floor that does not contain the old version must be left alone.'
+}
+
 Invoke-Case 'GitHub release hashing uses the asset id API URL and octet-stream accept header' {
     $script:NoDownload = $false
     $script:Sha256 = $null
