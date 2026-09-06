@@ -143,10 +143,14 @@ public sealed class AzureStorageBlockBlobUploader : IAzureStorageBlockBlobUpload
             .ConfigureAwait(false);
     }
 
-    private static Task StageBlockAsync(BlockBlobClient client, string blockId, byte[] buffer, int length, CancellationToken cancellationToken)
+    // Must be `async`/`await`, not a non-async method returning the inner Task directly: with a
+    // non-async method, `using`'s Dispose() runs in the caller's synchronous continuation right after
+    // StageBlockAsync is *called* (i.e. once it hands back a Task), not after its actual I/O completes,
+    // so `chunk` could be disposed while the SDK is still reading from it (Copilot review, PR #151).
+    private static async Task StageBlockAsync(BlockBlobClient client, string blockId, byte[] buffer, int length, CancellationToken cancellationToken)
     {
         using var chunk = new MemoryStream(buffer, 0, length, writable: false);
-        return client.StageBlockAsync(blockId, chunk, cancellationToken: cancellationToken);
+        await client.StageBlockAsync(blockId, chunk, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
