@@ -9,7 +9,7 @@ Azure Storage blob upload. `validate` and `publish --dry-run` both succeeded, be
 blob upload. The root cause is not fully confirmed - the log evidence is consistent with the stored access
 policy behind Intune's `azureStorageUri` not having propagated yet (Azure Storage documents up to ~30
 seconds for that), but does not rule out Intune revoking or rotating the policy - and both explanations
-call for the same remediation. See `doc/adr.md` (2026-09-06 entry) for the full reasoning.
+call for the same remediation. See `doc/adr/publishing.md` (2026-09-06 entry) for the full reasoning.
 
 Three confirmed defects compounded the symptom: the exception escaped every catch in the publish CLI (not
 a `PublisherException`), so `--result-file` was never written; a retried block would have resent an

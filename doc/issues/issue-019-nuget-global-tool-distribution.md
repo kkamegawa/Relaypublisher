@@ -40,7 +40,7 @@
 
 - 2026-08-24: 配布先を nuget.org 単独から 3 feed に拡張し、feed push の trigger を `push: tags` から
   `release: published` に変更した。workflow の置き場所を `workflows/github-actions/`(参照サンプル)から
-  `.github/workflows/`(実 CI)に移した。理由は `doc/adr.md` を参照。
+  `.github/workflows/`(実 CI)に移した。理由は `doc/adr/ci-release.md` を参照。
 
 ## 見積もり
 

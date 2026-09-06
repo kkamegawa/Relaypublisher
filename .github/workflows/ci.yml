@@ -47,6 +47,9 @@ jobs:
 
       - name: Build
         run: dotnet build IntuneLobPublisher.slnx --configuration Release
+      - name: Test manifest authoring script
+        shell: pwsh
+        run: pwsh -NoProfile -File ./tests/Tools/YamlCreate.Tests.ps1
 
       - name: Test
         run: >
