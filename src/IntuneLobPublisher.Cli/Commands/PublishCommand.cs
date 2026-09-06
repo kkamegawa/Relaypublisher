@@ -286,7 +286,14 @@ internal static class PublishCommand
                     // upload - killing the process before the result file below was ever written). A
                     // genuine OperationCanceledException from `cancellationToken` is deliberately excluded
                     // so caller cancellation still propagates as a cancellation, not a recorded failure.
-                    var message = $"{ex.GetType().Name}: {ex.Message}";
+                    //
+                    // Record only the type name, never ex.Message: every PublisherException subtype's
+                    // message is deliberately reviewed to carry no secrets (e.g. ContentUploadRejectedException
+                    // never keeps a signed URL - see AGENTS.md and PublicHttpSourceProvider.RedactQuery for the
+                    // same principle applied to URLs), but this catch-all sees exception types this codebase
+                    // has not vetted, and an arbitrary Message could carry a token or signed URL (Copilot
+                    // review, PR #151).
+                    var message = ex.GetType().Name;
                     AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, message);
                     Console.Error.WriteLine($"error: {label}: {message}");
                     aborted = true;

@@ -355,6 +355,40 @@ public sealed class PublishCommandBatchAbortTests
     }
 
     [TestMethod]
+    public async Task PublishEntriesAsync_UnexpectedException_MessageIsNotRecordedOrPrinted()
+    {
+        // Copilot review, PR #151: an exception type this loop does not otherwise recognize is not
+        // vetted for safety the way every PublisherException subtype's Message is (e.g.
+        // ContentUploadRejectedException never carries a signed URL). Its Message could contain a token
+        // or SAS query string, so only the type name may reach the result file or stderr.
+        var resultFile = Path.Combine(_repoRoot, "result.json");
+        const string secret = "https://sasaccount.blob.core.windows.net/c/b?sv=1&sig=super-secret-signature";
+        var originalError = Console.Error;
+        var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+        int exitCode;
+        try
+        {
+            var orchestrator = new ThrowingOrchestrator(() => new InvalidOperationException(secret));
+            exitCode = await RunAsync(orchestrator, resultFile);
+        }
+        finally
+        {
+            Console.SetError(originalError);
+        }
+
+        Assert.AreNotEqual(0, exitCode);
+        Assert.DoesNotContain(secret, capturedError.ToString());
+
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(resultFile));
+        var skipReason = document.RootElement[0].GetProperty("skipReason").GetString();
+        Assert.IsNotNull(skipReason);
+        Assert.DoesNotContain(secret, skipReason);
+        Assert.DoesNotContain("sig=", skipReason);
+        Assert.AreEqual("InvalidOperationException", skipReason);
+    }
+
+    [TestMethod]
     public async Task PublishEntriesAsync_CancelledToken_StillWritesResultFileForCompletedEntries()
     {
         var resultFile = Path.Combine(_repoRoot, "result.json");
