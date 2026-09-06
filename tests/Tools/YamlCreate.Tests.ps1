@@ -314,6 +314,51 @@ Invoke-Case 'New publicHttp offers only none and does not produce a token auth b
     Assert-Equal 0 $authChoice.Count 'publicHttp must not offer an unsupported auth choice.'
 }
 
+Invoke-Case 'New publicHttp with an invalid Url does not crash and falls back to no default Destination' {
+    $script:NoDownload = $true
+    $script:Sha256 = $null
+    $script:DestinationPrompts = [System.Collections.Generic.List[string]]::new()
+    function script:Read-Host {
+        param([string]$Prompt)
+        switch -Regex ($Prompt) {
+            '^Source type' { return '' }
+            '^Auth type' { return '' }
+            # Missing a host: a direct [uri]$value cast throws "Invalid URI: The hostname could
+            # not be parsed", which would abort the whole run instead of letting the user retype
+            # Destination. [uri]::TryCreate rejects it too, but returns false instead of throwing.
+            '^Url' { return 'http://' }
+            '^Destination' { $script:DestinationPrompts.Add($Prompt); return 'tool.bin' }
+            '^Sha256' { return ('a' * 64) }
+            default { return '' }
+        }
+    }
+    $source = Read-SourceItem -Label 'External file'
+    Assert-Equal 'tool.bin' $source['Destination'] 'Destination was not accepted from manual input.'
+    $withDefault = @($script:DestinationPrompts | Where-Object { $_.Contains('[') })
+    Assert-Equal 0 $withDefault.Count 'An invalid Url must not produce a [default] suggestion for Destination.'
+}
+
+Invoke-Case 'Read-RelativePath never accepts a missing file, with no override prompt' {
+    $script:AttemptedValues = [System.Collections.Generic.List[string]]::new()
+    $script:YesNoCalls = 0
+    function script:Read-YesNo {
+        param([string]$Prompt, [bool]$Default = $false)
+        $script:YesNoCalls++
+        return $true
+    }
+    function script:Read-Host {
+        param([string]$Prompt)
+        if ($script:AttemptedValues.Count -eq 0) {
+            $script:AttemptedValues.Add('does-not-exist.ps1')
+            return 'does-not-exist.ps1'
+        }
+        return 'tools/yamlcreate.ps1'
+    }
+    $value = Read-RelativePath -Prompt 'Detection ScriptFile (repository-relative)' -Root $testRepoRoot -Required -MustExist
+    Assert-Equal 'tools/yamlcreate.ps1' $value 'A missing file must never be accepted, even if the user would answer yes to an override.'
+    Assert-Equal 0 $script:YesNoCalls 'Read-RelativePath -MustExist must not offer an "use it anyway" override at all.'
+}
+
 # Answers every prompt of a Windows New run. Detection answers are layered on top by each case.
 # "Add a repository file?" defaults to yes on the first pass, so it must be answered explicitly or
 # the run falls into the repository file sub-prompts.

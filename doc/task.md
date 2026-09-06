@@ -255,7 +255,7 @@ CI の Windows / Linux 両ジョブで実行する。サブエージェントに
 
 ### 検証結果
 
-- `pwsh -NoProfile -File tests/Tools/YamlCreate.Tests.ps1`: 9 ケース成功。修正前のスクリプトを一時ディレクトリに展開して実行した場合は 9 ケースとも失敗することも確認した。
+- `pwsh -NoProfile -File tests/Tools/YamlCreate.Tests.ps1`: 9 ケース成功(この後の Copilot レビュー対応で 2 ケース追加し、最終的に 11 ケースになった。「2026-09-02 追記」参照)。修正前のスクリプトを一時ディレクトリに展開して実行した場合は 9 ケースとも失敗することも確認した。
 - `dotnet build IntuneLobPublisher.slnx --configuration Release`: 成功、警告 0、エラー 0。
 - `dotnet test IntuneLobPublisher.slnx --configuration Release --no-build`: 693 件成功、失敗 0、スキップ 0。
 - CI YAML の構文確認、`git diff --check`: 成功。

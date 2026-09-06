@@ -439,10 +439,13 @@ function Read-RelativePath {
         if ($MustExist) {
             $full = Join-Path -Path $Root -ChildPath $value
             if (-not (Test-Path -LiteralPath $full)) {
+                # No escape hatch: doc/08-yamlcreate.md documents this as an enforced existence
+                # check for every -MustExist caller (RepositoryFiles.Source, Detection.ScriptFile,
+                # Icon, Scripts.PreInstall/PostInstall). Letting the prompt "pass" here would
+                # produce a manifest that later fails at package/publish time despite this prompt
+                # having claimed the path was validated.
                 Write-Host "Not found under the repository root: $value" -ForegroundColor Yellow
-                if (-not (Read-YesNo -Prompt 'Use it anyway?')) {
-                    continue
-                }
+                continue
             }
         }
 
@@ -936,7 +939,19 @@ function Read-SourceItem {
     $destinationDefault = $DefaultDestination
     if ([string]::IsNullOrWhiteSpace($destinationDefault)) {
         $destinationDefault = switch ($type) {
-            'publicHttp' { [System.IO.Path]::GetFileName(([uri]$source['Url']).AbsolutePath) }
+            'publicHttp' {
+                # Url is free-form Read-Text input, not yet validated as a URI. A direct [uri]
+                # cast throws a terminating error on a typo, killing an otherwise-recoverable
+                # prompt flow, so fall back to no default and let the user type Destination
+                # instead.
+                $parsedUrl = $null
+                if ([uri]::TryCreate($source['Url'], [UriKind]::Absolute, [ref]$parsedUrl)) {
+                    [System.IO.Path]::GetFileName($parsedUrl.AbsolutePath)
+                }
+                else {
+                    $null
+                }
+            }
             'githubRelease' { $source['AssetName'] }
             'azureBlob' { [System.IO.Path]::GetFileName($source['BlobName']) }
         }
