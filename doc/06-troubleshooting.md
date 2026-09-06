@@ -393,7 +393,7 @@ If publish reports missing package metadata:
   payload entirely (`Win32LobAppPayloadMapper`), so Graph rejected the very first write for any new Windows
   app - `0 published, ... 1 failed` with no app created (the failure happens before content upload, so no
   partial/incomplete app is left behind in the tenant). Upgrade the CLI to a version that includes
-  `setupFilePath`/`fileName` mapping (doc/adr.md 2026-08-25 entry) and rerun `publish`; no manifest or
+  `setupFilePath`/`fileName` mapping (doc/adr/publishing.md 2026-08-25 entry) and rerun `publish`; no manifest or
   package change is needed since the value comes from the already-required `Package.IntuneWin.SetupFile`.
 
 ## 6d. Multi-Package `publish` Fails on the Second (or Later) Entry With a SAS 403
@@ -414,7 +414,7 @@ If publish reports missing package metadata:
   batch" rule did not apply because the exception was not a `PublisherException`.
 
 - **What it means**: Intune's `azureStorageUri` is a service SAS scoped to a stored access policy (its
-  `si=` signed identifier). The exact cause is not fully confirmed (see doc/adr.md 2026-09-06), but the
+  `si=` signed identifier). The exact cause is not fully confirmed (see doc/adr/publishing.md 2026-09-06), but the
   leading explanation is that a policy just created or updated can take up to ~30 seconds to propagate
   ([Define a stored access policy](https://learn.microsoft.com/rest/api/storageservices/define-stored-access-policy#create-or-modify-a-stored-access-policy)),
   and a request against a SAS tied to a not-yet-propagated policy fails with exactly this error in the

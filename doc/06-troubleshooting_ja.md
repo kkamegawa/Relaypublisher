@@ -386,7 +386,7 @@ Publish が package metadata missing を報告した場合:
   `setupFilePath`(と `fileName`)を一切含めていなかったため、新規 Windows アプリの最初の書き込みが
   Graph に拒否されていた -「`0 published, ... 1 failed`」となり app 自体は作成されない(コンテンツ
   アップロードより前に失敗するため、テナント側に不完全な app が残ることもない)。
-  `setupFilePath`/`fileName` のマッピングを含むバージョン(doc/adr.md の 2026-08-25 のエントリ参照)に
+  `setupFilePath`/`fileName` のマッピングを含むバージョン(doc/adr/publishing.md の 2026-08-25 のエントリ参照)に
   CLI をアップグレードして `publish` を再実行すること。値はすでに必須項目である
   `Package.IntuneWin.SetupFile` から取得するため、manifest やパッケージの変更は不要。
 
@@ -408,7 +408,7 @@ Publish が package metadata missing を報告した場合:
   止めない」規約も効かなかった(この例外が `PublisherException` ではなかったため)。
 
 - **原因の意味**: Intune の `azureStorageUri` は stored access policy(`si=` signed identifier)に紐づく
-  service SAS である。正確な原因は未確定(doc/adr.md の 2026-09-06 エントリ参照)だが、最有力の説明は
+  service SAS である。正確な原因は未確定(doc/adr/publishing.md の 2026-09-06 エントリ参照)だが、最有力の説明は
   作成・更新直後のポリシーが反映されるまで最大 30 秒程度かかりうるというもの
   ([Define a stored access policy](https://learn.microsoft.com/rest/api/storageservices/define-stored-access-policy#create-or-modify-a-stored-access-policy))。
   期限切れではない — `403 AuthenticationFailed` / `AuthenticationErrorDetail` の形はどちらの原因でも

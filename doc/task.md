@@ -11,7 +11,7 @@
 ### 実施内容
 
 PR #139 は `Detection` が script 固定だった頃の schema に対して書かれており、Issue #141 で入った
-`Detection.Type` の discriminator に追従していなかった。決定事項は [adr.md](adr.md) の同日エントリに記録した。
+`Detection.Type` の discriminator に追従していなかった。決定事項は [adr/manifest-tooling.md](adr/manifest-tooling.md) の同日エントリに記録した。
 
 1. `origin/main` を merge した(rebase・force push はしない)。衝突は `doc/adr.md` と `doc/task.md` の 2 ファイルのみで、
    どちらもヘッダー直下への新 section 追加だったため、両者を日付降順で残して解決した。
@@ -30,6 +30,15 @@ PR #139 は `Detection` が script 固定だった頃の schema に対して書�
    日英同時に更新した(283 行で一致、見出し位置も一致)。
 8. 回帰テストを 11 → 16 ケースに増やした。あわせて、応答されない必須プロンプトが無限ループでスイートを止めず
    ケースの失敗になるよう、Windows 用レスポンダに同一プロンプトの反復ガードを入れた。
+9. 上記の追記で `doc/adr.md` が 231 行になり、ヘッダーが定める 200 行の分割閾値を越えたため、ADR を領域別に分割した。
+   `doc/02-dotnet-architecture.md` の Phase 1〜10 は初期実装のフェーズで、いずれも完了済みかつ現行の ADR
+   (保守判断)に対応しないため、「phase 単位」ではなく領域単位に分けている。
+   [adr/publishing.md](adr/publishing.md)(publish / Graph)、
+   [adr/manifest-tooling.md](adr/manifest-tooling.md)(manifest schema / `tools/yamlcreate.ps1`)、
+   [adr/ci-release.md](adr/ci-release.md)(CI / 配布 feed)の 3 ファイルに分け、`doc/adr.md` は全エントリを
+   日付降順で並べた索引として残した。2026-08-21 のエントリは 1 回の作業で publish 側と CI 側の両方を決めていたため、
+   領域ごとに 2 エントリへ分け、互いの所在を本文に明記した。`doc/06-troubleshooting.md` / `_ja`、
+   `doc/issues/issue-019` / `issue-150` の参照先も新しいファイルに更新した(過去の作業記録の記述は履歴なので変更しない)。
 
 ### 検証結果
 
@@ -126,7 +135,7 @@ renewal、renewal 上限超過時のライブロック回避、期限接近/期�
   `Microsoft.GlobalSecureAccess` windows-arm64 / windows-x64 の再実行による確認が必要。手順は
   `doc/06-troubleshooting.md` §6d および `doc/issues/issue-150-sas-activation-retry-and-per-entry-session.md`
   の Verification 節を参照。
-- 診断ログを伴う実機での次回実行結果をもって、`doc/adr.md` の「原因未確定」を確定情報に更新すること。
+- 診断ログを伴う実機での次回実行結果をもって、`doc/adr/publishing.md` の「原因未確定」を確定情報に更新すること。
 
 ## 2026-09-05: Windows file-system detection (Issue #141)
 
