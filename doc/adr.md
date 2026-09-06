@@ -4,6 +4,60 @@
 
 このファイルが 200 行を超えた場合は phase 単位で分割します。
 
+## 2026-09-06: publish の SAS 認証 403 回復・result file 一本化・manifest エントリ単位の Graph セッション (Issue #150)
+
+- **決定**: `AzureStorageBlockBlobUploader` の `StageBlockAsync` / `CommitBlockListAsync` が Azure Storage
+  から 403 `AuthenticationFailed` を受けた場合、SAS の残り有効期限を見て「期限に余裕があれば同一 SAS で
+  document 化された伝播時間(最大 30 秒)を上回るまで再送し、それでも回復しなければ `renewUpload` で
+  SAS を取り直したうえで再度待機する」経路(issue #150 の Phase A / Phase B)に入る。renewal 回数は
+  403 回復専用に少数(既定 1 回)へ制限し、既存の期限接近時の予防的 renewal とはカウンタを共有しない。
+  この回復全体は 1 回の stage/commit 呼び出しごとに 1 つの deadline(既定 5 分)で区切り、呼び出し元の
+  `CancellationToken` にリンクした専用の `CancellationTokenSource` で実際にキャンセルする。回復に使い
+  切った場合は `ContentUploadRejectedException`(新規)に変換してそのエントリだけを failed とし、
+  呼び出し元の cancellation はそのまま `OperationCanceledException` として区別する。
+  - **理由**: 複数 manifest を含む `manifest-list.json` の `publish` が 2 件目のパッケージで
+    `Azure.RequestFailedException`(403 `AuthenticationFailed` /
+    `AuthenticationErrorDetail: SAS identifier cannot be found for specified signed identifier`)で
+    落ちる事象が本番の Azure Pipelines で発生した。**原因は未確定**である。ログに SAS の取得時刻・
+    有効期限が残っておらず、期限切れは確認できない。最有力仮説は Intune が発行する `azureStorageUri`
+    が stored access policy(signed identifier)に紐づく service SAS であり、ポリシーの作成・更新の
+    反映に最大 30 秒程度かかりうるという Microsoft のドキュメント
+    (<https://learn.microsoft.com/rest/api/storageservices/define-stored-access-policy>)だが、
+    Intune 側がポリシーを失効・ローテートさせている可能性も同じエラーで説明できるため排除できない。
+    どちらの仮説でも必要な対処(同一 SAS での待機・再送と `renewUpload` によるやり直し)は同じであり、
+    この修正で追加した診断ログ(段階・試行回数・経過時間・残り有効期限・renewal 回数・Storage の
+    `x-ms-request-id`)を伴う次回の実行結果で確定させる。
+  - **影響**: `ContentUploadOptions` に `SasActivationRetryDelay` / `SasActivationSameSasWindow` /
+    `SasActivationMaxRenewals` / `SasActivationTimeout` を追加。`MobileAppContentUploadOrchestrator` の
+    `IsRecoverableUncommittedUploadState` に `azureStorageUriRequestSuccess` /
+    `azureStorageUriRenewalSuccess` を追加し、blob 送信だけが中断した未 commit file も
+    `renewUpload` して再送する対象にした(既存の file 数・metadata 一致条件は変更しない)。この復旧は
+    6.9 の排他実行が実際に効いていることに依存する(6.10 に明記)。`PublishCommand.PublishEntriesAsync`
+    の result file 出力を単一の exit point(`finally`、`CancellationToken.None`)に統合し、想定外の
+    例外もエントリを記録してから中断するようにした — 従来は `Azure.RequestFailedException` が CLI の
+    全 catch をすり抜けてプロセスが即死し、result file が一切書かれず 6.10 の「1 件の失敗はバッチを
+    止めない」規約も効いていなかった。
+  - **今後の注意**: 上記のとおり本当の原因は未確定であり、伝播遅延は最有力仮説にすぎない。次回の実行で
+    診断ログから原因が確定したら、この節を更新すること。`renewUpload` が新しい signed identifier を
+    発行するかどうかも Learn からは断定できないため、renewal を主ではなく待機の次善策として少数回に
+    限定してある。
+
+- **決定**: `publish` の Graph セッション(`HttpClient`・認証ハンドラ・トークンキャッシュ)を manifest
+  エントリごとに新規作成し、そのエントリの処理完了後に破棄する(`IPublishSession` /
+  `PublishComposition`)。`DefaultAzureCredential` 自体は実行全体で共有し、セッションだけを作り直す。
+  - **理由**: ユーザーからの直接の指示(「publish 内の REST API 実行処理は yaml ごとに open→publish→close
+    の処理とする」)。**ただし、これは上記 403 の対策ではない**。SAS は現在も file ごとに取得して
+    Azure Storage SDK 独自のパイプラインに渡しており、Graph の `HttpClient` を作り直しても直接の効果は
+    ない。指示された構造変更として、効果と代償を明記したうえで実施した。
+  - **影響**: `GraphAuthenticationHandler` のトークンキャッシュがセッションごとになるため、
+    `--expected-tenant` の照合とトークン ID のログ出力(`Acquired Graph token for identity ...`)が
+    実行全体で 1 回ではなく manifest エントリごとに走るようになる(6.12)。資格情報を共有する理由は、
+    `DefaultAzureCredential` がインスタンスごとにチェーンを再解決するため、`AZURE_TOKEN_CREDENTIALS`
+    未設定時(6.19)にエントリ間で解決先が変わりうる ID ドリフトを自ら作らないため。
+  - **今後の注意**: エントリごとに接続プールとトークンキャッシュを失う代償があることを踏まえ、将来
+    パフォーマンス上の懸念が出た場合はこの ADR を確認してから戻すこと(戻す場合は 6.19 の ID
+    ドリフトへの対策を別途用意する)。
+
 ## 2026-09-05: Windows file-system detection (Issue #141)
 
 - **決定**: Windows `Detection.Type` は既存の `script` に加えて `file` を受け付け、`exists` と `version` の

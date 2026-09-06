@@ -99,11 +99,11 @@ Microsoft Graph 経由で Intune を操作する implementation layer。
 
 Responsibilities:
 
-- Graph token acquisition(`--expected-tenant` の tid 照合、および取得ごとの identity(`appid`/`idtyp`/`roles`)ログを含む)
+- Graph token acquisition(`--expected-tenant` の tid 照合、および取得ごとの identity(`appid`/`idtyp`/`roles`)ログを含む)。CLI 側の Graph セッション(`HttpClient`・認証ハンドラ・トークンキャッシュ)は manifest エントリごとに新規作成・破棄されるため、この照合とログ出力もエントリごとに走る(issue #150、`IntuneLobPublisher.Cli/Commands/PublishComposition.cs` の `IPublishSession`)。
 - mobile app search(複数一致は fail、DisplayName fallback 時は adopt)
 - win32LobApp create / update
 - `.intunewin` 展開と `Detection.xml` からの `fileEncryptionInfo` 組み立て
-- Azure Storage SAS URI へのコンテンツアップロード(`renewUpload` 対応)
+- Azure Storage SAS URI へのコンテンツアップロード(`renewUpload` 対応)。SAS 認証 403(`AuthenticationErrorDetail: SAS identifier cannot be found for specified signed identifier` 等)は、期限に余裕があれば同一 SAS での待機・再送、それでも回復しなければ `renewUpload` で SAS を取り直す 2 段階の回復を持つ(issue #150、`AzureStorageBlockBlobUploader`)。回復できない場合は元の `Azure.RequestFailedException` を保持せず `ContentUploadRejectedException` に変換し、SAS を含む情報をログ・例外メッセージに残さない。
 - commit + `committedContentVersion` PATCH
 - upload state polling
 - publishing state polling
@@ -582,13 +582,24 @@ Tasks:
   fail immediately for an unknown state.
 - For `notPublished`, list typed `contentVersions` before creating one. Create a version when none exists;
   reuse a sole existing version. When that version has no files, create its first file. When it contains
-  uncommitted files, renew and reuse only when the total count is one, its terminal failure state is supported,
-  and its name and sizes match the current payload; reject non-matching or multiple files, multiple versions, or
+  uncommitted files, renew and reuse only when the total count is one, its upload state is one of the
+  supported terminal-failure states or one of Graph's own success states left behind by an upload that was
+  itself interrupted (`azureStorageUriRequestSuccess` / `azureStorageUriRenewalSuccess`, issue #150 - this
+  reuse of a "success" state depends on publish being serialized, see doc/00-overview.md §6.9/§6.10), and
+  its name and sizes match the current payload; reject non-matching or multiple files, multiple versions, or
   mixed/ambiguous committed state without deleting the app or committed content. When the stored and current
   `inputHash` values match and the sole file is already committed, resume at the
   `committedContentVersion` PATCH instead of uploading again.
 - Extract `.intunewin` and build `fileEncryptionInfo` from `Detection.xml`.
-- Upload encrypted payload to Azure Storage SAS URI(renewUpload 対応)。
+- Upload encrypted payload to Azure Storage SAS URI(renewUpload 対応)。A block-level `StageBlockAsync` /
+  `CommitBlockListAsync` call that Azure Storage rejects with 403 `AuthenticationFailed` goes through its
+  own recovery (issue #150, `AzureStorageBlockBlobUploader`): retry the same SAS across a window sized
+  past Azure Storage's documented stored-access-policy propagation delay when the SAS is not near expiry,
+  otherwise (or if that window is exhausted) call `renewUpload` a small bounded number of times and wait
+  again each time, all bounded by one deadline per stage/commit call that is told apart from the caller's
+  own cancellation. A recovery that does not succeed fails only that content upload, as
+  `ContentUploadRejectedException`, without ever retaining the original `RequestFailedException` or any
+  SAS material in its message.
 - Build content URLs with the concrete OData type-cast segment after the app id
   (`win32LobApp`, `macOSPkgApp`, or `macOSLobApp`); the uncast `/contentVersions` route is not reliable.
   Interrupted-upload recovery uses `renewUpload` for a metadata-compatible file and does not depend on
