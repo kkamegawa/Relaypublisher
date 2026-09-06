@@ -82,6 +82,22 @@ internal static class TestManifests
         };
     }
 
+    public static AppManifest CreateValidFileDetectionApp(string architecture = "x64")
+    {
+        var app = CreateValidApp(architecture);
+        app.Detection = new DetectionManifest
+        {
+            Type = "file",
+            Path = @"C:\Program Files\Contoso Tool",
+            FileOrFolderName = "contoso-tool.exe",
+            OperationType = "version",
+            Operator = "greaterThanOrEqual",
+            ComparisonValue = "1.2.3",
+            Check32BitOn64System = false,
+        };
+        return app;
+    }
+
     /// <summary>A valid macOS app entry with the default AppType ("pkg").</summary>
     public static AppManifest CreateValidMacOsApp(string architecture = "arm64", string? appType = null, string? displayName = null)
     {

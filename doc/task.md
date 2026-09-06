@@ -2,6 +2,186 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-09-06: Fail publish when result-file output fails (Issue #150 review follow-up)
+
+- Issue: [#150](https://github.com/kkamegawa/Relaypublisher/issues/150)
+- Pull request: [#151](https://github.com/kkamegawa/Relaypublisher/pull/151)
+- Plan: restore the nonzero exit status for result-file output failures while preserving
+  existing publish failures and caller cancellation, then verify and push the focused fix.
+- `PublishEntriesAsync` now tracks result-file write failures independently from per-entry
+  publish failures. A successful batch cannot return success when its requested result file
+  could not be saved. Existing abort and cancellation behavior is preserved.
+- Added four regression tests in `PublishCommandBatchAbortTests`, covering output failures
+  after success, batch abort, per-app failure, and caller cancellation. Existing-directory
+  output targets make the failures deterministic without relying on OS permission changes.
+- Validation:
+  - `dotnet test tests/IntuneLobPublisher.Core.Tests/IntuneLobPublisher.Core.Tests.csproj -c Release --filter FullyQualifiedName~PublishCommandBatchAbortTests`: 15 passed, 0 failed, 0 skipped.
+  - `dotnet build IntuneLobPublisher.slnx -c Release --no-restore --no-incremental`: 0 warnings, 0 errors.
+  - `dotnet test IntuneLobPublisher.slnx -c Release --no-build --no-restore`: 723 passed, 0 failed, 38 skipped.
+  - `git diff --check`: passed.
+- The initial sandboxed test invocation was blocked by MSBuild IPC permissions; the
+  successful validation above ran with the required local process permissions.
+
+## 2026-09-06: publish の SAS 認証 403 回復・result file 一本化・manifest エントリ単位の Graph セッション (Issue #150)
+
+**ブランチ**: `fix/150-sas-activation-retry-and-per-entry-session`
+
+**対応 Issue / PR**:
+
+- Issue: [#150](https://github.com/kkamegawa/Relaypublisher/issues/150)
+- Pull request: [#151](https://github.com/kkamegawa/Relaypublisher/pull/151)
+
+### 実施内容
+
+1. 本番の Azure Pipelines で、複数 manifest を含む `manifest-list.json` の `publish` が 2 件目のパッケージで
+   `Azure.RequestFailedException`(403 `AuthenticationFailed` /
+   `AuthenticationErrorDetail: SAS identifier cannot be found for specified signed identifier`)により
+   落ちる事象の報告を受け、実際のログを基に調査した。原因は未確定(stored access policy の伝播遅延が
+   最有力仮説)だが、必要な対処は仮説によらず同じであることを確認し、実装を進めた。
+2. `AzureStorageBlockBlobUploader` に SAS 認証 403 の回復処理を追加した。SAS の残り有効期限で経路を分岐し、
+   期限に余裕があれば同一 SAS で document 化された伝播時間を上回るまで再送し、それでも回復しなければ
+   `renewUpload` で SAS を取り直したうえで再度待機する。renewal 回数は 403 回復専用に少数へ制限し、
+   予防的 renewal とはカウンタを共有しない。回復全体は 1 回の stage/commit 呼び出しごとに 1 つの
+   deadline で区切り、呼び出し元の `CancellationToken` にリンクした専用の `CancellationTokenSource` で
+   実際にキャンセルし、呼び出し元のキャンセルとは区別する。
+3. 再送のたびにブロック本文を同じバイト列から作り直すようにし(既存の `MemoryStream` 再利用による
+   空/欠損送信のリスクを修正)、回復できない場合は新規 `ContentUploadRejectedException` に変換した
+   (`Status`/`ErrorCode`/`AuthenticationErrorDetail`/`x-ms-request-id` のみを保持し、元の例外・SAS を
+   含む情報は一切保持しない)。
+4. `MobileAppContentUploadOrchestrator.IsRecoverableUncommittedUploadState` に
+   `azureStorageUriRequestSuccess` / `azureStorageUriRenewalSuccess` を追加し、blob 送信だけが中断した
+   未 commit file も既存の file 数・metadata 一致条件のまま再送対象にした。
+5. `PublishCommand.PublishEntriesAsync` の result file 出力を単一の exit point(`finally`、
+   `CancellationToken.None`)に統合し、想定外の例外もエントリを記録してから中断するようにした。
+6. ユーザーの指示により、`publish` の Graph セッション(`HttpClient`・認証・トークンキャッシュ)を
+   manifest エントリごとに新規作成・破棄する構造に変更した(`IPublishSession` / `PublishComposition`)。
+   資格情報(`DefaultAzureCredential`)自体は実行全体で共有する。これは 403 の対策ではなく、指示された
+   構造変更であることを設計判断として明記した。
+7. `doc/00-overview.md`(6.10 / 6.12 / 6.16)、`doc/02-dotnet-architecture.md`、
+   `doc/06-troubleshooting.md` / `_ja`、`doc/05-operation.md` / `_ja`、`doc/adr.md` を更新し、
+   `doc/issues/issue-150-sas-activation-retry-and-per-entry-session.md` を追加した。
+
+### 検証結果
+
+```
+dotnet build IntuneLobPublisher.slnx
+→ ビルドに成功しました。0 エラー。
+
+dotnet test tests/IntuneLobPublisher.Core.Tests/IntuneLobPublisher.Core.Tests.csproj --no-build
+→ 成功! 失敗: 0、合格: 719、スキップ: 38(環境依存でスキップされる既存テスト。今回の変更とは無関係)、合計: 757
+```
+
+追加した主なテスト: 同一 SAS での再送成功、再送本文のバイト単位一致、同一 SAS window 超過後の
+renewal、renewal 上限超過時のライブロック回避、期限接近/期限切れ時の即時 renewal、待機中に期限を
+跨ぐ場合の切り替え、非認証エラー(404)の非リトライ、commit 側での 403 リトライ、呼び出し元
+キャンセルと回復 deadline の区別、例外メッセージ・`ToString()`・logger 出力への SAS 非漏洩、
+3 件バッチ(成功→失敗→成功)での result file と終了コード、中断状態からの復旧。
+
+### 保留事項
+
+- PR [#151](https://github.com/kkamegawa/Relaypublisher/pull/151) は Ready for review。CI の結果は
+  マージ前に確認すること。
+- Wiki(`plan/2026-09-06/`)への計画・Intune 知見の登録は別途実施する。
+- 実機(Intune テナントへの実 publish)での検証は未実施。今回落ちた
+  `Microsoft.GlobalSecureAccess` windows-arm64 / windows-x64 の再実行による確認が必要。手順は
+  `doc/06-troubleshooting.md` §6d および `doc/issues/issue-150-sas-activation-retry-and-per-entry-session.md`
+  の Verification 節を参照。
+- 診断ログを伴う実機での次回実行結果をもって、`doc/adr.md` の「原因未確定」を確定情報に更新すること。
+
+## 2026-09-05: Windows file-system detection (Issue #141)
+
+**ブランチ**: `feature/141-windows-file-detection`
+
+**対応 Issue / PR**:
+
+- 親 Issue: [#141](https://github.com/kkamegawa/Relaypublisher/issues/141)
+- Manifest / validation: [#142](https://github.com/kkamegawa/Relaypublisher/issues/142)
+- Microsoft Graph mapping: [#143](https://github.com/kkamegawa/Relaypublisher/issues/143)
+- Documentation / release: [#144](https://github.com/kkamegawa/Relaypublisher/issues/144)
+- Pull request: [#145](https://github.com/kkamegawa/Relaypublisher/pull/145)
+
+### 実施内容
+
+1. Windows の `Detection.Type: file` を追加し、`exists` と `version` の validation、target-device path / leaf name
+   validation、script/file fields の相互排他、macOS の file fields 拒否を実装した。
+2. Graph v1.0 `win32LobAppFileSystemRule` を追加した。rules collection は System.Text.Json の polymorphic contract に
+   変更し、PowerShell rule は discriminator と衝突しない `Win32LobAppPowerShellScriptRulePayload` とした。
+3. Windows publisher は `Type: file` の場合に detection script を read せず、preflight / create / update のすべてで
+   file rule を mapping する。script detection の repository-relative path と欠落時の failure は維持した。
+4. existing script manifest hash の固定値、file criteria による hash 変化、validation、YAML load、payload JSON、
+   publisher、staging の regression test を追加した。
+5. 正本、日英の operation / troubleshooting / local E2E docs、README、sample catalog を更新し、file detection sample
+   を追加した。
+
+### 検証結果
+
+- `dotnet test IntuneLobPublisher.slnx --configuration Release`: 733 passed、0 failed、0 skipped。
+- `dotnet pack src\IntuneLobPublisher.Cli\IntuneLobPublisher.Cli.csproj --configuration Release
+  -p:ContinuousIntegrationBuild=true -p:Version=1.1.0`: `relaypublisher.1.1.0.nupkg` を生成。
+- `dotnet run ... validate --repo-root samples --manifest manifests\contoso-tool-windows-file-detection.yaml`:
+  1 manifest が valid。
+- `dotnet list IntuneLobPublisher.slnx package --vulnerable --include-transitive`: 脆弱な package なし。
+- `git diff --check`: 成功。
+
+### 保留事項
+
+- PR #145 は Ready for review に更新済み。Ubuntu / Windows build-test、NuGet pack、3 RID の single-file
+  publish、CodeQL、静的解析、NuGet submit が成功。
+- #145 の merge 後、別途承認を得て `v1.1.0` tag、draft release、3 feed への publish を実施する。
+- `intuneapps` の Global Secure Access manifest 更新、Azure Pipelines dry-run、本番 Intune publish は別 repository /
+  別承認のままとする。
+
+### 2026-09-05 追記: Issue #144 の release 準備を完了
+
+**対応 Issue**: [#144](https://github.com/kkamegawa/Relaypublisher/issues/144)
+
+#145 と、その後の CS8631 warning 修正 [#146](https://github.com/kkamegawa/Relaypublisher/pull/146) が main に merge
+されたので、#144 の残作業である release 検証と draft release 生成を実施した。documentation / sample / ADR の作業は
+#145 で完了済みのため、本追記では package と release の検証結果のみを記録する。
+
+1. **CS8631 warning の解消**: `ManifestValidator` の `RuleFor(a => a.Detection)` / `RuleFor(a => a.Requirements)` は
+   nullable property を返すため `IValidator<T?>` が要求され、`AbstractValidator<T>` の validator と型引数の
+   nullability が一致しなかった。null 許容解除を validator instance から property 式へ移した(#146)。
+   `!` は expression tree に現れないため、報告される property 名と `NotNull()` の runtime 検証は変わらない。
+2. **`v1.1.0` tag の作成**: main の `33bed3ef` に annotated tag を付与し、既存の `release-draft.yml` を起動した。
+3. **draft release の検証**: run 33953565705 が成功。draft `v1.1.0` は `targetCommitish: main`、`isDraft: true` で、
+   `relaypublisher.1.1.0.nupkg`、win-x64 / win-arm64 / osx-arm64 の zip、`SHA256SUMS.txt` の 5 asset を持つ。
+
+**検証結果**
+
+```
+dotnet build IntuneLobPublisher.slnx --configuration Release
+  → 成功、warning 0
+
+dotnet test IntuneLobPublisher.slnx --configuration Release --no-build
+  → 合格 735 / 失敗 0 / スキップ 0
+
+dotnet pack src\IntuneLobPublisher.Cli\IntuneLobPublisher.Cli.csproj --configuration Release
+  -p:ContinuousIntegrationBuild=true -p:Version=1.1.0 --output .\artifacts\nuget
+  → relaypublisher.1.1.0.nupkg
+
+dotnet list IntuneLobPublisher.slnx package --vulnerable --include-transitive
+  → Cli / Core / Core.Tests のいずれにも脆弱な package なし
+```
+
+- nuspec: id `relaypublisher`、version `1.1.0`、MIT expression、README 同梱、`DotnetTool` packageType、
+  repository commit `33bed3ef`。`tools/net10.0/any/` に CLI / Core assemblies と `DotnetToolSettings.xml` を含む。
+- draft release から download した `.nupkg` の SHA-256 は `SHA256SUMS.txt` と一致
+  (`8a5b9f1f5bedb9aa67bddbf16a0103219ce8cc02d887ac1a78409b63f8f15d0f`)。
+- **release asset の package に file detection 実装が含まれることを確認**: download した `.nupkg` を tool-path に
+  install し、`--version` が `1.1.0+33bed3ef...` を返すこと、`contoso-tool-windows-file-detection.yaml` が valid と
+  判定されること、`Operator: notConfigured` に改変した manifest が exit code 1 で reject されることを確認した。
+- sample manifest 4 件が valid。`apple-container-macos-arm64.yaml` は仕様どおり reference-only として reject される
+  ため対象外。
+
+**残る承認境界**
+
+- draft release の publish は人によるレビュー gate であり、本作業では実施しない。publish により
+  `release-publish.yml` が起動し、レビュー済みの同一 package が nuget.org / GitHub Packages / Azure Artifacts の
+  3 feed へ push される。publish 後に 3 feed への到達と package の同一性を確認して #144 / #141 を close する。
+- `intuneapps` の Global Secure Access manifest 更新、Azure Pipelines dry-run、本番 Intune publish は引き続き別
+  repository / 別承認とする。
+
 ## 2026-09-02: manifest 作成スクリプトのレビュー修正
 
 **ブランチ**: `feature/yamlcreate-manifest-tool`

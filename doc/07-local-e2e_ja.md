@@ -348,6 +348,10 @@ dotnet run --configuration Release --project $CliProject -- `
 
 Intune admin center で display name、`notes` の management metadata、committed content、detection rule、assignment、および manifest が `Categories` を宣言している場合は app の category を確認します。運用上の情報を含む場合があるため、`publish-result.json` を公開 artifact に含めないでください。
 
+Windows の `Detection.Type: file` では、作成された `win32LobAppFileSystemRule` の target-device `path`、
+`fileOrFolderName`、operation、comparison value を確認します。`publish --dry-run` は write せず mapping を通しますが、
+JSON は出力しません。正確な payload は unit test fixture で確認します。
+
 Relaypublisher は content hash で skip を判断する前に app の `publishingState` を確認します。
 `processing` の app は `published` になるまで polling し、`notPublished` の app は中断した単一 content version を
 再利用します。file が 0 件なら最初の file を作成し、対応する終端失敗 state の互換な未 commit file が総数 1 件なら

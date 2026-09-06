@@ -333,11 +333,20 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
             && file.Size == uploadable.UnencryptedContentSize
             && file.SizeEncrypted == uploadable.EncryptedContentSize;
 
+    // issue #150: "*Success" states are included alongside the original failure/error states because a
+    // run interrupted between "the SAS was issued/renewed" and "the blob upload finished" (e.g. the SAS
+    // authentication 403 AzureStorageBlockBlobUploader.RecoverFromSasAuthenticationFailureAsync could not
+    // recover) leaves the file in one of these states, not a failure state - Graph only ever reports what
+    // it last told the caller, not what the caller did with it. This is safe only because publish is
+    // required to run one instance at a time (doc/00-overview.md 6.9): the same states also describe a
+    // *different* run's upload still in flight, and uploadState alone cannot tell the two apart.
     private static bool IsRecoverableUncommittedUploadState(string uploadState)
         => uploadState is "azureStorageUriRequestFailed"
             or "azureStorageUriRenewalFailed"
             or "commitFileFailed"
-            or "error";
+            or "error"
+            or "azureStorageUriRequestSuccess"
+            or "azureStorageUriRenewalSuccess";
 
     private async Task<ContentUploadResult> ActivateContentVersionAsync(
         string appId,

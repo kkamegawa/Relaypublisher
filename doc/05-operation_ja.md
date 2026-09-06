@@ -178,8 +178,8 @@ GitHub Actions の `azure/login` と Azure Pipelines の workload identity servi
 token を取得します — Azure CLI login は chain の中の1候補に過ぎず、選ばれる保証はありません。login
 step の直後に job environment で `AZURE_TOKEN_CREDENTIALS` を設定してください(§3 参照)。Azure CLI
 login だけでは Graph application permission と admin consent の代わりになりません。`publish` は
-`AZURE_TOKEN_CREDENTIALS` が未設定なら warning を出し、最初の Graph 呼び出しで取得した identity の
-`appid`/`idtyp`/`roles` をログします。
+`AZURE_TOKEN_CREDENTIALS` が未設定なら実行につき 1 回 warning を出し、manifest エントリごとのセッションの
+最初の Graph 呼び出しで取得した identity の `appid`/`idtyp`/`roles` をログします(§3 参照)。
 
 Bash / zsh、`azure/login` の直後:
 
@@ -218,7 +218,15 @@ Source provider の認証は、manifest item ごとの `Auth` block で制御し
 `AzureCliCredential` で、chain を Azure CLI login のみに制限します。設定は任意です(`AZURE_TOKEN_CREDENTIALS`
 なしでも `DefaultAzureCredential` は動作します)が推奨します — pin しない chain は別のサインイン済み
 identity に黙って解決されることがあるためです(doc/00-overview.md §6.19、
-[06-troubleshooting_ja.md](06-troubleshooting_ja.md) §2a)。`publish` は未設定時に warning を出します。
+[06-troubleshooting_ja.md](06-troubleshooting_ja.md) §2a)。`publish` は未設定時に、publish する
+manifest エントリ数によらず**実行につき 1 回だけ** warning を出します(issue #150: 資格情報自体は
+実行全体で共有し、その上に構築する Graph セッションだけを manifest エントリごとに作り直すため)。
+
+このセッションの作り直しにより、`Acquired Graph token for identity appid=... idtyp=... roles=...`
+というログ行([06-troubleshooting_ja.md](06-troubleshooting_ja.md) §2a「token が実際に何を持っているか
+確認する」)は、実行につき 1 回ではなく manifest エントリごとに 1 回出るようになります。これは想定どおり
+であり、認証が繰り返し失敗しているわけではありません。むしろ publish する app ごとに identity を
+確認できるようになったと捉えてください。
 
 ```bash
 export AZURE_TOKEN_CREDENTIALS=AzureCliCredential
@@ -421,7 +429,9 @@ Intune の supersedence 関係を設定したりはしない。
 4. macOS のみ: `Detection.IncludedApps[].BundleVersion` を新リリースの bundle version に更新する。これを旧値の
    ままにすると、更新後も Intune の検出ルールが旧バージョンを探し続けるため、新しい content が publish されても
    既存管理下のデバイスが「未インストール/未更新」と判定されることがある。
-5. Windows のみ: `SetupFile`、`RepositoryFiles`、検出スクリプトの中に版数依存の参照が残っていないか確認する。
+5. Windows のみ: `SetupFile`、`RepositoryFiles`、検出スクリプト、または `Detection.Type: file` の
+   `ComparisonValue` に版数依存の参照が残っていないか確認する。file detection では target-device `Path` と
+   `FileOrFolderName` を使い、repository-relative path を指定しない。
 6. バージョンを上げる際に `PackageIdentifier`・`Platform`・`Architecture`・`DisplayName` を変更しない。
    これらを変更すると identity 解決が壊れ(doc/00-overview.md §6.1)、`publish` は既存 app を見つけられずに
    別 app を新規作成してしまい、旧 app と assignment は移行されないまま残る。

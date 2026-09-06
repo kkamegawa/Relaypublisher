@@ -349,6 +349,11 @@ dotnet run --configuration Release --project $CliProject -- `
 
 Verify the app in the Intune admin center, including its display name, management metadata in `notes`, committed content, detection rules, assignments, and - when the manifest declares `Categories` - the app's categories. Keep `publish-result.json` out of public artifacts if it contains operational details.
 
+For Windows `Detection.Type: file`, inspect the created `win32LobAppFileSystemRule` and confirm its
+target-device `path`, `fileOrFolderName`, operation, and comparison value. A `publish --dry-run` exercises
+the mapping without writing the rule, but does not print its JSON; use the unit-test fixture for exact
+payload verification.
+
 Relaypublisher checks the app's `publishingState` before deciding whether the content hash permits a
 skip. An app in `processing` is polled until `published`; an app in `notPublished` reuses its sole
 interrupted content version, creating the first file when none exists, renewing a sole compatible uncommitted

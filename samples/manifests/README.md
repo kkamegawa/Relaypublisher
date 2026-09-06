@@ -21,10 +21,19 @@ schema shape or constraint rather than a version-upgrade lifecycle.
 | `Microsoft/Microsoft.PowerShell/7.6.4/powershell-macos-x64.yaml` | E2E-runnable, previous version | passes | passes (downloads ~73 MB from GitHub, verifies SHA-256) | Same as above |
 | `contoso-tool-windows-x64.yaml` | E2E-runnable | passes | passes (stages local `RepositoryFiles`, builds a real `.intunewin` — requires a Windows machine/runner) | No external download; `.intunewin` build needs `IntuneWinAppUtil.exe`, downloaded automatically |
 | `contoso-tool-windows-arm64.yaml` | E2E-runnable | passes | passes (same as above) | |
+| `contoso-tool-windows-file-detection.yaml` | E2E-runnable (file detection example) | passes | passes (same local Windows packaging path) | Shows `Detection.Type: file` with file-version detection and no detection script |
 | `contoso-tool-macos-arm64.yaml` | Reference-only (schema example) | passes | **fails** — `Source` points at a fictitious Azure Blob account (`contosopackages`) with a placeholder all-zero `Sha256` | Shows the `azureBlob` shape from [doc/01-manifest-schema.md §5.3](../../doc/01-manifest-schema.md); not meant to resolve |
 | `apple-container-macos-arm64.yaml` | Reference-only (intentional failure) | **fails** — `Detection.IncludedApps` is empty | n/a | The Apple Container PKG installs no `.app` bundle, so `IncludedApps` cannot be populated with real values without fabricating a bundle ID. Documents a real Intune macOS-detection limitation; see the comments at the top of the file and [doc/01-manifest-schema.md §5.4](../../doc/01-manifest-schema.md) |
 
 ## Why the PowerShell samples work as an E2E fixture
+
+## Windows file-system detection sample
+
+`contoso-tool-windows-file-detection.yaml` packages the same local installer inputs as the Windows script
+samples, but its detection rule is evaluated on the managed device rather than read from this repository.
+`Detection.Path` is therefore a Windows target-device path, not an input for `--repo-root`. The sample uses
+the supported `version` operation; use `exists` when no version comparison is required, omitting both
+`Operator` and `ComparisonValue`.
 
 Intune's macOS `Detection.IncludedApps` must list the bundle ID + version of an application the PKG *actually installs* (see [Add an Unmanaged macOS PKG App to Microsoft Intune](https://learn.microsoft.com/intune/app-management/deployment/add-unmanaged-pkg-macos#step-4-%E2%80%93-detection-rules)). A CLI-only PKG like Apple Container's has nothing to point at.
 

@@ -1,13 +1,13 @@
 namespace IntuneLobPublisher.Core.Manifests;
 
 /// <summary>
-/// App detection settings. Windows uses script detection (<see cref="Type"/> / <see cref="ScriptFile"/>).
+/// App detection settings. Windows uses script or file-system detection.
 /// macOS has no script detection; it is always detected via <see cref="IncludedApps"/>
 /// (doc/01-manifest-schema.md §5.3, Graph <c>includedApps</c> / <c>childApps</c>).
 /// </summary>
 public sealed class DetectionManifest
 {
-    /// <summary>Windows only: "script".</summary>
+    /// <summary>Windows only: "script" or "file".</summary>
     public string? Type { get; set; }
 
     /// <summary>Windows only: detection script path relative to the repository root.</summary>
@@ -16,6 +16,24 @@ public sealed class DetectionManifest
     public bool? RunAs32Bit { get; set; }
 
     public bool? EnforceSignatureCheck { get; set; }
+
+    /// <summary>Windows <c>Type: file</c> only: target-device directory path.</summary>
+    public string? Path { get; set; }
+
+    /// <summary>Windows <c>Type: file</c> only: target-device file or folder leaf name.</summary>
+    public string? FileOrFolderName { get; set; }
+
+    /// <summary>Windows <c>Type: file</c> only: "exists" or "version".</summary>
+    public string? OperationType { get; set; }
+
+    /// <summary>Windows <c>Type: file</c> only: the version comparison operator.</summary>
+    public string? Operator { get; set; }
+
+    /// <summary>Windows <c>Type: file</c> only: the version comparison value.</summary>
+    public string? ComparisonValue { get; set; }
+
+    /// <summary>Windows <c>Type: file</c> only: expands environment variables in 32-bit context.</summary>
+    public bool? Check32BitOn64System { get; set; }
 
     /// <summary>
     /// macOS only: bundleId + version list Intune uses to detect the app (Graph <c>includedApps</c> /

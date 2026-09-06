@@ -243,6 +243,7 @@ Rollback 後は Intune で app を確認し、assignments が意図した manife
 | run が `skipped (downgrade)` と報告した | manifest の version が Intune 側 metadata に保存された version より低い | 上記 §3 を参照 |
 | `Invalid operation: app's PublishingState is not 'Published'` で失敗した | Intune が app を処理中だった、または committed content version がまだ activate されていない状態で metadata / category を更新しようとした | 現在の CLI で同じ publish を再実行する。`processing` は `published` になるまで待機し、`notPublished` は `inputHash` が一致していても content を upload する。polling が timeout した場合は Intune の処理完了後に再実行する。app は削除・再作成しない |
 | `publish` は成功したが content が変わらない | `inputHash` が保存値と一致し、content upload が skip された(doc/00-overview.md §6.7) | manifest または入力ファイルが実際に変わっているか確認する。`inputHash` が変わっていなければ再アップロードを skip するのは仕様どおり |
+| Windows file detection が validation で落ちる、または常に失敗する | `Path` を repository path として扱った、未対応の operation / operator を使った、または version 値が不正 | `exists` / `version` だけを使用する。対象端末の drive-rooted / root-relative / UNC / environment-variable path を設定し、`version` の `ComparisonValue` は 1～4 part の数値にする |
 | macOS: publish 後もデバイス側の検出バージョンが変わらない | `Detection.IncludedApps[].BundleVersion` を新リリースに合わせて更新していない | manifest を修正して再 publish する |
 | ログに旧バージョンの `superseded by version X` が出る | 解決された set に同一 identity の複数バージョンが含まれる場合の仕様(doc/00-overview.md §6.8) | 対処不要 — 最高バージョンのみが publish される |
 
@@ -389,6 +390,45 @@ Publish が package metadata missing を報告した場合:
   CLI をアップグレードして `publish` を再実行すること。値はすでに必須項目である
   `Package.IntuneWin.SetupFile` から取得するため、manifest やパッケージの変更は不要。
 
+## 6d. 複数パッケージの `publish` が 2 件目以降で SAS 403 で失敗する
+
+- **症状(このリリースで修正済み)**: 複数エントリを含む `manifest-list.json` を publish すると、最初の
+  数件は成功するのに、途中で未処理の `Azure.RequestFailedException` で落ちる:
+
+  ```
+  Status: 403 (... AuthenticationFailed)
+  ErrorCode: AuthenticationFailed
+  AuthenticationErrorDetail: SAS identifier cannot be found for specified signed identifier
+    at AzureStorageBlockBlobUploader.UploadAsync ...
+  ```
+
+  `--dry-run` と `validate` はどちらも blob へのアップロードを行わないため成功する。実際の `publish`
+  だけがこの Azure Storage 呼び出しに到達する。以前のビルドにはこの回復処理が無く、プロセスがバッチの
+  途中で即死し、`--result-file` が一切出力されず、doc/00-overview.md §6.10 の「1 件の失敗はバッチを
+  止めない」規約も効かなかった(この例外が `PublisherException` ではなかったため)。
+
+- **原因の意味**: Intune の `azureStorageUri` は stored access policy(`si=` signed identifier)に紐づく
+  service SAS である。正確な原因は未確定(doc/adr.md の 2026-09-06 エントリ参照)だが、最有力の説明は
+  作成・更新直後のポリシーが反映されるまで最大 30 秒程度かかりうるというもの
+  ([Define a stored access policy](https://learn.microsoft.com/rest/api/storageservices/define-stored-access-policy#create-or-modify-a-stored-access-policy))。
+  期限切れではない — `403 AuthenticationFailed` / `AuthenticationErrorDetail` の形はどちらの原因でも
+  同じなので、このエラー単体から期限切れだと決めつけないこと。
+
+- **現在の挙動**: `AzureStorageBlockBlobUploader` は(SAS 自体が期限切れ・期限接近でなければ)document 化
+  された伝播時間を上回るまで同一 SAS で再送し、それでも回復しなければ少数回に制限した `renewUpload` に
+  切り替えて、その都度再度待機する。再試行のたびに段階・試行回数・経過時間・SAS 有効期限までの残秒・
+  renewal 回数・Azure Storage の `x-ms-request-id` をログに出すので、伝播遅延だったのか(同一 SAS の
+  window 内で、多くは 1 分未満で回復)renewal が必要だったのかをログから読み取れる。回復が deadline
+  内に収まらなかった場合は、その manifest エントリだけが `ContentUploadRejectedException` として失敗し、
+  バッチは継続する。どちらの結果でも `--result-file` には必ずそのエントリが記録される。
+
+- **それでも止まる場合**: 同じテナントに対して別の `publish` が同時に走っていないか確認する。上記の
+  回復と、アップロード途中で中断した実行の別の回復(`azureStorageUriRequestSuccess` /
+  `azureStorageUriRenewalSuccess` を再送可能として扱う。下記「Safe rerun rules」参照)は、いずれも
+  doc/00-overview.md §6.9 の直列化(GitHub Actions の `concurrency` グループ、または Azure Pipelines の
+  Exclusive Lock check)が実際に効いていることを前提にしている。ローカル CLI からの実行や、その保護の
+  対象外の environment からの実行は、この前提の外側にある。
+
 ## 7. Safe rerun rules
 
 - `validate`、`plan`、`package --stage-only` は rerun して安全です。
@@ -396,3 +436,4 @@ Publish が package metadata missing を報告した場合:
 - `publish --dry-run` は rerun して安全です。
 - 実 publish は収束するよう設計されていますが、content activation step は tool では undo できません。Rollback は以前の manifest version を `--allow-downgrade` 付きで publish して行います。
 - category の `$ref` add/remove は冪等です。重複 add と不在 remove はどちらも成功として扱われるため、途中で中断した category 同期は次回実行で収束します。
+- SAS の発行・renewal と blob アップロード完了の間で中断した実行は、未 commit の content file が `azureStorageUriRequestSuccess` または `azureStorageUriRenewalSuccess` のまま残ります。再実行時は失敗扱いにせず renewal して再送します(issue #150)。前項と同じく §6.9 の直列化を前提にしています。

@@ -163,6 +163,39 @@ Apps:
         Intent: required
 ```
 
+### 5.2.1 Windows file-system detection
+
+Windows では `Detection.Type: file` により、repository に detection script を置かずに対象端末の file / folder
+を検出できる。`Path` は対象端末の directory、`FileOrFolderName` は単一の leaf name であり、いずれも
+`--repo-root` からの相対 path ではない。
+
+```yaml
+Detection:
+  Type: file
+  Path: 'C:\Program Files\Contoso Tool'
+  FileOrFolderName: contoso-tool.exe
+  OperationType: version
+  Operator: greaterThanOrEqual
+  ComparisonValue: "1.2.3"
+  Check32BitOn64System: false
+```
+
+`OperationType` と関連 field の制約:
+
+| `OperationType` | `Operator` | `ComparisonValue` |
+|---|---|---|
+| `exists` | 指定不可。Graph payload では `notConfigured` を生成する | 指定不可 |
+| `version` | 必須。`equal` / `notEqual` / `greaterThan` / `greaterThanOrEqual` / `lessThan` / `lessThanOrEqual` のいずれか | 必須。各 part 1～5 桁、全体で 1～4 part の数値 version |
+
+- `notConfigured` は Graph の unset sentinel のため、manifest の `OperationType` / `Operator` には指定できない。
+- `Path` は drive-rooted (`C:\...`)、root-relative (`\...`)、UNC (`\\server\share\...`)、
+  environment-variable-rooted (`%ProgramFiles%\...`、`%ProgramFiles(x86)%\...`) のいずれかでなければならない。
+- `Path` と `FileOrFolderName` に wildcard (`*` / `?`)、control character、`<`、`>`、`"`、`|`、前後空白は指定できない。
+  `FileOrFolderName` に directory separator は指定できない。
+- `Check32BitOn64System` は省略時 false。true のとき Graph は 64-bit OS 上で環境変数を 32-bit context で展開する。
+- `Type: script` と file 用 fields は相互排他である。`Type: file` には `ScriptFile`、`RunAs32Bit`、
+  `EnforceSignatureCheck` を指定できない。macOS の検出は `IncludedApps` のままであり、file 用 fields は使えない。
+
 ### 5.3 macOS 例
 
 ```yaml
@@ -322,6 +355,8 @@ Windows:
 | `Architecture: arm64` | `allowedArchitectures: arm64` | v1.0 の `applicableArchitectures` enum に `arm64` は**存在しない**。`allowedArchitectures` を使用し、その場合 `applicableArchitectures` は `none` になる |
 | `MinimumOSVersion: 10.0.19045` | `minimumSupportedWindowsRelease: Windows10_22H2` | build 番号 → release 名のマッピングテーブルを Core に持つ。未知の build は fail |
 | `MinimumOSVersion: 10.0.22621` | `minimumSupportedWindowsRelease: Windows11_22H2` | |
+| `Detection.Type: script` | `win32LobAppPowerShellScriptRule` | `scriptContent` は repository-relative `ScriptFile` の UTF-8 bytes を base64 encode する |
+| `Detection.Type: file` | `win32LobAppFileSystemRule` | `ruleType: detection` と path/name/operation fields を出力する。`exists` の operator は mapper が `notConfigured` を設定する |
 
 macOS:
 

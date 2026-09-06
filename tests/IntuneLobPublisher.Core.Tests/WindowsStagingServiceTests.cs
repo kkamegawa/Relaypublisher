@@ -201,4 +201,16 @@ public sealed class WindowsStagingServiceTests
 
         await Assert.ThrowsExactlyAsync<StagingException>(() => StageAsync(manifest));
     }
+
+    [TestMethod]
+    public async Task StageAsync_FileDetection_DoesNotRequireDetectionScript()
+    {
+        var manifest = CreateManifest();
+        manifest.Apps = [TestManifests.CreateValidFileDetectionApp()];
+        manifest.Apps[0].Package!.ExternalFiles[0].Sha256 = ExternalContentSha256;
+
+        var result = await StageAsync(manifest);
+
+        Assert.IsTrue(File.Exists(Path.Combine(result.StagingDirectory, "install.ps1")));
+    }
 }

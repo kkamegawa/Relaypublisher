@@ -268,6 +268,36 @@ public sealed class ManifestLoaderTests
     }
 
     [TestMethod]
+    public async Task LoadAsync_FileDetection_PopulatesFileSystemFields()
+    {
+        var manifest = await LoadFromTextAsync(
+            """
+            SchemaVersion: "1.0"
+            PackageIdentifier: Contoso.Tool
+            Apps:
+              - Platform: windows
+                Architecture: x64
+                Detection:
+                  Type: file
+                  Path: 'C:\Program Files\Contoso Tool'
+                  FileOrFolderName: contoso-tool.exe
+                  OperationType: version
+                  Operator: greaterThanOrEqual
+                  ComparisonValue: "1.2.3"
+                  Check32BitOn64System: false
+            """);
+
+        var detection = manifest.Apps[0].Detection;
+        Assert.AreEqual("file", detection?.Type);
+        Assert.AreEqual(@"C:\Program Files\Contoso Tool", detection?.Path);
+        Assert.AreEqual("contoso-tool.exe", detection?.FileOrFolderName);
+        Assert.AreEqual("version", detection?.OperationType);
+        Assert.AreEqual("greaterThanOrEqual", detection?.Operator);
+        Assert.AreEqual("1.2.3", detection?.ComparisonValue);
+        Assert.IsFalse(detection?.Check32BitOn64System);
+    }
+
+    [TestMethod]
     public async Task LoadAsync_UnknownKeys_AreIgnored()
     {
         var manifest = await LoadFromTextAsync(

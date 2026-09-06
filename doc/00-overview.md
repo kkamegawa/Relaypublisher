@@ -296,6 +296,28 @@ manifest schema に optional field を追加するときの hash 互換性(#99):
 - 逆に、field を宣言した manifest の hash は変わる。カテゴリだけを変更した manifest でも content 再package /
   再upload が発生し得る(6.20)。
 
+### 6.7.1 Windows file-system detection (Issue #141)
+
+Windows の `Detection.Type` は既存の `script` に加えて `file` をサポートする。`file` は Graph v1.0 の
+`win32LobAppFileSystemRule` を使い、対象端末上の file / folder の存在または file version で検出する。
+
+- このリリースで許可する `OperationType` は `exists` と `version` だけとする。`modifiedDate`、`createdDate`、
+  `sizeInMB` は comparison value の形式と十分な検証を定義してから追加する。
+- `exists` では manifest に `Operator` と `ComparisonValue` を指定しない。Graph payload には mapper が
+  `operator: notConfigured` と null の `comparisonValue` を設定する。
+- `version` では `Operator` を `equal`、`notEqual`、`greaterThan`、`greaterThanOrEqual`、`lessThan`、
+  `lessThanOrEqual` のいずれかにし、`ComparisonValue` は各 part が 1～5 桁、全体で 1～4 part の数値 version
+  (`^\d{1,5}(\.\d{1,5}){0,3}$`)とする。
+- `notConfigured` は Graph 上の unset sentinel であり、manifest 入力としては `OperationType`、`Operator` の
+  どちらでも許可しない。
+- `Detection.Path` と `Detection.FileOrFolderName` は repository path ではなく**対象端末の path**である。
+  `PathSafety` に渡さず、ドライブ起点、root-relative、UNC、環境変数起点の形式だけを validation で判定する。
+  `%ProgramFiles%` と `%ProgramFiles(x86)%` を含め、Windows の backslash path を使う。`FileOrFolderName` は
+  directory separator や wildcard を含まない単一の leaf name とする。
+- `file` の検出条件は manifest の fields なので、その変更は manifest hash / inputHash を変更する。`script` の
+  script body は従来どおり hash の入力に含めない。file 用に追加する fields はすべて nullable かつ初期値なしとし、
+  script manifest を再 hash しない。
+
 ### 6.8 ダウングレード防止とバージョンフォルダのライフサイクル
 
 manifest はバージョン別フォルダで管理するが、app identity はバージョンを含まないため以下を仕様とする。
@@ -320,9 +342,11 @@ Rollback 機能は実装しないが、Win32 コンテンツ更新のトラン�
 - 新しい content version の作成・ファイルアップロード・commit までは、**既存クライアントには旧コンテンツが配信され続ける**。この区間での失敗は安全であり、再実行時は Graph の未完了 content state を確認して収束させる。
 - `win32LobApp.committedContentVersion` を PATCH した時点で新コンテンツが有効になる。**この操作以降は戻せない**(戻すには旧バージョンの manifest を `--allow-downgrade` で再 publish する)。
 - 既存 app の publish は `publishingState` を先に確認する。`processing` の場合は `published` になるまで待機し、`notPublished` の場合は保存済み `inputHash` が一致していても content を upload・activate する。未知の state は即時に fail する。待機が timeout した場合は失敗として報告し、app を削除・再作成せずに再実行で復旧する。
-- `notPublished` の app は、最初の content version が未 commit のまま残っている可能性がある。content version が 0 件なら新規作成し、1 件ならその version を再利用する。単一 version に file が 0 件なら最初の file を作成する。未 commit file がある場合は、総数が 1 件、`uploadState` が `azureStorageUriRequestFailed` / `azureStorageUriRenewalFailed` / `commitFileFailed` / `error` のいずれか、かつ現在の package と `name` / `size` / `sizeEncrypted` が一致するときだけ `renewUpload` して再 upload する。一致する file が無い、file が複数ある、pending / timed out / 未知の state の場合は fail し、同じ version への追加 file 作成や既存 file の自動削除は行わない。現在の `inputHash` と保存済み `inputHash` が一致し、単一の file が commit 済みなら、version / file を削除せず `committedContentVersion` の PATCH から再開する。content version が複数ある、commit 済み file と未 commit file が混在する、または commit 済み file と現在の input の対応を証明できない場合は、app / version / file を自動削除せず fail する。Intune の macOS PKG backend には動作する content file DELETE がなく、失敗 file を残した version は activation できないため、明示的な運用判断で未公開 app を再作成する。
+- `notPublished` の app は、最初の content version が未 commit のまま残っている可能性がある。content version が 0 件なら新規作成し、1 件ならその version を再利用する。単一 version に file が 0 件なら最初の file を作成する。未 commit file がある場合は、総数が 1 件、`uploadState` が `azureStorageUriRequestFailed` / `azureStorageUriRenewalFailed` / `commitFileFailed` / `error` / `azureStorageUriRequestSuccess` / `azureStorageUriRenewalSuccess`(issue #150。後者 2 つは、SAS を得た・更新した直後に blob へのアップロード自体が中断した場合に残る状態で、Graph はクライアントが実際に upload できたかまでは記録しないため、失敗状態と同列に扱う)のいずれか、かつ現在の package と `name` / `size` / `sizeEncrypted` が一致するときだけ `renewUpload` して再 upload する。一致する file が無い、file が複数ある、pending / timed out / 未知の state の場合は fail し、同じ version への追加 file 作成や既存 file の自動削除は行わない。現在の `inputHash` と保存済み `inputHash` が一致し、単一の file が commit 済みなら、version / file を削除せず `committedContentVersion` の PATCH から再開する。content version が複数ある、commit 済み file と未 commit file が混在する、または commit 済み file と現在の input の対応を証明できない場合は、app / version / file を自動削除せず fail する。Intune の macOS PKG backend には動作する content file DELETE がなく、失敗 file を残した version は activation できないため、明示的な運用判断で未公開 app を再作成する。**`azureStorageUriRequestSuccess` / `azureStorageUriRenewalSuccess` は「別の実行がまさにアップロード中」でも起こりうる状態であり、`uploadState` だけでは進行中と中断済みを区別できない。この復旧は 6.9 の排他実行(GitHub Actions の `concurrency` グループ / Azure Pipelines の Exclusive Lock)が実際に効いていることに依存する**。ローカル CLI からの実行や、Exclusive Lock の対象外の environment からの実行は、この前提の外側にある。
+- Azure Storage への blob アップロード(`StageBlockAsync` / `CommitBlockListAsync`)が 403 `AuthenticationFailed` を返した場合(issue #150。Intune の `azureStorageUri` は stored access policy の signed identifier に紐づく service SAS であり、ポリシーの作成・更新の反映に最大 30 秒程度かかりうる。詳細は Wiki の plan ドキュメントを参照)、まず SAS の残り有効期限を見て、期限切れ・期限接近でなければ同一 SAS で document 化された伝播時間を上回る時間まで再送し、それでも回復しなければ `renewUpload` で SAS を取り直したうえで再度待機する。renewal の回数は 403 回復専用に少数へ制限する(この margin による予防的な renewal とは別枠)。この 403 回復の全体(待機と renewal を含む)は 1 回の stage/commit 呼び出しごとに 1 つの上限で区切り、呼び出し元のキャンセルとはっきり区別する。回復できなかった場合はそのエントリのみ failed として扱い、バッチ全体は継続する。
 - content の commit と `committedContentVersion` PATCH、`publishingState = published` の確認を完了してから、既存 app のプロパティ PATCH、category relationship、assignment を適用する。Graph は `publishingState` が `published` でない app へのこれらの更新を拒否する。
 - app 本体のプロパティ PATCH、category relationship の `$ref` add/remove、assignment 適用は個別に冪等であり、部分失敗しても再実行で収束する。category relationship は content の**後**に適用する(6.20)。content upload や assignment sync が失敗しても、次回実行時に Graph の現在値から plan を再計算して収束する。
+- `publish` の Graph セッション(`HttpClient`・認証・トークンキャッシュ)は manifest エントリごとに新規作成し、そのエントリの処理完了後に破棄する(issue #150)。資格情報(`DefaultAzureCredential`)自体は実行全体で共有する — エントリごとに作り直すと `AZURE_TOKEN_CREDENTIALS` 未設定時(6.19)にチェーンの解決先がエントリ間で変わりうる可能性があり、`--expected-tenant` では検出できない ID ドリフトを自ら作ってしまうため。
 
 ### 6.11 App 削除・リタイアのライフサイクル
 
@@ -336,6 +360,7 @@ manifest を削除しても Intune 側の app は削除しない。**削除・�
 
 - CLI に `--expected-tenant <tenant-id>` オプションを設ける。取得した token の `tid` claim と照合し、不一致なら何も変更せず fail する。
 - CI では environment ごとの変数(placeholder: `<tenant-id>`)から渡す。
+- Graph セッションが manifest エントリごとに新規作成される(6.10、issue #150)ため、この照合はトークンを新規取得するたびに、つまり実行全体で 1 回ではなく manifest エントリごとに走る。不一致を検知すればそのエントリで即座にバッチ全体を中断する点は変わらない。
 - 現時点では single tenant 運用を前提とする。複数環境(検証→本番)は environment 単位の federated credential と protected environment で分離する。
 
 ### 6.13 macOS app type の選定
@@ -433,6 +458,7 @@ Intune 系 Graph API は 429 が発生しやすい。すべての Graph 呼び�
 
 - `429` / `503` 時は `Retry-After` ヘッダーを尊重して retry する(上限回数付き exponential backoff)。
 - 失敗時は `client-request-id` / `request-id` をログに出す。
+- Azure Storage への blob アップロード自体が SAS 認証で 403 を返した場合の回復(6.10、issue #150)は、この Graph 呼び出しの Retry-After 尊重とは別軸の仕組みである。対象は Graph API ではなく Azure Storage SDK が直接投げる `RequestFailedException` であり、待機・`renewUpload` による回復も `AzureStorageBlockBlobUploader` 内で完結する。
 
 ### 6.17 配布形態(NuGet global tool)
 

@@ -56,7 +56,7 @@ public sealed class GraphWin32LobAppClientTests
         ReturnCodes = [new Win32LobAppReturnCodePayload { ReturnCode = 0, Type = "success" }],
         Rules =
         [
-            new Win32LobAppDetectionRulePayload
+            new Win32LobAppPowerShellScriptRulePayload
             {
                 EnforceSignatureCheck = false,
                 RunAs32Bit = false,

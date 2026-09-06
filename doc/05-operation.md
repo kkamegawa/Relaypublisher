@@ -180,9 +180,9 @@ establish the Azure CLI login on the runner. Relaypublisher's `DefaultAzureCrede
 scope `https://graph.microsoft.com/.default` from whichever credential source it resolves first — the Azure CLI
 login is only one candidate in that chain, not a guaranteed one, so set `AZURE_TOKEN_CREDENTIALS` in the job
 environment right after the login step (see section 3). A successful Azure CLI login alone is not a substitute
-for the required Graph application permission and admin consent, and `publish` prints a warning if
-`AZURE_TOKEN_CREDENTIALS` is not set and logs the acquired identity's `appid`/`idtyp`/`roles` on the first Graph
-call.
+for the required Graph application permission and admin consent, and `publish` prints a warning once per
+run if `AZURE_TOKEN_CREDENTIALS` is not set, and logs the acquired identity's `appid`/`idtyp`/`roles` on
+the first Graph call of each manifest entry's session (see section 3).
 
 Bash / zsh, after `azure/login`:
 
@@ -221,7 +221,15 @@ variable that `Azure.Identity` (1.15.0+) reads internally, so setting it once go
 local use is `AzureCliCredential`, which restricts the chain to only the Azure CLI login. Setting it is
 optional — `DefaultAzureCredential` still works without it — but recommended, because an unpinned chain
 can silently resolve to a different signed-in identity (doc/00-overview.md section 6.19,
-[06-troubleshooting.md](06-troubleshooting.md) section 2a). `publish` warns when it is not set.
+[06-troubleshooting.md](06-troubleshooting.md) section 2a). `publish` warns once per run when it is not
+set, regardless of how many manifest entries it publishes (issue #150: the credential itself is shared
+across the whole run even though the Graph session built on top of it is rebuilt per manifest entry).
+
+That per-entry session rebuild does mean the `Acquired Graph token for identity appid=... idtyp=...
+roles=...` line ([06-troubleshooting.md](06-troubleshooting.md) section 2a, "Check what the token actually
+carries") now appears once per manifest entry instead of once per run - this is expected, not a sign of
+repeated authentication failures, and gives you an identity check per app being published rather than only
+the first.
 
 ```bash
 export AZURE_TOKEN_CREDENTIALS=AzureCliCredential
@@ -430,8 +438,9 @@ Steps:
    this is left at the old value, Intune's detection rule keeps checking for the previous version after
    the update, which can make already-managed devices report as not installed/not up to date even though
    the new content was published.
-5. Windows only: check `SetupFile`, `RepositoryFiles`, and any detection script for version references
-   that also need to change.
+5. Windows only: check `SetupFile`, `RepositoryFiles`, any detection script, or the
+   `ComparisonValue` of `Detection.Type: file` for version references that also need to change. File
+   detection uses target-device `Path` and `FileOrFolderName`, never a repository-relative path.
 6. Do not change `PackageIdentifier`, `Platform`, `Architecture`, or `DisplayName` when bumping a
    version. Changing any of these breaks identity resolution (doc/00-overview.md §6.1): `publish` will
    not find the existing app and creates a new one instead, leaving the old app and its assignments

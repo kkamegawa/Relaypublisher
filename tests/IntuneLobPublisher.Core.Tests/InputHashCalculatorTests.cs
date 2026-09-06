@@ -154,4 +154,18 @@ public sealed class InputHashCalculatorTests
             InputHashCalculator.ComputeManifestHash(first),
             InputHashCalculator.ComputeManifestHash(second));
     }
+
+    [TestMethod]
+    public void ComputeManifestHash_FileDetectionComparisonValueChange_ChangesTheHash()
+    {
+        var first = TestManifests.CreateValid();
+        first.Apps = [TestManifests.CreateValidFileDetectionApp()];
+        var second = TestManifests.CreateValid();
+        second.Apps = [TestManifests.CreateValidFileDetectionApp()];
+        second.Apps[0].Detection!.ComparisonValue = "1.2.4";
+
+        Assert.AreNotEqual(
+            InputHashCalculator.ComputeManifestHash(first),
+            InputHashCalculator.ComputeManifestHash(second));
+    }
 }
