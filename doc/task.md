@@ -2,6 +2,92 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-09-06: Fail publish when result-file output fails (Issue #150 review follow-up)
+
+- Issue: [#150](https://github.com/kkamegawa/Relaypublisher/issues/150)
+- Pull request: [#151](https://github.com/kkamegawa/Relaypublisher/pull/151)
+- Plan: restore the nonzero exit status for result-file output failures while preserving
+  existing publish failures and caller cancellation, then verify and push the focused fix.
+- `PublishEntriesAsync` now tracks result-file write failures independently from per-entry
+  publish failures. A successful batch cannot return success when its requested result file
+  could not be saved. Existing abort and cancellation behavior is preserved.
+- Added four regression tests in `PublishCommandBatchAbortTests`, covering output failures
+  after success, batch abort, per-app failure, and caller cancellation. Existing-directory
+  output targets make the failures deterministic without relying on OS permission changes.
+- Validation:
+  - `dotnet test tests/IntuneLobPublisher.Core.Tests/IntuneLobPublisher.Core.Tests.csproj -c Release --filter FullyQualifiedName~PublishCommandBatchAbortTests`: 15 passed, 0 failed, 0 skipped.
+  - `dotnet build IntuneLobPublisher.slnx -c Release --no-restore --no-incremental`: 0 warnings, 0 errors.
+  - `dotnet test IntuneLobPublisher.slnx -c Release --no-build --no-restore`: 723 passed, 0 failed, 38 skipped.
+  - `git diff --check`: passed.
+- The initial sandboxed test invocation was blocked by MSBuild IPC permissions; the
+  successful validation above ran with the required local process permissions.
+
+## 2026-09-06: publish の SAS 認証 403 回復・result file 一本化・manifest エントリ単位の Graph セッション (Issue #150)
+
+**ブランチ**: `fix/150-sas-activation-retry-and-per-entry-session`
+
+**対応 Issue / PR**:
+
+- Issue: [#150](https://github.com/kkamegawa/Relaypublisher/issues/150)
+- Pull request: [#151](https://github.com/kkamegawa/Relaypublisher/pull/151)
+
+### 実施内容
+
+1. 本番の Azure Pipelines で、複数 manifest を含む `manifest-list.json` の `publish` が 2 件目のパッケージで
+   `Azure.RequestFailedException`(403 `AuthenticationFailed` /
+   `AuthenticationErrorDetail: SAS identifier cannot be found for specified signed identifier`)により
+   落ちる事象の報告を受け、実際のログを基に調査した。原因は未確定(stored access policy の伝播遅延が
+   最有力仮説)だが、必要な対処は仮説によらず同じであることを確認し、実装を進めた。
+2. `AzureStorageBlockBlobUploader` に SAS 認証 403 の回復処理を追加した。SAS の残り有効期限で経路を分岐し、
+   期限に余裕があれば同一 SAS で document 化された伝播時間を上回るまで再送し、それでも回復しなければ
+   `renewUpload` で SAS を取り直したうえで再度待機する。renewal 回数は 403 回復専用に少数へ制限し、
+   予防的 renewal とはカウンタを共有しない。回復全体は 1 回の stage/commit 呼び出しごとに 1 つの
+   deadline で区切り、呼び出し元の `CancellationToken` にリンクした専用の `CancellationTokenSource` で
+   実際にキャンセルし、呼び出し元のキャンセルとは区別する。
+3. 再送のたびにブロック本文を同じバイト列から作り直すようにし(既存の `MemoryStream` 再利用による
+   空/欠損送信のリスクを修正)、回復できない場合は新規 `ContentUploadRejectedException` に変換した
+   (`Status`/`ErrorCode`/`AuthenticationErrorDetail`/`x-ms-request-id` のみを保持し、元の例外・SAS を
+   含む情報は一切保持しない)。
+4. `MobileAppContentUploadOrchestrator.IsRecoverableUncommittedUploadState` に
+   `azureStorageUriRequestSuccess` / `azureStorageUriRenewalSuccess` を追加し、blob 送信だけが中断した
+   未 commit file も既存の file 数・metadata 一致条件のまま再送対象にした。
+5. `PublishCommand.PublishEntriesAsync` の result file 出力を単一の exit point(`finally`、
+   `CancellationToken.None`)に統合し、想定外の例外もエントリを記録してから中断するようにした。
+6. ユーザーの指示により、`publish` の Graph セッション(`HttpClient`・認証・トークンキャッシュ)を
+   manifest エントリごとに新規作成・破棄する構造に変更した(`IPublishSession` / `PublishComposition`)。
+   資格情報(`DefaultAzureCredential`)自体は実行全体で共有する。これは 403 の対策ではなく、指示された
+   構造変更であることを設計判断として明記した。
+7. `doc/00-overview.md`(6.10 / 6.12 / 6.16)、`doc/02-dotnet-architecture.md`、
+   `doc/06-troubleshooting.md` / `_ja`、`doc/05-operation.md` / `_ja`、`doc/adr.md` を更新し、
+   `doc/issues/issue-150-sas-activation-retry-and-per-entry-session.md` を追加した。
+
+### 検証結果
+
+```
+dotnet build IntuneLobPublisher.slnx
+→ ビルドに成功しました。0 エラー。
+
+dotnet test tests/IntuneLobPublisher.Core.Tests/IntuneLobPublisher.Core.Tests.csproj --no-build
+→ 成功! 失敗: 0、合格: 719、スキップ: 38(環境依存でスキップされる既存テスト。今回の変更とは無関係)、合計: 757
+```
+
+追加した主なテスト: 同一 SAS での再送成功、再送本文のバイト単位一致、同一 SAS window 超過後の
+renewal、renewal 上限超過時のライブロック回避、期限接近/期限切れ時の即時 renewal、待機中に期限を
+跨ぐ場合の切り替え、非認証エラー(404)の非リトライ、commit 側での 403 リトライ、呼び出し元
+キャンセルと回復 deadline の区別、例外メッセージ・`ToString()`・logger 出力への SAS 非漏洩、
+3 件バッチ(成功→失敗→成功)での result file と終了コード、中断状態からの復旧。
+
+### 保留事項
+
+- PR [#151](https://github.com/kkamegawa/Relaypublisher/pull/151) は Ready for review。CI の結果は
+  マージ前に確認すること。
+- Wiki(`plan/2026-09-06/`)への計画・Intune 知見の登録は別途実施する。
+- 実機(Intune テナントへの実 publish)での検証は未実施。今回落ちた
+  `Microsoft.GlobalSecureAccess` windows-arm64 / windows-x64 の再実行による確認が必要。手順は
+  `doc/06-troubleshooting.md` §6d および `doc/issues/issue-150-sas-activation-retry-and-per-entry-session.md`
+  の Verification 節を参照。
+- 診断ログを伴う実機での次回実行結果をもって、`doc/adr.md` の「原因未確定」を確定情報に更新すること。
+
 ## 2026-09-05: Windows file-system detection (Issue #141)
 
 **ブランチ**: `feature/141-windows-file-detection`

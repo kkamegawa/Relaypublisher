@@ -233,6 +233,61 @@ public sealed class ContentUploadTimedOutException : PublisherException
 }
 
 /// <summary>
+/// Azure Storage rejected a block-blob upload call (stage/commit) against the SAS URI Graph issued for
+/// this content file. Raised after the SAS-activation recovery in <see cref="AzureStorageBlockBlobUploader"/>
+/// gives up: same-SAS retries within the propagation window, then a bounded number of <c>renewUpload</c>
+/// calls, were exhausted or the recovery deadline elapsed. The original <c>Azure.RequestFailedException</c>
+/// is deliberately not kept as an inner exception - only <see cref="Status"/>, <see cref="ErrorCode"/>,
+/// <see cref="AuthenticationErrorDetail"/> and <see cref="StorageRequestId"/> are copied out, so that
+/// keeping this repository's "never log a signed URL" rule (AGENTS.md) does not depend on what a future
+/// Azure SDK version happens to put in <c>RequestFailedException.Message</c> or <c>ToString()</c>.
+/// </summary>
+public sealed class ContentUploadRejectedException : PublisherException
+{
+    public ContentUploadRejectedException(string stage, int status, string? errorCode, string? authenticationErrorDetail, string? storageRequestId)
+        : base(BuildMessage(stage, status, errorCode, authenticationErrorDetail, storageRequestId))
+    {
+        Stage = stage;
+        Status = status;
+        ErrorCode = errorCode;
+        AuthenticationErrorDetail = authenticationErrorDetail;
+        StorageRequestId = storageRequestId;
+    }
+
+    /// <summary>The upload step being performed, e.g. "stageBlock" or "commitBlockList".</summary>
+    public string Stage { get; }
+
+    /// <summary>The HTTP status Azure Storage returned.</summary>
+    public int Status { get; }
+
+    /// <summary>Azure Storage's <c>x-ms-error-code</c> value, e.g. "AuthenticationFailed".</summary>
+    public string? ErrorCode { get; }
+
+    /// <summary>The <c>AuthenticationErrorDetail</c> element from the storage error body, when present.</summary>
+    public string? AuthenticationErrorDetail { get; }
+
+    /// <summary>The storage service's <c>x-ms-request-id</c>, for correlating with storage-side logs.</summary>
+    public string? StorageRequestId { get; }
+
+    private static string BuildMessage(string stage, int status, string? errorCode, string? authenticationErrorDetail, string? storageRequestId)
+    {
+        var message = $"Azure Storage rejected content upload step '{stage}' with status {status}" +
+            (errorCode is null ? "." : $" ({errorCode}).");
+        if (!string.IsNullOrWhiteSpace(authenticationErrorDetail))
+        {
+            message += $" AuthenticationErrorDetail: {authenticationErrorDetail}.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(storageRequestId))
+        {
+            message += $" Storage request id: {storageRequestId}.";
+        }
+
+        return message;
+    }
+}
+
+/// <summary>
 /// Assignment plan computation received input it cannot plan against: malformed manifest values
 /// that slipped past validation, duplicate targets on the Intune side, or an intent the app type
 /// does not support. Thrown before any write.

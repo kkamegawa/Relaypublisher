@@ -1,4 +1,5 @@
 using System.CommandLine;
+using Azure.Identity;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Publishing;
@@ -90,6 +91,15 @@ internal static class PublishCommand
 
                 ValidateResultFileDirectory(resultFile);
 
+                var loggerFactory = services.GetRequiredService<ILoggerFactory>();
+
+                // Warned once for the whole run, not per entry (doc/00-overview.md 6.19): the logger
+                // category is intentionally still `PublishComposition`, matching every session's own Graph
+                // logging, rather than `PublishCommand`, so this line does not change under issue #150's
+                // per-entry session split.
+                CredentialDeterminismCheck.WarnIfCredentialChainNotPinned(
+                    loggerFactory.CreateLogger<PublishComposition>(), Environment.GetEnvironmentVariable);
+
                 var graphOptions = new GraphClientOptions
                 {
                     ExpectedTenantId = parseResult.GetValue(expectedTenantOption),
@@ -102,11 +112,13 @@ internal static class PublishCommand
                 var allowDowngrade = parseResult.GetValue(allowDowngradeOption);
                 var dryRun = parseResult.GetValue(dryRunOption);
 
-                using var composition = PublishComposition.Create(
-                    graphOptions, services.GetRequiredService<ILoggerFactory>());
+                // Shared for the whole run (see PublishComposition.Create); only the HttpClient-based
+                // session below is rebuilt per manifest entry (issue #150).
+                var credential = new DefaultAzureCredential();
+                IPublishSession CreateSession() => PublishComposition.Create(credential, graphOptions, loggerFactory);
 
                 return await PublishEntriesAsync(
-                    composition.Orchestrator, entries, repoRoot, packageDirectory,
+                    CreateSession, entries, repoRoot, packageDirectory,
                     sourceCommit, allowDowngrade, dryRun, resultFile, cancellationToken);
             }
             catch (PublisherException ex)
@@ -171,11 +183,16 @@ internal static class PublishCommand
     /// <summary>
     /// Publishes entries one by one, continuing on per-app failures so one broken app does not block
     /// the rest of a CI batch (reruns converge, doc/00-overview.md 6.10). Tenant mismatch,
-    /// authentication failures and identity-wide Graph authorization failures abort the whole run —
-    /// nothing else can succeed after those, so continuing would only repeat the same error per entry.
+    /// authentication failures, identity-wide Graph authorization failures, and any exception type this
+    /// loop does not otherwise recognize abort the whole run — nothing else can safely continue after
+    /// those. <paramref name="createSession"/> is called once per entry and each session is disposed
+    /// before the next entry starts (issue #150): the Graph <see cref="HttpClient"/>, its handlers and
+    /// their cached token are never reused across manifest entries. The result file has a single write
+    /// point at the end (in a <c>finally</c>, using <see cref="CancellationToken.None"/>) so it is
+    /// produced whichever way the loop above ends, instead of one write per abort path.
     /// </summary>
     internal static async Task<int> PublishEntriesAsync(
-        IPublishOrchestrator orchestrator,
+        Func<IPublishSession> createSession,
         List<PublishEntry> entries,
         string repoRoot,
         string packageDirectory,
@@ -190,79 +207,126 @@ internal static class PublishCommand
         var skippedPlatform = 0;
         var failed = 0;
         var resultEntries = new List<PublishResultEntry>();
+        var aborted = false;
+        var resultFileWriteFailed = false;
 
-        foreach (var entry in entries)
+        try
         {
-            var label = $"{entry.Loaded.Manifest.PackageIdentifier} {entry.App.Platform}-{entry.App.Architecture}";
-
-            try
+            foreach (var entry in entries)
             {
-                var request = CreatePublishRequest(
-                    entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun);
-                var result = await orchestrator.PublishAsync(
-                    request,
-                    new PublishReport
-                    {
-                        ReportCategoryPlan = plan => Console.Write(CategoryPlanFormatter.Format(plan)),
-                        ReportAssignmentPlan = plan => Console.Write(AssignmentPlanFormatter.Format(plan)),
-                    },
-                    cancellationToken);
-                resultEntries.Add(PublishResultOutput.FromResult(request, result));
+                var label = $"{entry.Loaded.Manifest.PackageIdentifier} {entry.App.Platform}-{entry.App.Architecture}";
 
-                switch (result.Outcome)
+                try
                 {
-                    case PublishOutcome.Published:
-                        published++;
-                        Console.WriteLine($"Published {label} -> app {result.AppId} (content: {result.ContentOutcome}).");
-                        break;
-                    case PublishOutcome.DryRunCompleted:
-                        Console.WriteLine($"[dry-run] {label} -> app {result.AppId ?? PublishOrchestrator.NewAppPlaceholderId}.");
-                        break;
-                    case PublishOutcome.SkippedDowngrade:
-                        skippedDowngrade++;
-                        Console.WriteLine($"Skipped {label}: {result.SkipReason}");
-                        break;
-                    case PublishOutcome.SkippedPlatformNotSupported:
-                        skippedPlatform++;
-                        Console.WriteLine($"Skipped {label}: {result.SkipReason}");
-                        break;
+                    using var session = createSession();
+                    var request = CreatePublishRequest(
+                        entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun);
+                    var result = await session.Orchestrator.PublishAsync(
+                        request,
+                        new PublishReport
+                        {
+                            ReportCategoryPlan = plan => Console.Write(CategoryPlanFormatter.Format(plan)),
+                            ReportAssignmentPlan = plan => Console.Write(AssignmentPlanFormatter.Format(plan)),
+                        },
+                        cancellationToken);
+                    resultEntries.Add(PublishResultOutput.FromResult(request, result));
+
+                    switch (result.Outcome)
+                    {
+                        case PublishOutcome.Published:
+                            published++;
+                            Console.WriteLine($"Published {label} -> app {result.AppId} (content: {result.ContentOutcome}).");
+                            break;
+                        case PublishOutcome.DryRunCompleted:
+                            Console.WriteLine($"[dry-run] {label} -> app {result.AppId ?? PublishOrchestrator.NewAppPlaceholderId}.");
+                            break;
+                        case PublishOutcome.SkippedDowngrade:
+                            skippedDowngrade++;
+                            Console.WriteLine($"Skipped {label}: {result.SkipReason}");
+                            break;
+                        case PublishOutcome.SkippedPlatformNotSupported:
+                            skippedPlatform++;
+                            Console.WriteLine($"Skipped {label}: {result.SkipReason}");
+                            break;
+                    }
+                }
+                catch (TenantMismatchException ex)
+                {
+                    AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
+                    Console.Error.WriteLine($"error: {ex.Message}");
+                    aborted = true;
+                    break;
+                }
+                catch (GraphAccessDeniedException ex)
+                {
+                    AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
+                    Console.Error.WriteLine($"error: {label}: {ex.Message}");
+                    aborted = true;
+                    break;
+                }
+                catch (Azure.Identity.AuthenticationFailedException ex)
+                {
+                    var message = $"Graph authentication failed: {ex.Message}";
+                    AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, message);
+                    Console.Error.WriteLine($"error: {message}");
+                    aborted = true;
+                    break;
+                }
+                catch (PublisherException ex)
+                {
+                    failed++;
+                    AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
+                    Console.Error.WriteLine($"error: {label}: {ex.Message}");
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Anything else is a failure mode this loop was not written to reason about safely, so
+                    // it stops the batch rather than guessing it is a per-entry problem (issue #150: this
+                    // used to escape uncaught entirely - e.g. Azure.RequestFailedException from a blob
+                    // upload - killing the process before the result file below was ever written). A
+                    // genuine OperationCanceledException from `cancellationToken` is deliberately excluded
+                    // so caller cancellation still propagates as a cancellation, not a recorded failure.
+                    //
+                    // Record only the type name, never ex.Message: every PublisherException subtype's
+                    // message is deliberately reviewed to carry no secrets (e.g. ContentUploadRejectedException
+                    // never keeps a signed URL - see AGENTS.md and PublicHttpSourceProvider.RedactQuery for the
+                    // same principle applied to URLs), but this catch-all sees exception types this codebase
+                    // has not vetted, and an arbitrary Message could carry a token or signed URL (Copilot
+                    // review, PR #151).
+                    var message = ex.GetType().Name;
+                    AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, message);
+                    Console.Error.WriteLine($"error: {label}: {message}");
+                    aborted = true;
+                    break;
                 }
             }
-            catch (TenantMismatchException ex)
+        }
+        finally
+        {
+            // Single exit point (issue #150): reached whether the loop finished, aborted, or an
+            // unexpected exception was recorded above. CancellationToken.None so a cancelled run still
+            // gets to persist whatever it completed; a write failure here is logged, never left to mask
+            // whatever publish failure is already propagating, but still makes a completed run fail.
+            try
             {
-                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
-                await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
-                Console.Error.WriteLine($"error: {ex.Message}");
-                return ExitCodes.Failure;
+                await WriteResultFileAsync(resultFile, resultEntries, CancellationToken.None);
             }
-            catch (GraphAccessDeniedException ex)
+            catch (Exception ex)
             {
-                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
-                await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
-                Console.Error.WriteLine($"error: {label}: {ex.Message}");
-                return ExitCodes.Failure;
-            }
-            catch (Azure.Identity.AuthenticationFailedException ex)
-            {
-                var message = $"Graph authentication failed: {ex.Message}";
-                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, message);
-                await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
-                Console.Error.WriteLine($"error: {message}");
-                return ExitCodes.Failure;
-            }
-            catch (PublisherException ex)
-            {
-                failed++;
-                AddFailureResult(resultEntries, entry, repoRoot, packageDirectory, sourceCommit, allowDowngrade, dryRun, ex.Message);
-                Console.Error.WriteLine($"error: {label}: {ex.Message}");
+                resultFileWriteFailed = true;
+                Console.Error.WriteLine($"error: failed to write --result-file: {ex.Message}");
             }
         }
 
-        await WriteResultFileAsync(resultFile, resultEntries, cancellationToken);
+        if (aborted)
+        {
+            return ExitCodes.Failure;
+        }
+
         Console.WriteLine(
             $"{published} published, {skippedDowngrade} skipped (downgrade), " +
             $"{skippedPlatform} skipped (platform), {failed} failed.");
-        return failed == 0 ? ExitCodes.Success : ExitCodes.Failure;
+        return failed == 0 && !resultFileWriteFailed ? ExitCodes.Success : ExitCodes.Failure;
     }
 
     private static void AddFailureResult(
