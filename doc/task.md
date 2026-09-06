@@ -2,6 +2,26 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-09-06: Fail publish when result-file output fails (Issue #150 review follow-up)
+
+- Issue: [#150](https://github.com/kkamegawa/Relaypublisher/issues/150)
+- Pull request: [#151](https://github.com/kkamegawa/Relaypublisher/pull/151)
+- Plan: restore the nonzero exit status for result-file output failures while preserving
+  existing publish failures and caller cancellation, then verify and push the focused fix.
+- `PublishEntriesAsync` now tracks result-file write failures independently from per-entry
+  publish failures. A successful batch cannot return success when its requested result file
+  could not be saved. Existing abort and cancellation behavior is preserved.
+- Added four regression tests in `PublishCommandBatchAbortTests`, covering output failures
+  after success, batch abort, per-app failure, and caller cancellation. Existing-directory
+  output targets make the failures deterministic without relying on OS permission changes.
+- Validation:
+  - `dotnet test tests/IntuneLobPublisher.Core.Tests/IntuneLobPublisher.Core.Tests.csproj -c Release --filter FullyQualifiedName~PublishCommandBatchAbortTests`: 15 passed, 0 failed, 0 skipped.
+  - `dotnet build IntuneLobPublisher.slnx -c Release --no-restore --no-incremental`: 0 warnings, 0 errors.
+  - `dotnet test IntuneLobPublisher.slnx -c Release --no-build --no-restore`: 723 passed, 0 failed, 38 skipped.
+  - `git diff --check`: passed.
+- The initial sandboxed test invocation was blocked by MSBuild IPC permissions; the
+  successful validation above ran with the required local process permissions.
+
 ## 2026-09-06: publish の SAS 認証 403 回復・result file 一本化・manifest エントリ単位の Graph セッション (Issue #150)
 
 **ブランチ**: `fix/150-sas-activation-retry-and-per-entry-session`

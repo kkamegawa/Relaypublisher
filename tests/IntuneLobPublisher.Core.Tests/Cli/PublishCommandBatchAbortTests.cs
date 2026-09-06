@@ -218,6 +218,20 @@ public sealed class PublishCommandBatchAbortTests
     }
 
     [TestMethod]
+    public async Task PublishEntriesAsync_ResultFileWriteFailsAfterSuccessfulBatch_ReturnsFailureAndDisposesEverySession()
+    {
+        var orchestrator = new SequencedOrchestrator(SequencedOrchestrator.Published, SequencedOrchestrator.Published);
+        var factory = new SessionFactory(orchestrator);
+
+        var exitCode = await RunAsync(factory, CreateTwoEntries(), _repoRoot);
+
+        Assert.AreEqual(ExitCodes.Failure, exitCode);
+        Assert.AreEqual(2, orchestrator.CallCount);
+        Assert.AreEqual(2, factory.CreateCount);
+        Assert.AreEqual(2, factory.DisposeCount);
+    }
+
+    [TestMethod]
     public async Task PublishEntriesAsync_AbortPath_DisposesTheFailingEntrySession()
     {
         var resultFile = Path.Combine(_repoRoot, "result.json");
@@ -229,6 +243,38 @@ public sealed class PublishCommandBatchAbortTests
 
         Assert.AreEqual(1, factory.CreateCount);
         Assert.AreEqual(1, factory.DisposeCount);
+    }
+
+    [TestMethod]
+    public async Task PublishEntriesAsync_AbortAndResultFileWriteFails_PreservesAbortFailure()
+    {
+        var orchestrator = new ThrowingOrchestrator(
+            () => new GraphAccessDeniedException("Failed to list Intune mobile apps.", 403, null, null, "Forbidden"));
+        var factory = new SessionFactory(orchestrator);
+
+        var exitCode = await RunAsync(factory, CreateTwoEntries(), _repoRoot);
+
+        Assert.AreEqual(ExitCodes.Failure, exitCode);
+        Assert.AreEqual(1, orchestrator.CallCount);
+        Assert.AreEqual(1, factory.CreateCount);
+        Assert.AreEqual(1, factory.DisposeCount);
+    }
+
+    [TestMethod]
+    public async Task PublishEntriesAsync_PerAppFailureAndResultFileWriteFails_PreservesPublishFailure()
+    {
+        var orchestrator = new SequencedOrchestrator(
+            SequencedOrchestrator.Published,
+            SequencedOrchestrator.ThrowUploadFailure,
+            SequencedOrchestrator.Published);
+        var factory = new SessionFactory(orchestrator);
+
+        var exitCode = await RunAsync(factory, CreateEntries(3), _repoRoot);
+
+        Assert.AreEqual(ExitCodes.Failure, exitCode);
+        Assert.AreEqual(3, orchestrator.CallCount);
+        Assert.AreEqual(3, factory.CreateCount);
+        Assert.AreEqual(3, factory.DisposeCount);
     }
 
     [TestMethod]
@@ -331,5 +377,26 @@ public sealed class PublishCommandBatchAbortTests
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(resultFile));
         Assert.AreEqual(1, document.RootElement.GetArrayLength());
         Assert.AreEqual("published", document.RootElement[0].GetProperty("outcome").GetString());
+    }
+
+    [TestMethod]
+    public async Task PublishEntriesAsync_CancelledTokenAndResultFileWriteFails_PreservesCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        var orchestrator = new SequencedOrchestrator(
+            request =>
+            {
+                cts.Cancel();
+                return SequencedOrchestrator.Published(request);
+            },
+            SequencedOrchestrator.Published);
+        var factory = new SessionFactory(orchestrator);
+
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(
+            () => RunAsync(factory, CreateTwoEntries(), _repoRoot, cts.Token));
+
+        Assert.AreEqual(1, orchestrator.CallCount);
+        Assert.AreEqual(2, factory.CreateCount);
+        Assert.AreEqual(2, factory.DisposeCount);
     }
 }

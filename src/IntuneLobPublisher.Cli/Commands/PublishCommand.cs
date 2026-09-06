@@ -208,6 +208,7 @@ internal static class PublishCommand
         var failed = 0;
         var resultEntries = new List<PublishResultEntry>();
         var aborted = false;
+        var resultFileWriteFailed = false;
 
         try
         {
@@ -298,13 +299,14 @@ internal static class PublishCommand
             // Single exit point (issue #150): reached whether the loop finished, aborted, or an
             // unexpected exception was recorded above. CancellationToken.None so a cancelled run still
             // gets to persist whatever it completed; a write failure here is logged, never left to mask
-            // whatever publish failure is already propagating.
+            // whatever publish failure is already propagating, but still makes a completed run fail.
             try
             {
                 await WriteResultFileAsync(resultFile, resultEntries, CancellationToken.None);
             }
             catch (Exception ex)
             {
+                resultFileWriteFailed = true;
                 Console.Error.WriteLine($"error: failed to write --result-file: {ex.Message}");
             }
         }
@@ -317,7 +319,7 @@ internal static class PublishCommand
         Console.WriteLine(
             $"{published} published, {skippedDowngrade} skipped (downgrade), " +
             $"{skippedPlatform} skipped (platform), {failed} failed.");
-        return failed == 0 ? ExitCodes.Success : ExitCodes.Failure;
+        return failed == 0 && !resultFileWriteFailed ? ExitCodes.Success : ExitCodes.Failure;
     }
 
     private static void AddFailureResult(
