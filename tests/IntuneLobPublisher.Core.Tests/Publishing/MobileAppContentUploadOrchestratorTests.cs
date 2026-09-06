@@ -390,6 +390,48 @@ public sealed class MobileAppContentUploadOrchestratorTests
     }
 
     [TestMethod]
+    [DataRow("azureStorageUriRequestSuccess")]
+    [DataRow("azureStorageUriRenewalSuccess")]
+    public async Task PublishContentAsync_NotPublished_UncommittedFileStillInSuccessState_RenewsAndReusesFile(string uploadState)
+    {
+        // issue #150: a run interrupted between "Graph told us the SAS was ready" and "the blob upload
+        // finished" (e.g. AzureStorageBlockBlobUploader's SAS-authentication-403 recovery gave up) leaves
+        // the file in one of Graph's own "success" upload states, not a failure state - Graph only ever
+        // reports what it last told the caller, not what the caller did with that answer. Recovery must
+        // treat this the same as the existing "commitFileFailed" reuse case: renew the SAS and resend,
+        // never delete or recreate anything.
+        var client = new FakeMobileAppContentClient();
+        client.PublishingStates.Enqueue("notPublished");
+        client.ContentVersions.Add(new MobileAppContentResponse { Id = "cv-1" });
+        var content = CreateContent();
+        using var extracted = new IntuneWinContentExtractor().Extract(content.ContentPath);
+        client.ContentFiles["cv-1"] =
+        [
+            FileState(
+                uploadState,
+                isCommitted: false,
+                id: "reusable-file",
+                name: extracted.ContentFileName,
+                size: extracted.UnencryptedContentSize,
+                sizeEncrypted: extracted.EncryptedContentSize),
+        ];
+        client.FileResponses.Enqueue(FileState("azureStorageUriRenewalSuccess", "https://sas.example/renewed"));
+        client.FileResponses.Enqueue(FileState("commitFileSuccess"));
+        client.PublishingStates.Enqueue("published");
+        var orchestrator = CreateOrchestrator(client, new FakeAzureStorageBlockBlobUploader(), new ManualTimeProvider());
+
+        var result = await PublishAsync(
+            orchestrator, "app-1", content, storedInputHash: null, CreateMetadata(), FastOptions());
+
+        Assert.AreEqual(ContentUploadOutcome.Uploaded, result.Outcome);
+        Assert.AreEqual(0, client.CreateContentVersionCallCount);
+        Assert.IsEmpty(client.CreateContentFileCalls);
+        Assert.AreEqual(1, client.RenewUploadCallCount);
+        Assert.HasCount(1, client.CommitFileCalls);
+        Assert.AreEqual("cv-1", client.PatchedCommittedContentVersion);
+    }
+
+    [TestMethod]
     public async Task PublishContentAsync_NotPublished_MultipleCompatibleUncommittedFiles_FailsWithoutMutation()
     {
         var client = new FakeMobileAppContentClient();
