@@ -1,11 +1,11 @@
 lockfile_version: '1'
-generated_at: '2026-08-23T20:56:00.482466+00:00'
+generated_at: '2026-09-06T02:49:25.697482+00:00'
 apm_version: 0.28.0
 dependencies:
 - repo_url: dotnet/skills
   name: dotnet
   host: github.com
-  resolved_commit: 98f848512e9ee4877e399a0ae367bb5e4a193144
+  resolved_commit: ac8f41264bdd557e58924a3110eea8e0917dcf4d
   version: 0.2.3
   virtual_path: plugins/dotnet
   is_virtual: true
@@ -18,12 +18,12 @@ dependencies:
   deployed_file_hashes:
     .agents/skills/setup-local-sdk/SKILL.md: sha256:6b4904db9ae950da582f85dc2f4cf2adf586776d84ce805a273edb4045f1a74e
     .claude/skills/setup-local-sdk/SKILL.md: sha256:6b4904db9ae950da582f85dc2f4cf2adf586776d84ce805a273edb4045f1a74e
-  content_hash: sha256:36cd8bf500fc94bf7e17416fd7ea1530abd7c01bdfdcea853a43f05be97cbc8e
+  content_hash: sha256:8f00b3310cc1307eb6b586a15083818b2597a7787b26e9b7bed82336e1e4863e
 - repo_url: dotnet/skills
   name: dotnet-test
   host: github.com
-  resolved_commit: 98f848512e9ee4877e399a0ae367bb5e4a193144
-  version: 0.2.18
+  resolved_commit: ac8f41264bdd557e58924a3110eea8e0917dcf4d
+  version: 0.2.19
   virtual_path: plugins/dotnet-test
   is_virtual: true
   package_type: marketplace_plugin
@@ -85,6 +85,7 @@ dependencies:
   - .agents/skills/mtp-hot-reload/SKILL.md
   - .agents/skills/platform-detection
   - .agents/skills/platform-detection/SKILL.md
+  - .agents/skills/platform-detection/references/command-mode.md
   - .agents/skills/run-tests
   - .agents/skills/run-tests/SKILL.md
   - .agents/skills/scaffold-dotnet-test-project
@@ -106,6 +107,7 @@ dependencies:
   - .agents/skills/test-anti-patterns/SKILL.md
   - .agents/skills/test-gap-analysis
   - .agents/skills/test-gap-analysis/SKILL.md
+  - .agents/skills/test-gap-analysis/references/mutation-catalog.md
   - .agents/skills/test-smell-detection
   - .agents/skills/test-smell-detection/SKILL.md
   - .agents/skills/test-smell-detection/references/test-smell-catalog.md
@@ -182,6 +184,7 @@ dependencies:
   - .claude/skills/mtp-hot-reload/SKILL.md
   - .claude/skills/platform-detection
   - .claude/skills/platform-detection/SKILL.md
+  - .claude/skills/platform-detection/references/command-mode.md
   - .claude/skills/run-tests
   - .claude/skills/run-tests/SKILL.md
   - .claude/skills/scaffold-dotnet-test-project
@@ -203,6 +206,7 @@ dependencies:
   - .claude/skills/test-anti-patterns/SKILL.md
   - .claude/skills/test-gap-analysis
   - .claude/skills/test-gap-analysis/SKILL.md
+  - .claude/skills/test-gap-analysis/references/mutation-catalog.md
   - .claude/skills/test-smell-detection
   - .claude/skills/test-smell-detection/SKILL.md
   - .claude/skills/test-smell-detection/references/test-smell-catalog.md
@@ -233,52 +237,53 @@ dependencies:
   - .github/agents/test-quality-auditor.agent.md
   - .github/agents/testability-migration.agent.md
   deployed_file_hashes:
-    .agents/skills/assertion-quality/SKILL.md: sha256:1060250e6a930ab9e2e6854b4dbcc2315d2eff188f5aea5710d53e6ac0ee0060
-    .agents/skills/code-testing-agent/SKILL.md: sha256:723a3e73b01b8e033c1feddeea649e93489c5c36d52323ebd035604bb56c2c79
+    .agents/skills/assertion-quality/SKILL.md: sha256:4c895a35d9f9aaa0f7ba997b9d50a52b1fbb61fca4a5db5c187354cf00d7075c
+    .agents/skills/code-testing-agent/SKILL.md: sha256:b2dc595b8876fac9ee0773fd25a1a2ae2604103c706890845cb0ad2ae1fa4e6f
     .agents/skills/code-testing-agent/unit-test-generation.prompt.md: sha256:3b15527fa3525c1217f9c17afc4c67a709e8583caf90f710116d5742c8cce20d
     .agents/skills/code-testing-extensions/SKILL.md: sha256:211d1cdfc77a36bee0f2d2ee9095689899bceebe6adc5bfedcb8b5de5fa7fb47
-    .agents/skills/code-testing-extensions/extensions/cpp-examples.md: sha256:68a46d9304efc0120c35eea73d5155dd21ccc84eb5dc8461118fe37289d6c1fc
+    .agents/skills/code-testing-extensions/extensions/cpp-examples.md: sha256:a685f7b660bd6cdb345469224e6dbb534602def108df1a4e03958cfcfd1cd873
     .agents/skills/code-testing-extensions/extensions/cpp.md: sha256:9a2d89347ab8c5a02a32ae2feb60d7e9cf0094f7417d129f676c8e0933090f2a
-    .agents/skills/code-testing-extensions/extensions/dotnet-examples.md: sha256:034c4683312db43fbd4c6355c2006af054f740015b1483815b74cbfa07d82c11
-    .agents/skills/code-testing-extensions/extensions/dotnet.md: sha256:86c013435ae1b4ed26c0f7a2c66aaa920d607885df583b35d791de1ce9008a92
-    .agents/skills/code-testing-extensions/extensions/go-examples.md: sha256:4815e383e0b068e63bcbacc88cc6a6b5ee19823843da973e232e44596335e629
+    .agents/skills/code-testing-extensions/extensions/dotnet-examples.md: sha256:4e46ec56b1f96db33b65aa5a1213d380e4d979d1c97f7cce8ab9a3bc0a7e6813
+    .agents/skills/code-testing-extensions/extensions/dotnet.md: sha256:c0b8fdd2342ca12969ddf0f50260e97c9c89c9a62761f8b3a860a99dae0b27ae
+    .agents/skills/code-testing-extensions/extensions/go-examples.md: sha256:e3f2ba1c40c0f1bde5cb62aec46aaad6674de0fc9813038f7845d1512658bf71
     .agents/skills/code-testing-extensions/extensions/go.md: sha256:4024cdf22cc092cb120406a74c49e58ab5af4802fa446e12416f399df7a94807
-    .agents/skills/code-testing-extensions/extensions/java-examples.md: sha256:cdfcc33e33c21d0c1bee85c032f06065edb002e6e24992cd4c29078263645b47
+    .agents/skills/code-testing-extensions/extensions/java-examples.md: sha256:c6b0f5662b6a1c1526fd1315d77ab07539e688abeb64e6ccce747ff8b70ae492
     .agents/skills/code-testing-extensions/extensions/java.md: sha256:25b32c779b49e17dff4cbb44fa3003cd33edba27592a9f1d0ab28c135eb04125
-    .agents/skills/code-testing-extensions/extensions/kotlin-examples.md: sha256:a02cae6ec0a133ad12039f4cd616ed3b5cb9e4d34b12a803a98fccb2c603f739
+    .agents/skills/code-testing-extensions/extensions/kotlin-examples.md: sha256:1d09702b3d6b06bb36b965788c7e8013dfb2fce6014aba29de97f356910c32e4
     .agents/skills/code-testing-extensions/extensions/kotlin.md: sha256:7553070dbf0254c1bb91c293ae8ce4313a68450cf1a451975d9f92d5367eb906
-    .agents/skills/code-testing-extensions/extensions/powershell-examples.md: sha256:c526ce52c4f7451f37d122a284e55a01dd4db986a6f49c64111b3918ba536725
+    .agents/skills/code-testing-extensions/extensions/powershell-examples.md: sha256:a3476eb18bb64f3cf4b89cff74ee5bafb7d53564c8eabec48a341ee96d5af339
     .agents/skills/code-testing-extensions/extensions/powershell.md: sha256:90dd9616f65be68c63ce0a3c50a974f6aa53ad0cbeffe379a3c8309252f03715
-    .agents/skills/code-testing-extensions/extensions/python-examples.md: sha256:93301c314fc5ea903d42fd6a697d0e0fa9e1469460ff8581f5a787ee6bce5746
+    .agents/skills/code-testing-extensions/extensions/python-examples.md: sha256:f75689a7b272a4fb87435b1cbae4865901b9d0ef73a6b5cb0577c39f2b455ec4
     .agents/skills/code-testing-extensions/extensions/python.md: sha256:299b75668830dbe88747bff89355d825d7508f82937a87a3ed8d6953032efa96
-    .agents/skills/code-testing-extensions/extensions/ruby-examples.md: sha256:bc9d746417daa759f18cf0767beee969ce72f95cc41f29a0b7f4cc80fdd89563
+    .agents/skills/code-testing-extensions/extensions/ruby-examples.md: sha256:cc138ba9250b0b1c3d7ad712227c4d2988e12279e4686aaf6107aeed8b50349e
     .agents/skills/code-testing-extensions/extensions/ruby.md: sha256:9d6cc5ed7ba9269d259c39fa9754cfc93d496b5fd3abcf81bd91833a27268bbe
-    .agents/skills/code-testing-extensions/extensions/rust-examples.md: sha256:f8b46a1047ad2a8f06c4d0242d67c033064b7226d39821aa6240b60813ed009f
+    .agents/skills/code-testing-extensions/extensions/rust-examples.md: sha256:18c0483fcc3af9d8ddc4d8bf0878b2244991423c7c5890bac95cda8c065838a9
     .agents/skills/code-testing-extensions/extensions/rust.md: sha256:6228a43826eb47112bee333ba34ebbb692770907da235af20296d8938e96ceea
     .agents/skills/code-testing-extensions/extensions/swift.md: sha256:6765fb1f54ffbe34ecd25099ea5c735bae1c2f8f93bb7ac21d3b1fa0821d2adb
-    .agents/skills/code-testing-extensions/extensions/typescript-examples.md: sha256:b2178b3c89a456ef06d9dbb317602b4a266a0fd93300c07647eb4eb9fd3ea0c5
+    .agents/skills/code-testing-extensions/extensions/typescript-examples.md: sha256:07866737ba49e48dcadb67d79b56b8f851435eb139f6776f156fac3158fa997c
     .agents/skills/code-testing-extensions/extensions/typescript.md: sha256:011f96ef5cfc6d9d334ac1e8d32f322d1b31de9e716e6ec8e0400dd228020d49
-    .agents/skills/coverage-analysis/SKILL.md: sha256:d998a25af95ff99690b89b8ddbd613ee6e335030866d88dab0cdf58c23609e4a
-    .agents/skills/coverage-analysis/references/guidelines.md: sha256:f5738895ba74c5853f87d8ed5beca839fae34e274e20550151efbbfdcc8219ec
-    .agents/skills/coverage-analysis/references/output-format.md: sha256:f2328f0250002c25276f51373ab3b935b15b41be09c161db02d3e22316ad78c4
-    .agents/skills/coverage-analysis/references/report-generation.md: sha256:923ba6a89c3ba054dffb40398f33980548f5967a4dc8c6c52e372c8097b66c97
-    .agents/skills/coverage-analysis/references/setup-discovery.md: sha256:f8b1c1726bbe8dce4f7825628232600b8ff5791fc7e08ff781e598e993201cd9
-    .agents/skills/coverage-analysis/references/test-execution.md: sha256:b4b92390eadc8e508a09a9233c120895a217c0a12aca268c4eeed798b3a917c8
+    .agents/skills/coverage-analysis/SKILL.md: sha256:8ddb2cb8dceca5d83fad4642f40ce2cce808fbc278631399458082366f20f9e1
+    .agents/skills/coverage-analysis/references/guidelines.md: sha256:1482e2cd12389047c7f1aa6e1c4420967aafc430b25156d9246b1147fedfe071
+    .agents/skills/coverage-analysis/references/output-format.md: sha256:6731a634c278988f9b9c0c83defb3dfe8574176b9ad34a74ce9207069db8ce75
+    .agents/skills/coverage-analysis/references/report-generation.md: sha256:f2583a688de77f950bc18446913531f603ca528839b35c3c394a77981eafd7bb
+    .agents/skills/coverage-analysis/references/setup-discovery.md: sha256:4a943c7bba9f392fc8241740d9770f6afa52bb1bba2627954dd85396551c83c9
+    .agents/skills/coverage-analysis/references/test-execution.md: sha256:0eb1b6ffc08dfac34a75c0effca13d9d749b56837deb883cdb5c0c799a8c9e9a
     .agents/skills/coverage-analysis/scripts/Compute-CrapScores.ps1: sha256:5c43c1dedbd464500eab3380cf142176bd288d8652ae0aeba45d7fedf830f526
     .agents/skills/coverage-analysis/scripts/Extract-MethodCoverage.ps1: sha256:37b3c6377dd5f654f2a0b88ceaeb4c77d8798134cbb0c9584532e7b2835f6f5b
-    .agents/skills/crap-score/SKILL.md: sha256:9527711b6c30ec20feb06220c5aa021081ea11a4b1f4f074ca9a9e333499d724
-    .agents/skills/detect-static-dependencies/SKILL.md: sha256:bf743c24ddb6afe5c764897c9e5f43ba723e962718ea959209fd7ce702ddeb99
-    .agents/skills/filter-syntax/SKILL.md: sha256:ab2c30569d6c859e0f340880c7182ab87c4fe108fa65f618815d3ac85aedee52
-    .agents/skills/find-untested-sources/SKILL.md: sha256:b9e8d509604469418d998e18eecdadda3ee7e9afec612f6e11770053a9eef445
+    .agents/skills/crap-score/SKILL.md: sha256:4254327d4d224f588b7a20601cb5b43637a71467844e512010755a5591a3952d
+    .agents/skills/detect-static-dependencies/SKILL.md: sha256:ec8586b6f369c705e681ae737b4527044b21fa39a0645255bfd6f47eee72bc71
+    .agents/skills/filter-syntax/SKILL.md: sha256:64c294d0fc2d0c4d5887d391c6684429fc4d7a66b6b9f99a475e6abe390c5d19
+    .agents/skills/find-untested-sources/SKILL.md: sha256:df0e139888df7868420f2a48b20087b945a510af800a5a9b36105c1068f0023f
     .agents/skills/find-untested-sources/scripts/Find-UntestedSources.cs: sha256:b6f01c528bcfbeae5f4a88c5953ece8274850c902b90f9a591b4e62ed6161e70
-    .agents/skills/find-untested-sources/scripts/find_untested_sources.py: sha256:231dc55cd7558f54d09b292396370cb25f2430501bfb063266c62609ae55715f
-    .agents/skills/generate-testability-wrappers/SKILL.md: sha256:d51a4f2a4beed405c5ef235ca048bfc960563b9013e1d0ab65ba29f08dd464b7
-    .agents/skills/grade-tests/SKILL.md: sha256:1e14e1ae7749017b5183406a4e4369fed0eb662494e6774ac59e5007357fa03a
-    .agents/skills/migrate-static-to-wrapper/SKILL.md: sha256:96dbda555233da8ee06fac318c9507298d1884dac250c587df3ef86e10252e5c
-    .agents/skills/mtp-hot-reload/SKILL.md: sha256:2779894f8761a1b465f57b3fd81f13db5fab5516765ef8df246a99df151203a3
-    .agents/skills/platform-detection/SKILL.md: sha256:c2bd553a3169d4e3d623a0f5b23e7bcc4d714e6d4d49dfea3f65a81865d81acf
-    .agents/skills/run-tests/SKILL.md: sha256:0790463d50cccd1af22155301cb9a20dda1a7cbbcc9ee3cae7107232e37f08d8
-    .agents/skills/scaffold-dotnet-test-project/SKILL.md: sha256:7408dd7cb99bd8ca3920fc8914d6134476866520a23e31ff1aa123adc9808f5a
+    .agents/skills/find-untested-sources/scripts/find_untested_sources.py: sha256:c19e34846e48cb4ecb9896f0af7b921b5ec702d6eac3056ffb5f0ba87ee5f7b9
+    .agents/skills/generate-testability-wrappers/SKILL.md: sha256:58aac0affca5c0a56dab9e8e751f52ac4014533150355b734d6b5597ac8acec1
+    .agents/skills/grade-tests/SKILL.md: sha256:2ab1ee96112aa585a3edc09e92cb30c9a4969e7605c6b0870a29b2c8fc0704a8
+    .agents/skills/migrate-static-to-wrapper/SKILL.md: sha256:35e0ab131f7422a1ad685f6a8a49852885916c5aba89c8092a7c92f2611c3a61
+    .agents/skills/mtp-hot-reload/SKILL.md: sha256:2294ea9eb1702d50991cefeb00c0461344506e88bd735036b1f56c6040587925
+    .agents/skills/platform-detection/SKILL.md: sha256:a73b7c126af6249490a62454c55097cef93657f537b40794c2c52a4bbf58c35f
+    .agents/skills/platform-detection/references/command-mode.md: sha256:08e276dcafe6bd5bfbaab435065ca24a5800a4eae3ffd7fc15daa1e81354bbc4
+    .agents/skills/run-tests/SKILL.md: sha256:971e4d888a4435eb4c050079adfb6cb91fc73e3c756fa7a622b059c72fad7e3c
+    .agents/skills/scaffold-dotnet-test-project/SKILL.md: sha256:0fc25989601e66e3a2abb572a712befbcb6b315f31b6daa34661d3911fa6aa32
     .agents/skills/test-analysis-extensions/SKILL.md: sha256:ec6f69ed00a627c0319a2bbdcfd71fcfab84eaae28900b2f814af3b27e44bd70
     .agents/skills/test-analysis-extensions/extensions/cpp.md: sha256:da2de0bb820edaf523731bf36381d2a7e71009561072204773be548e43911d50
     .agents/skills/test-analysis-extensions/extensions/dotnet.md: sha256:ef257a931a25501697fde8a36e027ba9195ff624ff701dd5fd276d746c0d25be
@@ -291,69 +296,71 @@ dependencies:
     .agents/skills/test-analysis-extensions/extensions/rust.md: sha256:d92041fc8142311070e9c02a5590ac9d10eef0baa4aa9136e163e2c526871725
     .agents/skills/test-analysis-extensions/extensions/swift.md: sha256:41f4b7c9b8827de0737778ca24de5de26ccd1a3f5ff58d6f58a135fc576c4c52
     .agents/skills/test-analysis-extensions/extensions/typescript.md: sha256:7dd98060c3941ec791f1128ef67d77cad2733ee8381e39f14ccdc19ad48f90ef
-    .agents/skills/test-anti-patterns/SKILL.md: sha256:0f589352ba88c5873e85a2bde65d44f72c75ec76a0547105ff6698271d813bf0
-    .agents/skills/test-gap-analysis/SKILL.md: sha256:7701f2762d8612cf09ea7b45c2d63da9b980d8148ef0998ffa73436d8c9b38d6
-    .agents/skills/test-smell-detection/SKILL.md: sha256:73888755e509cfd455db5c00df6aaa20b9e7d4d7dc4b485f4add2c71f652dd4e
-    .agents/skills/test-smell-detection/references/test-smell-catalog.md: sha256:001e04c54d73940df65090c6915e87b07aac8cddcc26be139c7d9770dc0a8b99
-    .agents/skills/test-tagging/SKILL.md: sha256:874745af561a9b04b67f19adf587cb3b58f60d0e186345f1c799dfa23cf589e0
-    .agents/skills/testability-obstacle/SKILL.md: sha256:6050bf966c8fa023c75837ac6824b9020fa75f6cfa289b796598c11cf785b912
-    .agents/skills/writing-mstest-tests/SKILL.md: sha256:a13049108bc6a2f1825de4128abee9b5c98a9423268ba5bfa93466b16597468c
-    .claude/agents/code-testing-builder.md: sha256:ce8b48afc7b3425df82320b727198d20a8970ea6fb28212d56931489b2661d8d
+    .agents/skills/test-anti-patterns/SKILL.md: sha256:62022253bc67bc32a0ae94ca3d2784a7b6811c42697e76f2ed63fee4a705fb4e
+    .agents/skills/test-gap-analysis/SKILL.md: sha256:f440af358dc09d072be3cd689f32cffeaaa87c362c78c98b6ee87e2778866121
+    .agents/skills/test-gap-analysis/references/mutation-catalog.md: sha256:a7b31dcd2ae1641f29f33fab720721b27f416f2379ae531c33d409740003482d
+    .agents/skills/test-smell-detection/SKILL.md: sha256:4aa11579a99181fc15c0421a43d435e42e2bcd1363463780a4e85e22ade64402
+    .agents/skills/test-smell-detection/references/test-smell-catalog.md: sha256:974791cc1338c2c9d72556df47e3a7efec878aa90b28e72282018a3309a37a80
+    .agents/skills/test-tagging/SKILL.md: sha256:be41dbfe15053b1b42348c46bdb9cd181731d2d82d81e1d3247750b8bf2830cc
+    .agents/skills/testability-obstacle/SKILL.md: sha256:094d442bf9ad1a8128319b770c1b96fde751637c40a5810fa3a773ac6366c587
+    .agents/skills/writing-mstest-tests/SKILL.md: sha256:9da7a07ba196350c5bf9e53a1dbdc4820080a4178804748211c12e58622459a0
+    .claude/agents/code-testing-builder.md: sha256:28f061d54afdf33f6e1d6810d8f3b34e378cf4bb9fa2342fc97d6a981ae0ce52
     .claude/agents/code-testing-fixer.md: sha256:f71c748ebea572425af4919217ffa6445c16efcde75dff3edd04b91e3f4de299
-    .claude/agents/code-testing-generator.md: sha256:2e40707070cae3535c242ecdb548c84c86e840746413d34f72229bd0b7ec2a6b
-    .claude/agents/code-testing-implementer.md: sha256:83320cc1a77c979e156d1504bf2e0ec33a9fc90fe923c6a9f8248f2d9de3a54d
-    .claude/agents/code-testing-linter.md: sha256:c1f4d8aeeea267f7fd64db4b181376ad160dcfaa90820493a37a92b93dcc4e3a
-    .claude/agents/code-testing-planner.md: sha256:cad681c7b9de2ccd64b6faa7a200bc3fe77bf834d436088fea257e1d591b7bea
-    .claude/agents/code-testing-researcher.md: sha256:fb5257ccb3963fd40f5381e6f95f97af4de757473889ae2c1222b5656d8b7e62
-    .claude/agents/code-testing-tester.md: sha256:9e4f7018af351b554c19b3f7255b71850df84672558d6eba694c4a96df15e8ad
+    .claude/agents/code-testing-generator.md: sha256:8985a80f5fd7ca44a782295a1b169c22d4d9c1ffe8ed683dac21955b406b3946
+    .claude/agents/code-testing-implementer.md: sha256:0ae446eaec64028e698b0bd185f0f82a09e68f262ce6fcbe40f586ab326fb4b3
+    .claude/agents/code-testing-linter.md: sha256:801f4b911200f684d110ec9f5021c8937270c5c643ddf52433a22934df50009f
+    .claude/agents/code-testing-planner.md: sha256:53716ec19923dfac2b1179800e9dc99a1ef0173d791c159417ca8dacf7243770
+    .claude/agents/code-testing-researcher.md: sha256:8dfe73c8ce8c6909fd20d67a5993f6d6f6547b23d89c191a5c3de837dcd0dd34
+    .claude/agents/code-testing-tester.md: sha256:fe67d1b3e6eefe8f90fdd7e489adb8cf913b1c0cbeece98338d172abc28f896c
     .claude/agents/test-quality-auditor.md: sha256:13995d87d129fe11da728a60e18df7b3f91a71909eb8e4b91cc79c2ab2c7b61a
     .claude/agents/testability-migration.md: sha256:d1a5d3686e3cef639f23aae16ede518c968042e200cc70d6d96a84d2dc45999c
-    .claude/skills/assertion-quality/SKILL.md: sha256:1060250e6a930ab9e2e6854b4dbcc2315d2eff188f5aea5710d53e6ac0ee0060
-    .claude/skills/code-testing-agent/SKILL.md: sha256:723a3e73b01b8e033c1feddeea649e93489c5c36d52323ebd035604bb56c2c79
+    .claude/skills/assertion-quality/SKILL.md: sha256:4c895a35d9f9aaa0f7ba997b9d50a52b1fbb61fca4a5db5c187354cf00d7075c
+    .claude/skills/code-testing-agent/SKILL.md: sha256:b2dc595b8876fac9ee0773fd25a1a2ae2604103c706890845cb0ad2ae1fa4e6f
     .claude/skills/code-testing-agent/unit-test-generation.prompt.md: sha256:3b15527fa3525c1217f9c17afc4c67a709e8583caf90f710116d5742c8cce20d
     .claude/skills/code-testing-extensions/SKILL.md: sha256:211d1cdfc77a36bee0f2d2ee9095689899bceebe6adc5bfedcb8b5de5fa7fb47
-    .claude/skills/code-testing-extensions/extensions/cpp-examples.md: sha256:68a46d9304efc0120c35eea73d5155dd21ccc84eb5dc8461118fe37289d6c1fc
+    .claude/skills/code-testing-extensions/extensions/cpp-examples.md: sha256:a685f7b660bd6cdb345469224e6dbb534602def108df1a4e03958cfcfd1cd873
     .claude/skills/code-testing-extensions/extensions/cpp.md: sha256:9a2d89347ab8c5a02a32ae2feb60d7e9cf0094f7417d129f676c8e0933090f2a
-    .claude/skills/code-testing-extensions/extensions/dotnet-examples.md: sha256:034c4683312db43fbd4c6355c2006af054f740015b1483815b74cbfa07d82c11
-    .claude/skills/code-testing-extensions/extensions/dotnet.md: sha256:86c013435ae1b4ed26c0f7a2c66aaa920d607885df583b35d791de1ce9008a92
-    .claude/skills/code-testing-extensions/extensions/go-examples.md: sha256:4815e383e0b068e63bcbacc88cc6a6b5ee19823843da973e232e44596335e629
+    .claude/skills/code-testing-extensions/extensions/dotnet-examples.md: sha256:4e46ec56b1f96db33b65aa5a1213d380e4d979d1c97f7cce8ab9a3bc0a7e6813
+    .claude/skills/code-testing-extensions/extensions/dotnet.md: sha256:c0b8fdd2342ca12969ddf0f50260e97c9c89c9a62761f8b3a860a99dae0b27ae
+    .claude/skills/code-testing-extensions/extensions/go-examples.md: sha256:e3f2ba1c40c0f1bde5cb62aec46aaad6674de0fc9813038f7845d1512658bf71
     .claude/skills/code-testing-extensions/extensions/go.md: sha256:4024cdf22cc092cb120406a74c49e58ab5af4802fa446e12416f399df7a94807
-    .claude/skills/code-testing-extensions/extensions/java-examples.md: sha256:cdfcc33e33c21d0c1bee85c032f06065edb002e6e24992cd4c29078263645b47
+    .claude/skills/code-testing-extensions/extensions/java-examples.md: sha256:c6b0f5662b6a1c1526fd1315d77ab07539e688abeb64e6ccce747ff8b70ae492
     .claude/skills/code-testing-extensions/extensions/java.md: sha256:25b32c779b49e17dff4cbb44fa3003cd33edba27592a9f1d0ab28c135eb04125
-    .claude/skills/code-testing-extensions/extensions/kotlin-examples.md: sha256:a02cae6ec0a133ad12039f4cd616ed3b5cb9e4d34b12a803a98fccb2c603f739
+    .claude/skills/code-testing-extensions/extensions/kotlin-examples.md: sha256:1d09702b3d6b06bb36b965788c7e8013dfb2fce6014aba29de97f356910c32e4
     .claude/skills/code-testing-extensions/extensions/kotlin.md: sha256:7553070dbf0254c1bb91c293ae8ce4313a68450cf1a451975d9f92d5367eb906
-    .claude/skills/code-testing-extensions/extensions/powershell-examples.md: sha256:c526ce52c4f7451f37d122a284e55a01dd4db986a6f49c64111b3918ba536725
+    .claude/skills/code-testing-extensions/extensions/powershell-examples.md: sha256:a3476eb18bb64f3cf4b89cff74ee5bafb7d53564c8eabec48a341ee96d5af339
     .claude/skills/code-testing-extensions/extensions/powershell.md: sha256:90dd9616f65be68c63ce0a3c50a974f6aa53ad0cbeffe379a3c8309252f03715
-    .claude/skills/code-testing-extensions/extensions/python-examples.md: sha256:93301c314fc5ea903d42fd6a697d0e0fa9e1469460ff8581f5a787ee6bce5746
+    .claude/skills/code-testing-extensions/extensions/python-examples.md: sha256:f75689a7b272a4fb87435b1cbae4865901b9d0ef73a6b5cb0577c39f2b455ec4
     .claude/skills/code-testing-extensions/extensions/python.md: sha256:299b75668830dbe88747bff89355d825d7508f82937a87a3ed8d6953032efa96
-    .claude/skills/code-testing-extensions/extensions/ruby-examples.md: sha256:bc9d746417daa759f18cf0767beee969ce72f95cc41f29a0b7f4cc80fdd89563
+    .claude/skills/code-testing-extensions/extensions/ruby-examples.md: sha256:cc138ba9250b0b1c3d7ad712227c4d2988e12279e4686aaf6107aeed8b50349e
     .claude/skills/code-testing-extensions/extensions/ruby.md: sha256:9d6cc5ed7ba9269d259c39fa9754cfc93d496b5fd3abcf81bd91833a27268bbe
-    .claude/skills/code-testing-extensions/extensions/rust-examples.md: sha256:f8b46a1047ad2a8f06c4d0242d67c033064b7226d39821aa6240b60813ed009f
+    .claude/skills/code-testing-extensions/extensions/rust-examples.md: sha256:18c0483fcc3af9d8ddc4d8bf0878b2244991423c7c5890bac95cda8c065838a9
     .claude/skills/code-testing-extensions/extensions/rust.md: sha256:6228a43826eb47112bee333ba34ebbb692770907da235af20296d8938e96ceea
     .claude/skills/code-testing-extensions/extensions/swift.md: sha256:6765fb1f54ffbe34ecd25099ea5c735bae1c2f8f93bb7ac21d3b1fa0821d2adb
-    .claude/skills/code-testing-extensions/extensions/typescript-examples.md: sha256:b2178b3c89a456ef06d9dbb317602b4a266a0fd93300c07647eb4eb9fd3ea0c5
+    .claude/skills/code-testing-extensions/extensions/typescript-examples.md: sha256:07866737ba49e48dcadb67d79b56b8f851435eb139f6776f156fac3158fa997c
     .claude/skills/code-testing-extensions/extensions/typescript.md: sha256:011f96ef5cfc6d9d334ac1e8d32f322d1b31de9e716e6ec8e0400dd228020d49
-    .claude/skills/coverage-analysis/SKILL.md: sha256:d998a25af95ff99690b89b8ddbd613ee6e335030866d88dab0cdf58c23609e4a
-    .claude/skills/coverage-analysis/references/guidelines.md: sha256:f5738895ba74c5853f87d8ed5beca839fae34e274e20550151efbbfdcc8219ec
-    .claude/skills/coverage-analysis/references/output-format.md: sha256:f2328f0250002c25276f51373ab3b935b15b41be09c161db02d3e22316ad78c4
-    .claude/skills/coverage-analysis/references/report-generation.md: sha256:923ba6a89c3ba054dffb40398f33980548f5967a4dc8c6c52e372c8097b66c97
-    .claude/skills/coverage-analysis/references/setup-discovery.md: sha256:f8b1c1726bbe8dce4f7825628232600b8ff5791fc7e08ff781e598e993201cd9
-    .claude/skills/coverage-analysis/references/test-execution.md: sha256:b4b92390eadc8e508a09a9233c120895a217c0a12aca268c4eeed798b3a917c8
+    .claude/skills/coverage-analysis/SKILL.md: sha256:8ddb2cb8dceca5d83fad4642f40ce2cce808fbc278631399458082366f20f9e1
+    .claude/skills/coverage-analysis/references/guidelines.md: sha256:1482e2cd12389047c7f1aa6e1c4420967aafc430b25156d9246b1147fedfe071
+    .claude/skills/coverage-analysis/references/output-format.md: sha256:6731a634c278988f9b9c0c83defb3dfe8574176b9ad34a74ce9207069db8ce75
+    .claude/skills/coverage-analysis/references/report-generation.md: sha256:f2583a688de77f950bc18446913531f603ca528839b35c3c394a77981eafd7bb
+    .claude/skills/coverage-analysis/references/setup-discovery.md: sha256:4a943c7bba9f392fc8241740d9770f6afa52bb1bba2627954dd85396551c83c9
+    .claude/skills/coverage-analysis/references/test-execution.md: sha256:0eb1b6ffc08dfac34a75c0effca13d9d749b56837deb883cdb5c0c799a8c9e9a
     .claude/skills/coverage-analysis/scripts/Compute-CrapScores.ps1: sha256:5c43c1dedbd464500eab3380cf142176bd288d8652ae0aeba45d7fedf830f526
     .claude/skills/coverage-analysis/scripts/Extract-MethodCoverage.ps1: sha256:37b3c6377dd5f654f2a0b88ceaeb4c77d8798134cbb0c9584532e7b2835f6f5b
-    .claude/skills/crap-score/SKILL.md: sha256:9527711b6c30ec20feb06220c5aa021081ea11a4b1f4f074ca9a9e333499d724
-    .claude/skills/detect-static-dependencies/SKILL.md: sha256:bf743c24ddb6afe5c764897c9e5f43ba723e962718ea959209fd7ce702ddeb99
-    .claude/skills/filter-syntax/SKILL.md: sha256:ab2c30569d6c859e0f340880c7182ab87c4fe108fa65f618815d3ac85aedee52
-    .claude/skills/find-untested-sources/SKILL.md: sha256:b9e8d509604469418d998e18eecdadda3ee7e9afec612f6e11770053a9eef445
+    .claude/skills/crap-score/SKILL.md: sha256:4254327d4d224f588b7a20601cb5b43637a71467844e512010755a5591a3952d
+    .claude/skills/detect-static-dependencies/SKILL.md: sha256:ec8586b6f369c705e681ae737b4527044b21fa39a0645255bfd6f47eee72bc71
+    .claude/skills/filter-syntax/SKILL.md: sha256:64c294d0fc2d0c4d5887d391c6684429fc4d7a66b6b9f99a475e6abe390c5d19
+    .claude/skills/find-untested-sources/SKILL.md: sha256:df0e139888df7868420f2a48b20087b945a510af800a5a9b36105c1068f0023f
     .claude/skills/find-untested-sources/scripts/Find-UntestedSources.cs: sha256:b6f01c528bcfbeae5f4a88c5953ece8274850c902b90f9a591b4e62ed6161e70
-    .claude/skills/find-untested-sources/scripts/find_untested_sources.py: sha256:231dc55cd7558f54d09b292396370cb25f2430501bfb063266c62609ae55715f
-    .claude/skills/generate-testability-wrappers/SKILL.md: sha256:d51a4f2a4beed405c5ef235ca048bfc960563b9013e1d0ab65ba29f08dd464b7
-    .claude/skills/grade-tests/SKILL.md: sha256:1e14e1ae7749017b5183406a4e4369fed0eb662494e6774ac59e5007357fa03a
-    .claude/skills/migrate-static-to-wrapper/SKILL.md: sha256:96dbda555233da8ee06fac318c9507298d1884dac250c587df3ef86e10252e5c
-    .claude/skills/mtp-hot-reload/SKILL.md: sha256:2779894f8761a1b465f57b3fd81f13db5fab5516765ef8df246a99df151203a3
-    .claude/skills/platform-detection/SKILL.md: sha256:c2bd553a3169d4e3d623a0f5b23e7bcc4d714e6d4d49dfea3f65a81865d81acf
-    .claude/skills/run-tests/SKILL.md: sha256:0790463d50cccd1af22155301cb9a20dda1a7cbbcc9ee3cae7107232e37f08d8
-    .claude/skills/scaffold-dotnet-test-project/SKILL.md: sha256:7408dd7cb99bd8ca3920fc8914d6134476866520a23e31ff1aa123adc9808f5a
+    .claude/skills/find-untested-sources/scripts/find_untested_sources.py: sha256:c19e34846e48cb4ecb9896f0af7b921b5ec702d6eac3056ffb5f0ba87ee5f7b9
+    .claude/skills/generate-testability-wrappers/SKILL.md: sha256:58aac0affca5c0a56dab9e8e751f52ac4014533150355b734d6b5597ac8acec1
+    .claude/skills/grade-tests/SKILL.md: sha256:2ab1ee96112aa585a3edc09e92cb30c9a4969e7605c6b0870a29b2c8fc0704a8
+    .claude/skills/migrate-static-to-wrapper/SKILL.md: sha256:35e0ab131f7422a1ad685f6a8a49852885916c5aba89c8092a7c92f2611c3a61
+    .claude/skills/mtp-hot-reload/SKILL.md: sha256:2294ea9eb1702d50991cefeb00c0461344506e88bd735036b1f56c6040587925
+    .claude/skills/platform-detection/SKILL.md: sha256:a73b7c126af6249490a62454c55097cef93657f537b40794c2c52a4bbf58c35f
+    .claude/skills/platform-detection/references/command-mode.md: sha256:08e276dcafe6bd5bfbaab435065ca24a5800a4eae3ffd7fc15daa1e81354bbc4
+    .claude/skills/run-tests/SKILL.md: sha256:971e4d888a4435eb4c050079adfb6cb91fc73e3c756fa7a622b059c72fad7e3c
+    .claude/skills/scaffold-dotnet-test-project/SKILL.md: sha256:0fc25989601e66e3a2abb572a712befbcb6b315f31b6daa34661d3911fa6aa32
     .claude/skills/test-analysis-extensions/SKILL.md: sha256:ec6f69ed00a627c0319a2bbdcfd71fcfab84eaae28900b2f814af3b27e44bd70
     .claude/skills/test-analysis-extensions/extensions/cpp.md: sha256:da2de0bb820edaf523731bf36381d2a7e71009561072204773be548e43911d50
     .claude/skills/test-analysis-extensions/extensions/dotnet.md: sha256:ef257a931a25501697fde8a36e027ba9195ff624ff701dd5fd276d746c0d25be
@@ -366,69 +373,70 @@ dependencies:
     .claude/skills/test-analysis-extensions/extensions/rust.md: sha256:d92041fc8142311070e9c02a5590ac9d10eef0baa4aa9136e163e2c526871725
     .claude/skills/test-analysis-extensions/extensions/swift.md: sha256:41f4b7c9b8827de0737778ca24de5de26ccd1a3f5ff58d6f58a135fc576c4c52
     .claude/skills/test-analysis-extensions/extensions/typescript.md: sha256:7dd98060c3941ec791f1128ef67d77cad2733ee8381e39f14ccdc19ad48f90ef
-    .claude/skills/test-anti-patterns/SKILL.md: sha256:0f589352ba88c5873e85a2bde65d44f72c75ec76a0547105ff6698271d813bf0
-    .claude/skills/test-gap-analysis/SKILL.md: sha256:7701f2762d8612cf09ea7b45c2d63da9b980d8148ef0998ffa73436d8c9b38d6
-    .claude/skills/test-smell-detection/SKILL.md: sha256:73888755e509cfd455db5c00df6aaa20b9e7d4d7dc4b485f4add2c71f652dd4e
-    .claude/skills/test-smell-detection/references/test-smell-catalog.md: sha256:001e04c54d73940df65090c6915e87b07aac8cddcc26be139c7d9770dc0a8b99
-    .claude/skills/test-tagging/SKILL.md: sha256:874745af561a9b04b67f19adf587cb3b58f60d0e186345f1c799dfa23cf589e0
-    .claude/skills/testability-obstacle/SKILL.md: sha256:6050bf966c8fa023c75837ac6824b9020fa75f6cfa289b796598c11cf785b912
-    .claude/skills/writing-mstest-tests/SKILL.md: sha256:a13049108bc6a2f1825de4128abee9b5c98a9423268ba5bfa93466b16597468c
-    .codex/agents/code-testing-builder.toml: sha256:b05affaf99aa41f56f91a0f5a4dc87ef3bf987db51a22be7316d369add2bde3d
+    .claude/skills/test-anti-patterns/SKILL.md: sha256:62022253bc67bc32a0ae94ca3d2784a7b6811c42697e76f2ed63fee4a705fb4e
+    .claude/skills/test-gap-analysis/SKILL.md: sha256:f440af358dc09d072be3cd689f32cffeaaa87c362c78c98b6ee87e2778866121
+    .claude/skills/test-gap-analysis/references/mutation-catalog.md: sha256:a7b31dcd2ae1641f29f33fab720721b27f416f2379ae531c33d409740003482d
+    .claude/skills/test-smell-detection/SKILL.md: sha256:4aa11579a99181fc15c0421a43d435e42e2bcd1363463780a4e85e22ade64402
+    .claude/skills/test-smell-detection/references/test-smell-catalog.md: sha256:974791cc1338c2c9d72556df47e3a7efec878aa90b28e72282018a3309a37a80
+    .claude/skills/test-tagging/SKILL.md: sha256:be41dbfe15053b1b42348c46bdb9cd181731d2d82d81e1d3247750b8bf2830cc
+    .claude/skills/testability-obstacle/SKILL.md: sha256:094d442bf9ad1a8128319b770c1b96fde751637c40a5810fa3a773ac6366c587
+    .claude/skills/writing-mstest-tests/SKILL.md: sha256:9da7a07ba196350c5bf9e53a1dbdc4820080a4178804748211c12e58622459a0
+    .codex/agents/code-testing-builder.toml: sha256:de3799e2cafd728a3db64b21896b8c67f3a5986744ca9efc2b994a9b7e666040
     .codex/agents/code-testing-fixer.toml: sha256:2992f0ca31429d7a2684c9b09dde71a5050580061bffd454a3d6fb2455426035
-    .codex/agents/code-testing-generator.toml: sha256:e959af4066795d900acf629e408bb79fbf531d5be17ce8d4fd9a719d78781901
-    .codex/agents/code-testing-implementer.toml: sha256:9e04a638256bb20713c8c0fc48a3118f35768caf8c4ddc55e9edc027c0f52a0c
-    .codex/agents/code-testing-linter.toml: sha256:5883d2ccef6956474d80837c803516eb19fd4c2bbe3579f075290caebf64948b
-    .codex/agents/code-testing-planner.toml: sha256:74c9856503dbaa3533d590678adb416e38d74e71a2d4f3069dfe20c40700ca43
-    .codex/agents/code-testing-researcher.toml: sha256:481ffdc1790f4dd0125a5b3bb280afc2534667691bbd265b8f2a0b62ea28aba5
-    .codex/agents/code-testing-tester.toml: sha256:ecb06a3a9b1d4b36baa78e974044c2fdcb93393f5aabe298691d44a85568422f
+    .codex/agents/code-testing-generator.toml: sha256:d9357630e1ac31f65d932aa50fed5e53c324fbf77ad0dd620cda1252c01e81b9
+    .codex/agents/code-testing-implementer.toml: sha256:25f5934392b9a987dfddc23a79dca8e813b66cd5b3c97a011479f0f69a68194c
+    .codex/agents/code-testing-linter.toml: sha256:e750b05e179b73d1848697acc58ba791b21b174b2b87b2dc7eb84856c317a2fe
+    .codex/agents/code-testing-planner.toml: sha256:ba3e4c50741c8606bbe0e5c019e59be720b5564ba02c2513ad072adfa37f2702
+    .codex/agents/code-testing-researcher.toml: sha256:141073c0df0de53d0a33c521931ae2cdeb4ca3a48a67864a0ae2a907960ebe9b
+    .codex/agents/code-testing-tester.toml: sha256:3e64d0905357c8d370d2185077086b05c693cb83fa680cd41f1ca8a27ad7f118
     .codex/agents/test-quality-auditor.toml: sha256:9e104dc0549d12f878757c0fdd20383ede9d9426e537414b6ceea40144a7b962
     .codex/agents/testability-migration.toml: sha256:476e70856ed06b656ae606eba40f63004346085a89beb316ddc58fdf93560d6b
-    .github/agents/code-testing-builder.agent.md: sha256:ce8b48afc7b3425df82320b727198d20a8970ea6fb28212d56931489b2661d8d
+    .github/agents/code-testing-builder.agent.md: sha256:28f061d54afdf33f6e1d6810d8f3b34e378cf4bb9fa2342fc97d6a981ae0ce52
     .github/agents/code-testing-fixer.agent.md: sha256:f71c748ebea572425af4919217ffa6445c16efcde75dff3edd04b91e3f4de299
-    .github/agents/code-testing-generator.agent.md: sha256:2e40707070cae3535c242ecdb548c84c86e840746413d34f72229bd0b7ec2a6b
-    .github/agents/code-testing-implementer.agent.md: sha256:83320cc1a77c979e156d1504bf2e0ec33a9fc90fe923c6a9f8248f2d9de3a54d
-    .github/agents/code-testing-linter.agent.md: sha256:c1f4d8aeeea267f7fd64db4b181376ad160dcfaa90820493a37a92b93dcc4e3a
-    .github/agents/code-testing-planner.agent.md: sha256:cad681c7b9de2ccd64b6faa7a200bc3fe77bf834d436088fea257e1d591b7bea
-    .github/agents/code-testing-researcher.agent.md: sha256:fb5257ccb3963fd40f5381e6f95f97af4de757473889ae2c1222b5656d8b7e62
-    .github/agents/code-testing-tester.agent.md: sha256:9e4f7018af351b554c19b3f7255b71850df84672558d6eba694c4a96df15e8ad
+    .github/agents/code-testing-generator.agent.md: sha256:8985a80f5fd7ca44a782295a1b169c22d4d9c1ffe8ed683dac21955b406b3946
+    .github/agents/code-testing-implementer.agent.md: sha256:0ae446eaec64028e698b0bd185f0f82a09e68f262ce6fcbe40f586ab326fb4b3
+    .github/agents/code-testing-linter.agent.md: sha256:801f4b911200f684d110ec9f5021c8937270c5c643ddf52433a22934df50009f
+    .github/agents/code-testing-planner.agent.md: sha256:53716ec19923dfac2b1179800e9dc99a1ef0173d791c159417ca8dacf7243770
+    .github/agents/code-testing-researcher.agent.md: sha256:8dfe73c8ce8c6909fd20d67a5993f6d6f6547b23d89c191a5c3de837dcd0dd34
+    .github/agents/code-testing-tester.agent.md: sha256:fe67d1b3e6eefe8f90fdd7e489adb8cf913b1c0cbeece98338d172abc28f896c
     .github/agents/test-quality-auditor.agent.md: sha256:13995d87d129fe11da728a60e18df7b3f91a71909eb8e4b91cc79c2ab2c7b61a
     .github/agents/testability-migration.agent.md: sha256:d1a5d3686e3cef639f23aae16ede518c968042e200cc70d6d96a84d2dc45999c
-  content_hash: sha256:f4692d1d53f623a1b2b46c90b5be642774327d71000cfb27c7c83d7c1f85877f
+  content_hash: sha256:e83780094edddb91855f245c3e63d4c900869388d1d71de3d096402c43298798
 - repo_url: github/awesome-copilot
   name: csharp-dotnet-development
   host: github.com
-  resolved_commit: 83561bd7d8a46fcda0581aedabdf8eac7cb196b6
-  version: 1.1.0
+  resolved_commit: 7b1ebe6333397841ca918dec904d24d4695fe953
+  version: 1.2.0
   virtual_path: plugins/csharp-dotnet-development
   is_virtual: true
   package_type: marketplace_plugin
-  content_hash: sha256:33aa7e7d14c86e1223cea49ca080e194495d8956ab9a5356845c6e71d98f1085
+  content_hash: sha256:05c5c47e804a1ad20f3d38234eebf2289bac827d8610b5e35a8ac08c9725ae59
   declared_license: MIT
 - repo_url: github/awesome-copilot
   name: security-best-practices
   host: github.com
-  resolved_commit: 83561bd7d8a46fcda0581aedabdf8eac7cb196b6
+  resolved_commit: 7b1ebe6333397841ca918dec904d24d4695fe953
   version: 1.0.0
   virtual_path: plugins/security-best-practices
   is_virtual: true
   package_type: marketplace_plugin
-  content_hash: sha256:f6b56dcc6e8722493999dd27bd7ceb98910d8b50ef3c5e5290ac2cf51d1cd061
+  content_hash: sha256:0d90810398cfea1cfde61561a872cbd9f6b3036236d8630ba45867815ef7a757
   declared_license: MIT
 - repo_url: github/awesome-copilot
   name: software-engineering-team
   host: github.com
-  resolved_commit: 83561bd7d8a46fcda0581aedabdf8eac7cb196b6
+  resolved_commit: 7b1ebe6333397841ca918dec904d24d4695fe953
   version: 1.0.0
   virtual_path: plugins/software-engineering-team
   is_virtual: true
   package_type: marketplace_plugin
-  content_hash: sha256:2352d210f5af72bac87e948de896c5729a33a9367a7876c3c851f482d4c3cbeb
+  content_hash: sha256:d0b845c9d458a9ee86e0f0409c226a440dc9cce4961e48dc3a15fcbc59860c78
   declared_license: MIT
 - repo_url: microsoft/azure-skills
   name: azure
   host: github.com
-  resolved_commit: 1a03acfb9ac1a1a05518bf7420d4618cc41847be
-  version: 1.2.32
+  resolved_commit: 49e1542b04d296052f31ac62abe68562d4cc1204
+  version: 1.2.40
   virtual_path: .github/plugins/azure-skills
   is_virtual: true
   package_type: marketplace_plugin
@@ -814,6 +822,7 @@ dependencies:
   - .agents/skills/azure-enterprise-infra-planner/references/phases/5-verify.md
   - .agents/skills/azure-enterprise-infra-planner/references/phases/6-generate-iac.md
   - .agents/skills/azure-enterprise-infra-planner/references/phases/7-deploy.md
+  - .agents/skills/azure-enterprise-infra-planner/references/referenced-workload.md
   - .agents/skills/azure-enterprise-infra-planner/references/resources/README.md
   - .agents/skills/azure-enterprise-infra-planner/references/resources/ai-ml.md
   - .agents/skills/azure-enterprise-infra-planner/references/resources/compute-apps.md
@@ -1352,6 +1361,11 @@ dependencies:
   - .agents/skills/microsoft-foundry/foundry-agent/trace/references/tracing-insights-api.md
   - .agents/skills/microsoft-foundry/foundry-agent/trace/trace.md
   - .agents/skills/microsoft-foundry/foundry-agent/troubleshoot/troubleshoot.md
+  - .agents/skills/microsoft-foundry/foundry-agent/validate/references/default-rules.yaml
+  - .agents/skills/microsoft-foundry/foundry-agent/validate/references/report-schema.json
+  - .agents/skills/microsoft-foundry/foundry-agent/validate/references/report-template.md
+  - .agents/skills/microsoft-foundry/foundry-agent/validate/references/rules-schema.json
+  - .agents/skills/microsoft-foundry/foundry-agent/validate/validate.md
   - .agents/skills/microsoft-foundry/models/deploy-model/SKILL.md
   - .agents/skills/microsoft-foundry/models/deploy-model/TEST_PROMPTS.md
   - .agents/skills/microsoft-foundry/models/deploy-model/capacity/SKILL.md
@@ -1413,6 +1427,8 @@ dependencies:
   - .agents/skills/python-appservice-deploy/scripts/generate-app-name.sh
   - .agents/skills/python-appservice-deploy/scripts/retry-az-create.ps1
   - .agents/skills/python-appservice-deploy/scripts/retry-az-create.sh
+  - .claude/hooks/azure-skills/hooks/package.json
+  - .claude/hooks/azure-skills/hooks/scripts/track-telemetry.js
   - .claude/hooks/azure-skills/hooks/scripts/track-telemetry.ps1
   - .claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh
   - .claude/skills/airunway-aks-setup
@@ -1787,6 +1803,7 @@ dependencies:
   - .claude/skills/azure-enterprise-infra-planner/references/phases/5-verify.md
   - .claude/skills/azure-enterprise-infra-planner/references/phases/6-generate-iac.md
   - .claude/skills/azure-enterprise-infra-planner/references/phases/7-deploy.md
+  - .claude/skills/azure-enterprise-infra-planner/references/referenced-workload.md
   - .claude/skills/azure-enterprise-infra-planner/references/resources/README.md
   - .claude/skills/azure-enterprise-infra-planner/references/resources/ai-ml.md
   - .claude/skills/azure-enterprise-infra-planner/references/resources/compute-apps.md
@@ -2298,6 +2315,11 @@ dependencies:
   - .claude/skills/microsoft-foundry/foundry-agent/trace/references/tracing-insights-api.md
   - .claude/skills/microsoft-foundry/foundry-agent/trace/trace.md
   - .claude/skills/microsoft-foundry/foundry-agent/troubleshoot/troubleshoot.md
+  - .claude/skills/microsoft-foundry/foundry-agent/validate/references/default-rules.yaml
+  - .claude/skills/microsoft-foundry/foundry-agent/validate/references/report-schema.json
+  - .claude/skills/microsoft-foundry/foundry-agent/validate/references/report-template.md
+  - .claude/skills/microsoft-foundry/foundry-agent/validate/references/rules-schema.json
+  - .claude/skills/microsoft-foundry/foundry-agent/validate/validate.md
   - .claude/skills/microsoft-foundry/models/deploy-model/SKILL.md
   - .claude/skills/microsoft-foundry/models/deploy-model/TEST_PROMPTS.md
   - .claude/skills/microsoft-foundry/models/deploy-model/capacity/SKILL.md
@@ -2358,9 +2380,12 @@ dependencies:
   - .claude/skills/python-appservice-deploy/scripts/generate-app-name.sh
   - .claude/skills/python-appservice-deploy/scripts/retry-az-create.ps1
   - .claude/skills/python-appservice-deploy/scripts/retry-az-create.sh
+  - .codex/hooks/azure-skills/hooks/package.json
+  - .codex/hooks/azure-skills/hooks/scripts/track-telemetry.js
   - .codex/hooks/azure-skills/hooks/scripts/track-telemetry.ps1
   - .codex/hooks/azure-skills/hooks/scripts/track-telemetry.sh
   - .github/hooks/azure-skills-copilot-hooks.json
+  - .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.js
   - .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.ps1
   - .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.sh
   deployed_file_hashes:
@@ -2709,8 +2734,8 @@ dependencies:
     .agents/skills/azure-diagnostics/troubleshooting/messaging/azure-servicebus-js.md: sha256:ef4131010dbaa59fea9dd9c5b6b6a4d866e83d375fd4d920c79d25ccadf0e16b
     .agents/skills/azure-diagnostics/troubleshooting/messaging/azure-servicebus-py.md: sha256:274162fa4cec6f96fea056639c7cf0d8821bce277af82eb01343f6a9e74f647b
     .agents/skills/azure-diagnostics/troubleshooting/messaging/service-troubleshooting.md: sha256:056d3ee490ff20d121eb8575c47c6bab67a786996b6949921c08de3aa887f949
-    .agents/skills/azure-enterprise-infra-planner/SKILL.md: sha256:bc329fc8b330a775d77a4fec34c5f0598d635196563a13f173f14e368759ad02
-    .agents/skills/azure-enterprise-infra-planner/references/bicep-generation.md: sha256:0cf7f6219c25748701142286185b9574aa96653fac9bc29b12599578bf2e5032
+    .agents/skills/azure-enterprise-infra-planner/SKILL.md: sha256:7e1b932f780b6348745b9d283437b64fc031ba452e8982ed9705849b9c19f50e
+    .agents/skills/azure-enterprise-infra-planner/references/bicep-generation.md: sha256:8c58939d852d74ceeede144f8083dcfaa2fdcb755093921c4093164ef4727d9e
     .agents/skills/azure-enterprise-infra-planner/references/constraints/README.md: sha256:a9cb229020a86ca927cf2b952f9c0325ae2130427badf30f3843d8f5b85aafbd
     .agents/skills/azure-enterprise-infra-planner/references/constraints/ai-ml.md: sha256:6c6ca3fcfeacc72b61188082001b3d7d511a1e3bc03355792177e32d0d7747e1
     .agents/skills/azure-enterprise-infra-planner/references/constraints/compute-apps.md: sha256:b52a907ca87d17afd20688a345f00d84628d01438926f85291f400928cbb5a44
@@ -2725,13 +2750,14 @@ dependencies:
     .agents/skills/azure-enterprise-infra-planner/references/constraints/security.md: sha256:3dc42e12f42305b214138de4e6852d79e10220fdbac472b21792c255e58e2878
     .agents/skills/azure-enterprise-infra-planner/references/deployment.md: sha256:3e9eb07efeb7c9449634ab4f1aec1b0c6ba3d413c461283c028488ee53c78caa
     .agents/skills/azure-enterprise-infra-planner/references/pairing-checks.md: sha256:933b226617f82e4509d1a6379b5d66a69140a19d34f85100fee0293b520b75d4
-    .agents/skills/azure-enterprise-infra-planner/references/phases/1-extract-insights.md: sha256:217383bced7db728129130308460ec4e18eaa73b52703aa47a423d91a561373a
+    .agents/skills/azure-enterprise-infra-planner/references/phases/1-extract-insights.md: sha256:b19d51e209f24ea0218adf3f3be31948c604ce9f7522e77a6a0eed861ff478a0
     .agents/skills/azure-enterprise-infra-planner/references/phases/2-research-best-practices.md: sha256:0a919604bbcacce145f0c416b500d39606addf12cb40f71df645c4c4e9f5b98b
     .agents/skills/azure-enterprise-infra-planner/references/phases/3-research-resources.md: sha256:2c768ac449b066584334d63015f67ca6260a2b098b314d34072cf6efff3880bc
     .agents/skills/azure-enterprise-infra-planner/references/phases/4-generate-plan.md: sha256:2569ff79e1801dc54907b465491eceb4d13b30f33710a6933978b48f990318aa
     .agents/skills/azure-enterprise-infra-planner/references/phases/5-verify.md: sha256:d139b7c65d0aa69ef3d04647649475a31fd7faa0a52cbabbee8033f544165349
-    .agents/skills/azure-enterprise-infra-planner/references/phases/6-generate-iac.md: sha256:96cd941ab1fa90e54a4df523965a4e6eb985e9f4b2834181b2895b78efbb4269
+    .agents/skills/azure-enterprise-infra-planner/references/phases/6-generate-iac.md: sha256:94e1f2e5798bdee5833e245a93c26cd6cb1d7fac470976f98c5e54f7ef1d7067
     .agents/skills/azure-enterprise-infra-planner/references/phases/7-deploy.md: sha256:d2f0a8838c779accd2a7994b8922a45beb79cf0cda9dcddfdd1c712e4b27901c
+    .agents/skills/azure-enterprise-infra-planner/references/referenced-workload.md: sha256:adaa30f644e519c93fd994b29f202926d504f3c4a0ee68c6b0b8b4f08978ed6c
     .agents/skills/azure-enterprise-infra-planner/references/resources/README.md: sha256:cad104125cdf90875e42195671d813e25da3a442e55488e302855caf597af515
     .agents/skills/azure-enterprise-infra-planner/references/resources/ai-ml.md: sha256:f18b74764db95bb64b19e8ffc363e2a7034a4d1f8e96cb60eb541408d0ccb78c
     .agents/skills/azure-enterprise-infra-planner/references/resources/compute-apps.md: sha256:344e0c30f8ae8448446a83d61eef8bcedca684fe94c5df4baed7b4fa1a0ef5e4
@@ -2744,11 +2770,11 @@ dependencies:
     .agents/skills/azure-enterprise-infra-planner/references/resources/networking-core.md: sha256:df4d7ea9e2ec8a9a4babd12a67295945f747290fdf30ee79e675ca5038e07b56
     .agents/skills/azure-enterprise-infra-planner/references/resources/networking-traffic.md: sha256:ee899d2ffe8160879bc0954e7bc58086756b751430c9c35f20f56b53253f9a3b
     .agents/skills/azure-enterprise-infra-planner/references/resources/security.md: sha256:d2526274bd76d31995cc46603bf16f0b8ba04f376416bac2139a05a3e5085822
-    .agents/skills/azure-enterprise-infra-planner/references/schema.md: sha256:be22ab12fbfc5b7102db1c34ae2d57edb95ffdd74edf6731e90223ed5a9d0d6a
-    .agents/skills/azure-enterprise-infra-planner/references/terraform-generation.md: sha256:cee692face165859a317456498ed6e2e0006618a2835edb02e1cdf9964101278
+    .agents/skills/azure-enterprise-infra-planner/references/schema.md: sha256:87b12e1ebc2a70f1caf05e5a99dd8fd72a4624b9dd56dd93fcb9c299eb2df0fa
+    .agents/skills/azure-enterprise-infra-planner/references/terraform-generation.md: sha256:1a0f6360fc656aa7c7d71fac23deeafbc173460993bcb85db089a0a2f5905649
     .agents/skills/azure-enterprise-infra-planner/references/verification.md: sha256:5d57eb981a3cad16a2a56eb610d1cf58ed4e444cf7b756a5b2de1cb29075cd0f
     .agents/skills/azure-enterprise-infra-planner/references/waf-checklist.md: sha256:4748a924d126cb060f6b50dbf2abc3ba00b7e8208166947db8c0ac21eb98d007
-    .agents/skills/azure-enterprise-infra-planner/references/workflow.md: sha256:6b9af4864a05e4599526ee519c0d0122eb2f8d12e6b40b67d7e3cb57458492c6
+    .agents/skills/azure-enterprise-infra-planner/references/workflow.md: sha256:cc68a27d9c87bf73ecd5cabc2a212dcac2d34b9e4a18314946f1e2430e36891a
     .agents/skills/azure-hosted-copilot-sdk/SKILL.md: sha256:342dda8b9eb682aa2349bfcfe4cf28524c246e2739604f2f88ca9cb23281fdb5
     .agents/skills/azure-hosted-copilot-sdk/references/auth-best-practices.md: sha256:34f6fe88e2b5819c1a0f24aa3930a060d9504fee68ea4b363f0912a78daa5396
     .agents/skills/azure-hosted-copilot-sdk/references/azure-model-config.md: sha256:a7337b29c93d5b047142d59c2cccee18709890ffb8bb8ed19afb42a08caca595
@@ -3096,7 +3122,7 @@ dependencies:
     .agents/skills/entra-app-registration/references/sdk/microsoft-azure-webjobs-extensions-authentication-events-dotnet.md: sha256:33c98b6d5014a5ce4b99aad1aee231687e5771cf9691169888d0efd4c48e7ade
     .agents/skills/entra-app-registration/references/troubleshooting.md: sha256:47527e8b887a83f89d6de6e25f12faa49a12f3b6e269063743eb11f0678857f3
     .agents/skills/microsoft-foundry/.gitignore: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    .agents/skills/microsoft-foundry/SKILL.md: sha256:01000770f81e1529afcb397d16564d3425566bdad7c9fefa4dfe536523ff2c55
+    .agents/skills/microsoft-foundry/SKILL.md: sha256:46718ed889e7ea84593a2f6d4213ab8a442e6f2d400491c4bd032df9e77296d5
     .agents/skills/microsoft-foundry/finetuning/SKILL.md: sha256:7a17789cb61e026a52071564b00624f2880e7b35c89fec9aa06c0dfcc8fe1e31
     .agents/skills/microsoft-foundry/finetuning/references/agentic-rft.md: sha256:25a6ed20523edd2a2cf1bdf2d0a9c25de1bab291ea8194ad19d380fd49e021e6
     .agents/skills/microsoft-foundry/finetuning/references/dataset-formats.md: sha256:8456024eae5fd85c06d4f2467d0e331c611a1531ea8972a7948afd0ea2c00261
@@ -3140,7 +3166,7 @@ dependencies:
     .agents/skills/microsoft-foundry/foundry-agent/azd-guidance/azd-guidance.md: sha256:ec0ca086da1be842b7be511f836ba71e670cb5d77171bdf10240dd994760e4aa
     .agents/skills/microsoft-foundry/foundry-agent/azd-guidance/references/azd-ai-cli.md: sha256:a624f62cf74f4f601103f92ee7a7edb3579ccd0999cda05e5b2cb76d272b3676
     .agents/skills/microsoft-foundry/foundry-agent/cicd/cicd.md: sha256:ee026ffda91466b0d8c04fac336ae1ef385784734ee80a486d706ab7a4d070fb
-    .agents/skills/microsoft-foundry/foundry-agent/create/create-hosted.md: sha256:484b5e170e5519b2c3c0447986e6f3d59133f74c65d19173968def5b1862dc68
+    .agents/skills/microsoft-foundry/foundry-agent/create/create-hosted.md: sha256:d8f04912e0641ffbed253a371d9d5b481b3969d649eeee20f6770654fda96d16
     .agents/skills/microsoft-foundry/foundry-agent/create/create-prompt.md: sha256:0d7cf22c07fec1ae271c97ef1c11bda7a391844a8af81ed0cb4d50708b701a69
     .agents/skills/microsoft-foundry/foundry-agent/create/quick-start-hosted.md: sha256:16cf436ec4a40d126d7604ea85a9125492542dfe1134cb968898592fa6fdfde8
     .agents/skills/microsoft-foundry/foundry-agent/create/references/agent-tools.md: sha256:7294acfe5257e1c1ddb874824f74c6e6aecd9c188410bdc50bba4698c8bc3dfd
@@ -3148,7 +3174,7 @@ dependencies:
     .agents/skills/microsoft-foundry/foundry-agent/create/references/azd-ai-cli.md: sha256:abe12407a8f15419ed643d7f94e20387341c5cfcce78b265c100d2b3697096e0
     .agents/skills/microsoft-foundry/foundry-agent/create/references/enable-incoming-a2a.md: sha256:e0710be9d7441d9a5523c5f5d13b5985daf6828f946abdd6051944a949d89527
     .agents/skills/microsoft-foundry/foundry-agent/create/references/foundry-model.md: sha256:1aeb7d857715bd887a28cc657be884704c20130cd2c89b6b62bff8bd7a2e9032
-    .agents/skills/microsoft-foundry/foundry-agent/create/references/foundry-tool-catalog.md: sha256:913b8116164934311fe8979f479d08d083c8416130c65b545da09e675dba73df
+    .agents/skills/microsoft-foundry/foundry-agent/create/references/foundry-tool-catalog.md: sha256:4300e98615e73d9574d15cd219ce169decc7d575f1f75ec7d950a31a0b77d65d
     .agents/skills/microsoft-foundry/foundry-agent/create/references/guardrails/guardrail-api-create.md: sha256:d8f941d59f6d928b37462ae16c1ca1358002fdf6ca2a50240641f8bba9c42623
     .agents/skills/microsoft-foundry/foundry-agent/create/references/guardrails/guardrail-attach.md: sha256:dfc99c7eaaaaf4fad9f43a947bd8448f4dc9e449d1677cf54a4ca7cbb29d7082
     .agents/skills/microsoft-foundry/foundry-agent/create/references/guardrails/guardrail-manage.md: sha256:2ed914bcde3aff7f88a7ef97e951ed9444644b2f05c5faca94a634c56604f5d3
@@ -3222,7 +3248,7 @@ dependencies:
     .agents/skills/microsoft-foundry/foundry-agent/routine/references/azure-yaml.md: sha256:f725422764bddd11c4fe9acfd7915049ae136549af8fa401ed8020831d27a1a1
     .agents/skills/microsoft-foundry/foundry-agent/routine/references/cli-crud.md: sha256:5817c5a84652b66c3af951aa1f25aec1fd1898c8e8cc31cbb8524652e16a55cc
     .agents/skills/microsoft-foundry/foundry-agent/routine/routine.md: sha256:f7fe5adf57792ff1e4380533ef465b8dc601ea6196e9422917fdf7e1f9d0d78f
-    .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/mcp-protocol.md: sha256:906aded5e00b7303dd0fd703c63fa6c1e0b5ceff4288bda2e74c2bf82f3bd384
+    .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/mcp-protocol.md: sha256:964fac57870f522771f142d0f398efc7a97f6d3ebfa168c66bd9f550fd9fe2c8
     .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/test-endpoint.md: sha256:30ce163e2166c0e1549067831f5f71f098b81a67e8ed716e1aa68b3a995862e8
     .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-a2a.md: sha256:7f622d7b4988f88814f265ff7a6fc4a5fcb98dfb2ffcb7a5a96523ed146a8e92
     .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-azure-ai-search.md: sha256:53039d5529d4fc12a7c2cca48cb7d0ea175ca10e066c800445554d9b9de699b2
@@ -3234,7 +3260,7 @@ dependencies:
     .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-custom-oauth-azure-starter.md: sha256:07d981d3e12cd1ea7955514e8b369a9a1301f00d654779aefe02ad9fa37b8c95
     .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-custom-oauth.md: sha256:37c3da1bd4338a28653f8eef4f4d867aea1bb98c486c30a10b57079cde1d387b
     .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-key-auth.md: sha256:e7250b9b5b6b9384690381511323c4df1e89528cce41d2c47a9fd15f0ba3d1d9
-    .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-managed-oauth.md: sha256:1b82e7e7c09f4988a643a819bcf93c1656b2b764d4e7e7f9a4503803251cc21b
+    .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-managed-oauth.md: sha256:ced9ba2ccc0cf526b7cd38a585b1220a3d9c198e9a0a23e49932994187182d54
     .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-noauth.md: sha256:e5dea83b3da28330e94bd2144960e83f2a88d653d27300901580f4bf5d93a2fd
     .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-user-entra-token.md: sha256:d53140a022575770bcead37ad2631bd3453730233628813819c8d089726a9a27
     .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-openapi.md: sha256:d1bd5419668f9e5a66d7bfc32c382d43c035981293640bcf50640edb180e355e
@@ -3254,6 +3280,11 @@ dependencies:
     .agents/skills/microsoft-foundry/foundry-agent/trace/references/tracing-insights-api.md: sha256:42fc4ce2b0d309e7dbb2a46caa48f3cff1d9300e8190256c1f4ab13926ae8caf
     .agents/skills/microsoft-foundry/foundry-agent/trace/trace.md: sha256:b5263d272bad1b17965e591103011775613c9cf859db057628c355288344f63b
     .agents/skills/microsoft-foundry/foundry-agent/troubleshoot/troubleshoot.md: sha256:46fbc87daada93ffc66f2b79569035e6139949ff69aaa2041c5a8d84f3332122
+    .agents/skills/microsoft-foundry/foundry-agent/validate/references/default-rules.yaml: sha256:bba89ad3ce259acaf2734704657f788aadb6e5c2f2f887fd72be03bba4ede1af
+    .agents/skills/microsoft-foundry/foundry-agent/validate/references/report-schema.json: sha256:88b8952b9446d26c704e443e758b55d312d7645e68374fa0786cf85a92d5bbb4
+    .agents/skills/microsoft-foundry/foundry-agent/validate/references/report-template.md: sha256:10b7db0fa337303168ea18d67bcb3ffdb080be867c90eed4c2f57aebe0809b16
+    .agents/skills/microsoft-foundry/foundry-agent/validate/references/rules-schema.json: sha256:8e156c8a8fb38382461f2f17659eefcb18aa7ad78cdf9b1d4b5d20361919b474
+    .agents/skills/microsoft-foundry/foundry-agent/validate/validate.md: sha256:e8d1955f79a21c46dd0f3085eb712df8d422530334bc45a2ae561cb09311dc73
     .agents/skills/microsoft-foundry/models/deploy-model/SKILL.md: sha256:ae0de869fdaee1a6b6b04582e723a2363d482d85a5c119f1963a2c36eff5667c
     .agents/skills/microsoft-foundry/models/deploy-model/TEST_PROMPTS.md: sha256:a976fc095bdcfeadb830b73d04937adbc6e59121a7193bbd39f94879b5000ddf
     .agents/skills/microsoft-foundry/models/deploy-model/capacity/SKILL.md: sha256:91b3ce958de44f728453572747504e8c9146f119892aa690546fd19f8d96a344
@@ -3280,7 +3311,7 @@ dependencies:
     .agents/skills/microsoft-foundry/quota/references/ptu-guide.md: sha256:012db2f537dcb7da0a7d1caf773e04e66a96e142b7c3072dd98bfcc183c3d3f4
     .agents/skills/microsoft-foundry/quota/references/troubleshooting.md: sha256:c02131de9b24679f13b5d2cba4ebb4e90b5916bd061ff6c1acc98c494fb800e9
     .agents/skills/microsoft-foundry/quota/references/workflows.md: sha256:fafb7b983c3d13105b8c446e021638d35f6ffa05a9e8f09c0a3721f4d4142bdc
-    .agents/skills/microsoft-foundry/rbac/rbac.md: sha256:08879da4fe988512940360c6572f533f9517b3a8cf18af6c31847dbd128b3f1e
+    .agents/skills/microsoft-foundry/rbac/rbac.md: sha256:1fb39251c178ec8b3bb586bfceba793631faf7ab7de5037f4bdd01df9e6fb647
     .agents/skills/microsoft-foundry/references/agent-metadata-contract.md: sha256:4434487f9664be3cc52a6ba31e398d4053efd72b383fff2cbf9e45407f8e2c53
     .agents/skills/microsoft-foundry/references/auth-best-practices.md: sha256:278295716912a7d7f42bf5620eefdeb6f6952e168007f3f26c9176d3ecdc2b8d
     .agents/skills/microsoft-foundry/references/sdk/foundry-sdk-py.md: sha256:4ead5ca2f20ee5b705b5f4bf80091a40459e000ea1a16ad3aed878bf8d3d68a0
@@ -3294,7 +3325,7 @@ dependencies:
     .agents/skills/microsoft-foundry/resource/private-network/references/deploy.md: sha256:e57a4fd3db44738b9087902fb3756dc57e969381a8ba6ba327e0cc771f2de3f9
     .agents/skills/microsoft-foundry/resource/private-network/references/end-to-end-test.md: sha256:f8919ed4cf7a14f7fa30420bdcdde18716bcbcf1c68e832a9d00443e7576d63a
     .agents/skills/microsoft-foundry/resource/private-network/references/intake.md: sha256:fcc87a339f53c720880fa90a422a1ddf0e8725409b5348f9ecc3c0e15fcc0601
-    .agents/skills/microsoft-foundry/resource/private-network/references/post-deployment-validation.md: sha256:b9ddaace87157f40c15efa5b76c24c07d10ff4b152aa954e9eb47ecb915b8b84
+    .agents/skills/microsoft-foundry/resource/private-network/references/post-deployment-validation.md: sha256:8e15a5a71b99668edb99505a2255892a37405559a0acd695329c7a143a5ccd9d
     .agents/skills/microsoft-foundry/resource/private-network/references/scaffold.md: sha256:a2be45b33b3fa5b7728bc23dbfcd2d4dbea01adbf614308faf8601bb25905589
     .agents/skills/microsoft-foundry/resource/private-network/references/template-index.md: sha256:4a9bd0a20839b1a9cca6a042e894370c733e0339ec0ac0714ea650146e767d4f
     .agents/skills/microsoft-foundry/resource/private-network/references/vpn-dns-setup.bicep: sha256:20234f67572868bb656ea99ee0d34222d92880cac0a600343599ea63c1efe79e
@@ -3314,8 +3345,10 @@ dependencies:
     .agents/skills/python-appservice-deploy/scripts/generate-app-name.sh: sha256:06dd60528ab2870eaf38194d508c56efff2e77fd3c1979adcbc765134f0db183
     .agents/skills/python-appservice-deploy/scripts/retry-az-create.ps1: sha256:432adb3d4d52a13360f8ac554cf9cb603848fee8ac0b9873a571e1d53f833d7b
     .agents/skills/python-appservice-deploy/scripts/retry-az-create.sh: sha256:bf1b6f1bc07a96f3e2b8f1d95c7a1c870353289a4006fbf2cd4f0efd87f4f7af
-    .claude/hooks/azure-skills/hooks/scripts/track-telemetry.ps1: sha256:a6b82a1a175a159536f2a88f6858b3b901b287bd7766df837600eb6faf39bc54
-    .claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh: sha256:37dc1baf4b0244d124f7c52b1351c569657031b4cd7a468fa13d485f96ed9521
+    .claude/hooks/azure-skills/hooks/package.json: sha256:8005a3491db7d92f36ac66369861589f9c47123d3a7c71e643fc2c06168cd45a
+    .claude/hooks/azure-skills/hooks/scripts/track-telemetry.js: sha256:39d9420b2148e0c9940a2f2d07ee209308cdbd4d75567a938ebfc618b96a5a35
+    .claude/hooks/azure-skills/hooks/scripts/track-telemetry.ps1: sha256:43113b1854af6dbc3f8ab1917c499afbf65f1997597eab57f5e954efd9ca624a
+    .claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh: sha256:7af56659cef14d56207223b38e3cd19a76722367e38dd91d1a01e6f9e90101e3
     .claude/skills/airunway-aks-setup/SKILL.md: sha256:fff89af6c8c81005b48a073e470636f3b11ef3f991e55c109dae9f36105ffda7
     .claude/skills/airunway-aks-setup/references/gpu-profiles.md: sha256:d9782a61870446dac17dc2b6c62049a586372ec14bfa18493d4926162b10807b
     .claude/skills/airunway-aks-setup/references/model-sizing.md: sha256:00118f56befd015b53eb6df2572a8c5590fcaa3afd7f3b729c8d75fabfd8626f
@@ -3652,8 +3685,8 @@ dependencies:
     .claude/skills/azure-diagnostics/troubleshooting/messaging/azure-servicebus-js.md: sha256:ef4131010dbaa59fea9dd9c5b6b6a4d866e83d375fd4d920c79d25ccadf0e16b
     .claude/skills/azure-diagnostics/troubleshooting/messaging/azure-servicebus-py.md: sha256:274162fa4cec6f96fea056639c7cf0d8821bce277af82eb01343f6a9e74f647b
     .claude/skills/azure-diagnostics/troubleshooting/messaging/service-troubleshooting.md: sha256:056d3ee490ff20d121eb8575c47c6bab67a786996b6949921c08de3aa887f949
-    .claude/skills/azure-enterprise-infra-planner/SKILL.md: sha256:bc329fc8b330a775d77a4fec34c5f0598d635196563a13f173f14e368759ad02
-    .claude/skills/azure-enterprise-infra-planner/references/bicep-generation.md: sha256:0cf7f6219c25748701142286185b9574aa96653fac9bc29b12599578bf2e5032
+    .claude/skills/azure-enterprise-infra-planner/SKILL.md: sha256:7e1b932f780b6348745b9d283437b64fc031ba452e8982ed9705849b9c19f50e
+    .claude/skills/azure-enterprise-infra-planner/references/bicep-generation.md: sha256:8c58939d852d74ceeede144f8083dcfaa2fdcb755093921c4093164ef4727d9e
     .claude/skills/azure-enterprise-infra-planner/references/constraints/README.md: sha256:a9cb229020a86ca927cf2b952f9c0325ae2130427badf30f3843d8f5b85aafbd
     .claude/skills/azure-enterprise-infra-planner/references/constraints/ai-ml.md: sha256:6c6ca3fcfeacc72b61188082001b3d7d511a1e3bc03355792177e32d0d7747e1
     .claude/skills/azure-enterprise-infra-planner/references/constraints/compute-apps.md: sha256:b52a907ca87d17afd20688a345f00d84628d01438926f85291f400928cbb5a44
@@ -3668,13 +3701,14 @@ dependencies:
     .claude/skills/azure-enterprise-infra-planner/references/constraints/security.md: sha256:3dc42e12f42305b214138de4e6852d79e10220fdbac472b21792c255e58e2878
     .claude/skills/azure-enterprise-infra-planner/references/deployment.md: sha256:3e9eb07efeb7c9449634ab4f1aec1b0c6ba3d413c461283c028488ee53c78caa
     .claude/skills/azure-enterprise-infra-planner/references/pairing-checks.md: sha256:933b226617f82e4509d1a6379b5d66a69140a19d34f85100fee0293b520b75d4
-    .claude/skills/azure-enterprise-infra-planner/references/phases/1-extract-insights.md: sha256:217383bced7db728129130308460ec4e18eaa73b52703aa47a423d91a561373a
+    .claude/skills/azure-enterprise-infra-planner/references/phases/1-extract-insights.md: sha256:b19d51e209f24ea0218adf3f3be31948c604ce9f7522e77a6a0eed861ff478a0
     .claude/skills/azure-enterprise-infra-planner/references/phases/2-research-best-practices.md: sha256:0a919604bbcacce145f0c416b500d39606addf12cb40f71df645c4c4e9f5b98b
     .claude/skills/azure-enterprise-infra-planner/references/phases/3-research-resources.md: sha256:2c768ac449b066584334d63015f67ca6260a2b098b314d34072cf6efff3880bc
     .claude/skills/azure-enterprise-infra-planner/references/phases/4-generate-plan.md: sha256:2569ff79e1801dc54907b465491eceb4d13b30f33710a6933978b48f990318aa
     .claude/skills/azure-enterprise-infra-planner/references/phases/5-verify.md: sha256:d139b7c65d0aa69ef3d04647649475a31fd7faa0a52cbabbee8033f544165349
-    .claude/skills/azure-enterprise-infra-planner/references/phases/6-generate-iac.md: sha256:96cd941ab1fa90e54a4df523965a4e6eb985e9f4b2834181b2895b78efbb4269
+    .claude/skills/azure-enterprise-infra-planner/references/phases/6-generate-iac.md: sha256:94e1f2e5798bdee5833e245a93c26cd6cb1d7fac470976f98c5e54f7ef1d7067
     .claude/skills/azure-enterprise-infra-planner/references/phases/7-deploy.md: sha256:d2f0a8838c779accd2a7994b8922a45beb79cf0cda9dcddfdd1c712e4b27901c
+    .claude/skills/azure-enterprise-infra-planner/references/referenced-workload.md: sha256:adaa30f644e519c93fd994b29f202926d504f3c4a0ee68c6b0b8b4f08978ed6c
     .claude/skills/azure-enterprise-infra-planner/references/resources/README.md: sha256:cad104125cdf90875e42195671d813e25da3a442e55488e302855caf597af515
     .claude/skills/azure-enterprise-infra-planner/references/resources/ai-ml.md: sha256:f18b74764db95bb64b19e8ffc363e2a7034a4d1f8e96cb60eb541408d0ccb78c
     .claude/skills/azure-enterprise-infra-planner/references/resources/compute-apps.md: sha256:344e0c30f8ae8448446a83d61eef8bcedca684fe94c5df4baed7b4fa1a0ef5e4
@@ -3687,11 +3721,11 @@ dependencies:
     .claude/skills/azure-enterprise-infra-planner/references/resources/networking-core.md: sha256:df4d7ea9e2ec8a9a4babd12a67295945f747290fdf30ee79e675ca5038e07b56
     .claude/skills/azure-enterprise-infra-planner/references/resources/networking-traffic.md: sha256:ee899d2ffe8160879bc0954e7bc58086756b751430c9c35f20f56b53253f9a3b
     .claude/skills/azure-enterprise-infra-planner/references/resources/security.md: sha256:d2526274bd76d31995cc46603bf16f0b8ba04f376416bac2139a05a3e5085822
-    .claude/skills/azure-enterprise-infra-planner/references/schema.md: sha256:be22ab12fbfc5b7102db1c34ae2d57edb95ffdd74edf6731e90223ed5a9d0d6a
-    .claude/skills/azure-enterprise-infra-planner/references/terraform-generation.md: sha256:cee692face165859a317456498ed6e2e0006618a2835edb02e1cdf9964101278
+    .claude/skills/azure-enterprise-infra-planner/references/schema.md: sha256:87b12e1ebc2a70f1caf05e5a99dd8fd72a4624b9dd56dd93fcb9c299eb2df0fa
+    .claude/skills/azure-enterprise-infra-planner/references/terraform-generation.md: sha256:1a0f6360fc656aa7c7d71fac23deeafbc173460993bcb85db089a0a2f5905649
     .claude/skills/azure-enterprise-infra-planner/references/verification.md: sha256:5d57eb981a3cad16a2a56eb610d1cf58ed4e444cf7b756a5b2de1cb29075cd0f
     .claude/skills/azure-enterprise-infra-planner/references/waf-checklist.md: sha256:4748a924d126cb060f6b50dbf2abc3ba00b7e8208166947db8c0ac21eb98d007
-    .claude/skills/azure-enterprise-infra-planner/references/workflow.md: sha256:6b9af4864a05e4599526ee519c0d0122eb2f8d12e6b40b67d7e3cb57458492c6
+    .claude/skills/azure-enterprise-infra-planner/references/workflow.md: sha256:cc68a27d9c87bf73ecd5cabc2a212dcac2d34b9e4a18314946f1e2430e36891a
     .claude/skills/azure-kubernetes/SKILL.md: sha256:a5d09eecf5af6dd2a03397689c37aed69c4fef7965b3ff559878f2238a9464b5
     .claude/skills/azure-kubernetes/azure-kubernetes-app-deploy/SKILL.md: sha256:d29b307591886cde7841ff3cdb5509fbee2f66ffeb8c14dc88fd2e9a0a6f8dbe
     .claude/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/aspnet-core.md: sha256:e67fdfd98e1544f5473a62c0ac70024d33306f051e2bd7b80f5a4ea0335c8b15
@@ -4032,7 +4066,7 @@ dependencies:
     .claude/skills/entra-app-registration/references/sdk/microsoft-azure-webjobs-extensions-authentication-events-dotnet.md: sha256:33c98b6d5014a5ce4b99aad1aee231687e5771cf9691169888d0efd4c48e7ade
     .claude/skills/entra-app-registration/references/troubleshooting.md: sha256:47527e8b887a83f89d6de6e25f12faa49a12f3b6e269063743eb11f0678857f3
     .claude/skills/microsoft-foundry/.gitignore: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    .claude/skills/microsoft-foundry/SKILL.md: sha256:01000770f81e1529afcb397d16564d3425566bdad7c9fefa4dfe536523ff2c55
+    .claude/skills/microsoft-foundry/SKILL.md: sha256:46718ed889e7ea84593a2f6d4213ab8a442e6f2d400491c4bd032df9e77296d5
     .claude/skills/microsoft-foundry/finetuning/SKILL.md: sha256:7a17789cb61e026a52071564b00624f2880e7b35c89fec9aa06c0dfcc8fe1e31
     .claude/skills/microsoft-foundry/finetuning/references/agentic-rft.md: sha256:25a6ed20523edd2a2cf1bdf2d0a9c25de1bab291ea8194ad19d380fd49e021e6
     .claude/skills/microsoft-foundry/finetuning/references/dataset-formats.md: sha256:8456024eae5fd85c06d4f2467d0e331c611a1531ea8972a7948afd0ea2c00261
@@ -4076,12 +4110,12 @@ dependencies:
     .claude/skills/microsoft-foundry/foundry-agent/azd-guidance/azd-guidance.md: sha256:ec0ca086da1be842b7be511f836ba71e670cb5d77171bdf10240dd994760e4aa
     .claude/skills/microsoft-foundry/foundry-agent/azd-guidance/references/azd-ai-cli.md: sha256:a624f62cf74f4f601103f92ee7a7edb3579ccd0999cda05e5b2cb76d272b3676
     .claude/skills/microsoft-foundry/foundry-agent/cicd/cicd.md: sha256:ee026ffda91466b0d8c04fac336ae1ef385784734ee80a486d706ab7a4d070fb
-    .claude/skills/microsoft-foundry/foundry-agent/create/create-hosted.md: sha256:484b5e170e5519b2c3c0447986e6f3d59133f74c65d19173968def5b1862dc68
+    .claude/skills/microsoft-foundry/foundry-agent/create/create-hosted.md: sha256:d8f04912e0641ffbed253a371d9d5b481b3969d649eeee20f6770654fda96d16
     .claude/skills/microsoft-foundry/foundry-agent/create/create-prompt.md: sha256:0d7cf22c07fec1ae271c97ef1c11bda7a391844a8af81ed0cb4d50708b701a69
     .claude/skills/microsoft-foundry/foundry-agent/create/quick-start-hosted.md: sha256:16cf436ec4a40d126d7604ea85a9125492542dfe1134cb968898592fa6fdfde8
     .claude/skills/microsoft-foundry/foundry-agent/create/references/enable-incoming-a2a.md: sha256:e0710be9d7441d9a5523c5f5d13b5985daf6828f946abdd6051944a949d89527
     .claude/skills/microsoft-foundry/foundry-agent/create/references/foundry-model.md: sha256:1aeb7d857715bd887a28cc657be884704c20130cd2c89b6b62bff8bd7a2e9032
-    .claude/skills/microsoft-foundry/foundry-agent/create/references/foundry-tool-catalog.md: sha256:913b8116164934311fe8979f479d08d083c8416130c65b545da09e675dba73df
+    .claude/skills/microsoft-foundry/foundry-agent/create/references/foundry-tool-catalog.md: sha256:4300e98615e73d9574d15cd219ce169decc7d575f1f75ec7d950a31a0b77d65d
     .claude/skills/microsoft-foundry/foundry-agent/create/references/guardrails/guardrail-api-create.md: sha256:d8f941d59f6d928b37462ae16c1ca1358002fdf6ca2a50240641f8bba9c42623
     .claude/skills/microsoft-foundry/foundry-agent/create/references/guardrails/guardrail-attach.md: sha256:dfc99c7eaaaaf4fad9f43a947bd8448f4dc9e449d1677cf54a4ca7cbb29d7082
     .claude/skills/microsoft-foundry/foundry-agent/create/references/guardrails/guardrail-manage.md: sha256:2ed914bcde3aff7f88a7ef97e951ed9444644b2f05c5faca94a634c56604f5d3
@@ -4140,7 +4174,7 @@ dependencies:
     .claude/skills/microsoft-foundry/foundry-agent/routine/references/azure-yaml.md: sha256:f725422764bddd11c4fe9acfd7915049ae136549af8fa401ed8020831d27a1a1
     .claude/skills/microsoft-foundry/foundry-agent/routine/references/cli-crud.md: sha256:5817c5a84652b66c3af951aa1f25aec1fd1898c8e8cc31cbb8524652e16a55cc
     .claude/skills/microsoft-foundry/foundry-agent/routine/routine.md: sha256:f7fe5adf57792ff1e4380533ef465b8dc601ea6196e9422917fdf7e1f9d0d78f
-    .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/mcp-protocol.md: sha256:906aded5e00b7303dd0fd703c63fa6c1e0b5ceff4288bda2e74c2bf82f3bd384
+    .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/mcp-protocol.md: sha256:964fac57870f522771f142d0f398efc7a97f6d3ebfa168c66bd9f550fd9fe2c8
     .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/test-endpoint.md: sha256:30ce163e2166c0e1549067831f5f71f098b81a67e8ed716e1aa68b3a995862e8
     .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-a2a.md: sha256:7f622d7b4988f88814f265ff7a6fc4a5fcb98dfb2ffcb7a5a96523ed146a8e92
     .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-azure-ai-search.md: sha256:53039d5529d4fc12a7c2cca48cb7d0ea175ca10e066c800445554d9b9de699b2
@@ -4152,7 +4186,7 @@ dependencies:
     .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-custom-oauth-azure-starter.md: sha256:07d981d3e12cd1ea7955514e8b369a9a1301f00d654779aefe02ad9fa37b8c95
     .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-custom-oauth.md: sha256:37c3da1bd4338a28653f8eef4f4d867aea1bb98c486c30a10b57079cde1d387b
     .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-key-auth.md: sha256:e7250b9b5b6b9384690381511323c4df1e89528cce41d2c47a9fd15f0ba3d1d9
-    .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-managed-oauth.md: sha256:1b82e7e7c09f4988a643a819bcf93c1656b2b764d4e7e7f9a4503803251cc21b
+    .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-managed-oauth.md: sha256:ced9ba2ccc0cf526b7cd38a585b1220a3d9c198e9a0a23e49932994187182d54
     .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-noauth.md: sha256:e5dea83b3da28330e94bd2144960e83f2a88d653d27300901580f4bf5d93a2fd
     .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-user-entra-token.md: sha256:d53140a022575770bcead37ad2631bd3453730233628813819c8d089726a9a27
     .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-openapi.md: sha256:d1bd5419668f9e5a66d7bfc32c382d43c035981293640bcf50640edb180e355e
@@ -4172,6 +4206,11 @@ dependencies:
     .claude/skills/microsoft-foundry/foundry-agent/trace/references/tracing-insights-api.md: sha256:42fc4ce2b0d309e7dbb2a46caa48f3cff1d9300e8190256c1f4ab13926ae8caf
     .claude/skills/microsoft-foundry/foundry-agent/trace/trace.md: sha256:b5263d272bad1b17965e591103011775613c9cf859db057628c355288344f63b
     .claude/skills/microsoft-foundry/foundry-agent/troubleshoot/troubleshoot.md: sha256:46fbc87daada93ffc66f2b79569035e6139949ff69aaa2041c5a8d84f3332122
+    .claude/skills/microsoft-foundry/foundry-agent/validate/references/default-rules.yaml: sha256:bba89ad3ce259acaf2734704657f788aadb6e5c2f2f887fd72be03bba4ede1af
+    .claude/skills/microsoft-foundry/foundry-agent/validate/references/report-schema.json: sha256:88b8952b9446d26c704e443e758b55d312d7645e68374fa0786cf85a92d5bbb4
+    .claude/skills/microsoft-foundry/foundry-agent/validate/references/report-template.md: sha256:10b7db0fa337303168ea18d67bcb3ffdb080be867c90eed4c2f57aebe0809b16
+    .claude/skills/microsoft-foundry/foundry-agent/validate/references/rules-schema.json: sha256:8e156c8a8fb38382461f2f17659eefcb18aa7ad78cdf9b1d4b5d20361919b474
+    .claude/skills/microsoft-foundry/foundry-agent/validate/validate.md: sha256:e8d1955f79a21c46dd0f3085eb712df8d422530334bc45a2ae561cb09311dc73
     .claude/skills/microsoft-foundry/models/deploy-model/SKILL.md: sha256:ae0de869fdaee1a6b6b04582e723a2363d482d85a5c119f1963a2c36eff5667c
     .claude/skills/microsoft-foundry/models/deploy-model/TEST_PROMPTS.md: sha256:a976fc095bdcfeadb830b73d04937adbc6e59121a7193bbd39f94879b5000ddf
     .claude/skills/microsoft-foundry/models/deploy-model/capacity/SKILL.md: sha256:91b3ce958de44f728453572747504e8c9146f119892aa690546fd19f8d96a344
@@ -4198,7 +4237,7 @@ dependencies:
     .claude/skills/microsoft-foundry/quota/references/ptu-guide.md: sha256:012db2f537dcb7da0a7d1caf773e04e66a96e142b7c3072dd98bfcc183c3d3f4
     .claude/skills/microsoft-foundry/quota/references/troubleshooting.md: sha256:c02131de9b24679f13b5d2cba4ebb4e90b5916bd061ff6c1acc98c494fb800e9
     .claude/skills/microsoft-foundry/quota/references/workflows.md: sha256:fafb7b983c3d13105b8c446e021638d35f6ffa05a9e8f09c0a3721f4d4142bdc
-    .claude/skills/microsoft-foundry/rbac/rbac.md: sha256:08879da4fe988512940360c6572f533f9517b3a8cf18af6c31847dbd128b3f1e
+    .claude/skills/microsoft-foundry/rbac/rbac.md: sha256:1fb39251c178ec8b3bb586bfceba793631faf7ab7de5037f4bdd01df9e6fb647
     .claude/skills/microsoft-foundry/references/agent-metadata-contract.md: sha256:4434487f9664be3cc52a6ba31e398d4053efd72b383fff2cbf9e45407f8e2c53
     .claude/skills/microsoft-foundry/references/auth-best-practices.md: sha256:278295716912a7d7f42bf5620eefdeb6f6952e168007f3f26c9176d3ecdc2b8d
     .claude/skills/microsoft-foundry/references/standard-agent-setup.md: sha256:d279ee9b1bfa1f43ec127cd0890703621ed0866f8eec5eee66960e3bb51b9cd6
@@ -4211,7 +4250,7 @@ dependencies:
     .claude/skills/microsoft-foundry/resource/private-network/references/deploy.md: sha256:e57a4fd3db44738b9087902fb3756dc57e969381a8ba6ba327e0cc771f2de3f9
     .claude/skills/microsoft-foundry/resource/private-network/references/end-to-end-test.md: sha256:f8919ed4cf7a14f7fa30420bdcdde18716bcbcf1c68e832a9d00443e7576d63a
     .claude/skills/microsoft-foundry/resource/private-network/references/intake.md: sha256:fcc87a339f53c720880fa90a422a1ddf0e8725409b5348f9ecc3c0e15fcc0601
-    .claude/skills/microsoft-foundry/resource/private-network/references/post-deployment-validation.md: sha256:b9ddaace87157f40c15efa5b76c24c07d10ff4b152aa954e9eb47ecb915b8b84
+    .claude/skills/microsoft-foundry/resource/private-network/references/post-deployment-validation.md: sha256:8e15a5a71b99668edb99505a2255892a37405559a0acd695329c7a143a5ccd9d
     .claude/skills/microsoft-foundry/resource/private-network/references/scaffold.md: sha256:a2be45b33b3fa5b7728bc23dbfcd2d4dbea01adbf614308faf8601bb25905589
     .claude/skills/microsoft-foundry/resource/private-network/references/template-index.md: sha256:4a9bd0a20839b1a9cca6a042e894370c733e0339ec0ac0714ea650146e767d4f
     .claude/skills/microsoft-foundry/resource/private-network/references/vpn-dns-setup.bicep: sha256:20234f67572868bb656ea99ee0d34222d92880cac0a600343599ea63c1efe79e
@@ -4231,18 +4270,21 @@ dependencies:
     .claude/skills/python-appservice-deploy/scripts/generate-app-name.sh: sha256:06dd60528ab2870eaf38194d508c56efff2e77fd3c1979adcbc765134f0db183
     .claude/skills/python-appservice-deploy/scripts/retry-az-create.ps1: sha256:432adb3d4d52a13360f8ac554cf9cb603848fee8ac0b9873a571e1d53f833d7b
     .claude/skills/python-appservice-deploy/scripts/retry-az-create.sh: sha256:bf1b6f1bc07a96f3e2b8f1d95c7a1c870353289a4006fbf2cd4f0efd87f4f7af
-    .codex/hooks/azure-skills/hooks/scripts/track-telemetry.ps1: sha256:a6b82a1a175a159536f2a88f6858b3b901b287bd7766df837600eb6faf39bc54
-    .codex/hooks/azure-skills/hooks/scripts/track-telemetry.sh: sha256:37dc1baf4b0244d124f7c52b1351c569657031b4cd7a468fa13d485f96ed9521
+    .codex/hooks/azure-skills/hooks/package.json: sha256:8005a3491db7d92f36ac66369861589f9c47123d3a7c71e643fc2c06168cd45a
+    .codex/hooks/azure-skills/hooks/scripts/track-telemetry.js: sha256:39d9420b2148e0c9940a2f2d07ee209308cdbd4d75567a938ebfc618b96a5a35
+    .codex/hooks/azure-skills/hooks/scripts/track-telemetry.ps1: sha256:43113b1854af6dbc3f8ab1917c499afbf65f1997597eab57f5e954efd9ca624a
+    .codex/hooks/azure-skills/hooks/scripts/track-telemetry.sh: sha256:7af56659cef14d56207223b38e3cd19a76722367e38dd91d1a01e6f9e90101e3
     .github/hooks/azure-skills-copilot-hooks.json: sha256:16ae349703f4d9e9a60b7f697bf55038e2cc42424774116c6c95a2fc8b834aa1
-    .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.ps1: sha256:a6b82a1a175a159536f2a88f6858b3b901b287bd7766df837600eb6faf39bc54
-    .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.sh: sha256:37dc1baf4b0244d124f7c52b1351c569657031b4cd7a468fa13d485f96ed9521
-  content_hash: sha256:98743b2bf6fb25abb18da3ff99e577648960136bc6692eb4d52fa4cddc6ac8e6
+    .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.js: sha256:39d9420b2148e0c9940a2f2d07ee209308cdbd4d75567a938ebfc618b96a5a35
+    .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.ps1: sha256:43113b1854af6dbc3f8ab1917c499afbf65f1997597eab57f5e954efd9ca624a
+    .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.sh: sha256:7af56659cef14d56207223b38e3cd19a76722367e38dd91d1a01e6f9e90101e3
+  content_hash: sha256:f599e6ba0895fba56de045bfb8824c152776c57c3656c3618f233593e34b5d00
   declared_license: MIT
 - repo_url: microsoftdocs/mcp
   materialization_repo_url: MicrosoftDocs/mcp
   name: microsoft-docs
   host: github.com
-  resolved_commit: caa3d670bf2814171dba4f7346ece5080964021e
+  resolved_commit: bb124f19c9304a33e507d0017f0613f8bda3a16c
   version: 0.3.1
   package_type: marketplace_plugin
   deployed_files:
@@ -4269,7 +4311,14 @@ dependencies:
     .claude/skills/microsoft-docs/SKILL.md: sha256:23d6c309124c4dd7f96ef7166a1998814b4eaeca7e3d654bdac2feacde7e16d1
     .claude/skills/microsoft-skill-creator/SKILL.md: sha256:b1cd59dfad7379b60dad82da5a23aaebdf25f9523cfe538d6ca4f8d35b6a410e
     .claude/skills/microsoft-skill-creator/references/skill-templates.md: sha256:ff30f0b66e3d4ce70fa97fb764491fd33728a2b47baf9c37f892bc2b64fe73f6
-  content_hash: sha256:b1c5f8532eb580b005100a80d350e47a864b0b00f53ee48af490844e5c4689d3
+  content_hash: sha256:447dcfb7d0894ec5ed93d3bda34073b5b1817d88d695b4d8ecb09d33255f336d
+- repo_url: tfsugjp/skills
+  name: skills
+  host: github.com
+  resolved_commit: 8a878d5e4a45c07b6d7efb76f507fc627aff60f7
+  version: 8a878d5
+  package_type: marketplace_plugin
+  content_hash: sha256:5f29997c8f8992ecbfb60c36d4a68140601d6ab211d0f503a6848a729f18da2e
 deployments:
 - kind: project-relative
   target: agent-skills
@@ -4522,7 +4571,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:1060250e6a930ab9e2e6854b4dbcc2315d2eff188f5aea5710d53e6ac0ee0060
+  content_hash: sha256:4c895a35d9f9aaa0f7ba997b9d50a52b1fbb61fca4a5db5c187354cf00d7075c
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-ai
@@ -7438,7 +7487,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:bc329fc8b330a775d77a4fec34c5f0598d635196563a13f173f14e368759ad02
+  content_hash: sha256:7e1b932f780b6348745b9d283437b64fc031ba452e8982ed9705849b9c19f50e
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-enterprise-infra-planner/references/bicep-generation.md
@@ -7447,7 +7496,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:0cf7f6219c25748701142286185b9574aa96653fac9bc29b12599578bf2e5032
+  content_hash: sha256:8c58939d852d74ceeede144f8083dcfaa2fdcb755093921c4093164ef4727d9e
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-enterprise-infra-planner/references/constraints/README.md
@@ -7582,7 +7631,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:217383bced7db728129130308460ec4e18eaa73b52703aa47a423d91a561373a
+  content_hash: sha256:b19d51e209f24ea0218adf3f3be31948c604ce9f7522e77a6a0eed861ff478a0
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-enterprise-infra-planner/references/phases/2-research-best-practices.md
@@ -7627,7 +7676,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:96cd941ab1fa90e54a4df523965a4e6eb985e9f4b2834181b2895b78efbb4269
+  content_hash: sha256:94e1f2e5798bdee5833e245a93c26cd6cb1d7fac470976f98c5e54f7ef1d7067
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-enterprise-infra-planner/references/phases/7-deploy.md
@@ -7637,6 +7686,15 @@ deployments:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
   content_hash: sha256:d2f0a8838c779accd2a7994b8922a45beb79cf0cda9dcddfdd1c712e4b27901c
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/azure-enterprise-infra-planner/references/referenced-workload.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:adaa30f644e519c93fd994b29f202926d504f3c4a0ee68c6b0b8b4f08978ed6c
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-enterprise-infra-planner/references/resources/README.md
@@ -7753,7 +7811,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:be22ab12fbfc5b7102db1c34ae2d57edb95ffdd74edf6731e90223ed5a9d0d6a
+  content_hash: sha256:87b12e1ebc2a70f1caf05e5a99dd8fd72a4624b9dd56dd93fcb9c299eb2df0fa
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-enterprise-infra-planner/references/terraform-generation.md
@@ -7762,7 +7820,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:cee692face165859a317456498ed6e2e0006618a2835edb02e1cdf9964101278
+  content_hash: sha256:1a0f6360fc656aa7c7d71fac23deeafbc173460993bcb85db089a0a2f5905649
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-enterprise-infra-planner/references/verification.md
@@ -7789,7 +7847,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:6b9af4864a05e4599526ee519c0d0122eb2f8d12e6b40b67d7e3cb57458492c6
+  content_hash: sha256:cc68a27d9c87bf73ecd5cabc2a212dcac2d34b9e4a18314946f1e2430e36891a
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/azure-kubernetes
@@ -10741,7 +10799,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:723a3e73b01b8e033c1feddeea649e93489c5c36d52323ebd035604bb56c2c79
+  content_hash: sha256:b2dc595b8876fac9ee0773fd25a1a2ae2604103c706890845cb0ad2ae1fa4e6f
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/code-testing-agent/unit-test-generation.prompt.md
@@ -10777,7 +10835,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:68a46d9304efc0120c35eea73d5155dd21ccc84eb5dc8461118fe37289d6c1fc
+  content_hash: sha256:a685f7b660bd6cdb345469224e6dbb534602def108df1a4e03958cfcfd1cd873
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/code-testing-extensions/extensions/cpp.md
@@ -10795,7 +10853,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:034c4683312db43fbd4c6355c2006af054f740015b1483815b74cbfa07d82c11
+  content_hash: sha256:4e46ec56b1f96db33b65aa5a1213d380e4d979d1c97f7cce8ab9a3bc0a7e6813
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/code-testing-extensions/extensions/dotnet.md
@@ -10804,7 +10862,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:86c013435ae1b4ed26c0f7a2c66aaa920d607885df583b35d791de1ce9008a92
+  content_hash: sha256:c0b8fdd2342ca12969ddf0f50260e97c9c89c9a62761f8b3a860a99dae0b27ae
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/code-testing-extensions/extensions/go-examples.md
@@ -10813,7 +10871,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:4815e383e0b068e63bcbacc88cc6a6b5ee19823843da973e232e44596335e629
+  content_hash: sha256:e3f2ba1c40c0f1bde5cb62aec46aaad6674de0fc9813038f7845d1512658bf71
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/code-testing-extensions/extensions/go.md
@@ -10831,7 +10889,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:cdfcc33e33c21d0c1bee85c032f06065edb002e6e24992cd4c29078263645b47
+  content_hash: sha256:c6b0f5662b6a1c1526fd1315d77ab07539e688abeb64e6ccce747ff8b70ae492
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/code-testing-extensions/extensions/java.md
@@ -10849,7 +10907,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:a02cae6ec0a133ad12039f4cd616ed3b5cb9e4d34b12a803a98fccb2c603f739
+  content_hash: sha256:1d09702b3d6b06bb36b965788c7e8013dfb2fce6014aba29de97f356910c32e4
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/code-testing-extensions/extensions/kotlin.md
@@ -10867,7 +10925,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:c526ce52c4f7451f37d122a284e55a01dd4db986a6f49c64111b3918ba536725
+  content_hash: sha256:a3476eb18bb64f3cf4b89cff74ee5bafb7d53564c8eabec48a341ee96d5af339
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/code-testing-extensions/extensions/powershell.md
@@ -10885,7 +10943,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:93301c314fc5ea903d42fd6a697d0e0fa9e1469460ff8581f5a787ee6bce5746
+  content_hash: sha256:f75689a7b272a4fb87435b1cbae4865901b9d0ef73a6b5cb0577c39f2b455ec4
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/code-testing-extensions/extensions/python.md
@@ -10903,7 +10961,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:bc9d746417daa759f18cf0767beee969ce72f95cc41f29a0b7f4cc80fdd89563
+  content_hash: sha256:cc138ba9250b0b1c3d7ad712227c4d2988e12279e4686aaf6107aeed8b50349e
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/code-testing-extensions/extensions/ruby.md
@@ -10921,7 +10979,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:f8b46a1047ad2a8f06c4d0242d67c033064b7226d39821aa6240b60813ed009f
+  content_hash: sha256:18c0483fcc3af9d8ddc4d8bf0878b2244991423c7c5890bac95cda8c065838a9
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/code-testing-extensions/extensions/rust.md
@@ -10948,7 +11006,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:b2178b3c89a456ef06d9dbb317602b4a266a0fd93300c07647eb4eb9fd3ea0c5
+  content_hash: sha256:07866737ba49e48dcadb67d79b56b8f851435eb139f6776f156fac3158fa997c
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/code-testing-extensions/extensions/typescript.md
@@ -10975,7 +11033,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:d998a25af95ff99690b89b8ddbd613ee6e335030866d88dab0cdf58c23609e4a
+  content_hash: sha256:8ddb2cb8dceca5d83fad4642f40ce2cce808fbc278631399458082366f20f9e1
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/coverage-analysis/references/guidelines.md
@@ -10984,7 +11042,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:f5738895ba74c5853f87d8ed5beca839fae34e274e20550151efbbfdcc8219ec
+  content_hash: sha256:1482e2cd12389047c7f1aa6e1c4420967aafc430b25156d9246b1147fedfe071
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/coverage-analysis/references/output-format.md
@@ -10993,7 +11051,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:f2328f0250002c25276f51373ab3b935b15b41be09c161db02d3e22316ad78c4
+  content_hash: sha256:6731a634c278988f9b9c0c83defb3dfe8574176b9ad34a74ce9207069db8ce75
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/coverage-analysis/references/report-generation.md
@@ -11002,7 +11060,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:923ba6a89c3ba054dffb40398f33980548f5967a4dc8c6c52e372c8097b66c97
+  content_hash: sha256:f2583a688de77f950bc18446913531f603ca528839b35c3c394a77981eafd7bb
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/coverage-analysis/references/setup-discovery.md
@@ -11011,7 +11069,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:f8b1c1726bbe8dce4f7825628232600b8ff5791fc7e08ff781e598e993201cd9
+  content_hash: sha256:4a943c7bba9f392fc8241740d9770f6afa52bb1bba2627954dd85396551c83c9
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/coverage-analysis/references/test-execution.md
@@ -11020,7 +11078,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:b4b92390eadc8e508a09a9233c120895a217c0a12aca268c4eeed798b3a917c8
+  content_hash: sha256:0eb1b6ffc08dfac34a75c0effca13d9d749b56837deb883cdb5c0c799a8c9e9a
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/coverage-analysis/scripts/Compute-CrapScores.ps1
@@ -11056,7 +11114,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:9527711b6c30ec20feb06220c5aa021081ea11a4b1f4f074ca9a9e333499d724
+  content_hash: sha256:4254327d4d224f588b7a20601cb5b43637a71467844e512010755a5591a3952d
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/detect-static-dependencies
@@ -11074,7 +11132,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:bf743c24ddb6afe5c764897c9e5f43ba723e962718ea959209fd7ce702ddeb99
+  content_hash: sha256:ec8586b6f369c705e681ae737b4527044b21fa39a0645255bfd6f47eee72bc71
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/entra-agent-id
@@ -11326,7 +11384,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:ab2c30569d6c859e0f340880c7182ab87c4fe108fa65f618815d3ac85aedee52
+  content_hash: sha256:64c294d0fc2d0c4d5887d391c6684429fc4d7a66b6b9f99a475e6abe390c5d19
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/find-untested-sources
@@ -11344,7 +11402,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:b9e8d509604469418d998e18eecdadda3ee7e9afec612f6e11770053a9eef445
+  content_hash: sha256:df0e139888df7868420f2a48b20087b945a510af800a5a9b36105c1068f0023f
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/find-untested-sources/scripts/Find-UntestedSources.cs
@@ -11362,7 +11420,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:231dc55cd7558f54d09b292396370cb25f2430501bfb063266c62609ae55715f
+  content_hash: sha256:c19e34846e48cb4ecb9896f0af7b921b5ec702d6eac3056ffb5f0ba87ee5f7b9
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/generate-testability-wrappers
@@ -11380,7 +11438,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:d51a4f2a4beed405c5ef235ca048bfc960563b9013e1d0ab65ba29f08dd464b7
+  content_hash: sha256:58aac0affca5c0a56dab9e8e751f52ac4014533150355b734d6b5597ac8acec1
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/grade-tests
@@ -11398,7 +11456,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:1e14e1ae7749017b5183406a4e4369fed0eb662494e6774ac59e5007357fa03a
+  content_hash: sha256:2ab1ee96112aa585a3edc09e92cb30c9a4969e7605c6b0870a29b2c8fc0704a8
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/microsoft-code-reference
@@ -11461,7 +11519,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:01000770f81e1529afcb397d16564d3425566bdad7c9fefa4dfe536523ff2c55
+  content_hash: sha256:46718ed889e7ea84593a2f6d4213ab8a442e6f2d400491c4bd032df9e77296d5
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/microsoft-foundry/finetuning/SKILL.md
@@ -11857,7 +11915,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:484b5e170e5519b2c3c0447986e6f3d59133f74c65d19173968def5b1862dc68
+  content_hash: sha256:d8f04912e0641ffbed253a371d9d5b481b3969d649eeee20f6770654fda96d16
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/microsoft-foundry/foundry-agent/create/create-prompt.md
@@ -11902,7 +11960,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:913b8116164934311fe8979f479d08d083c8416130c65b545da09e675dba73df
+  content_hash: sha256:4300e98615e73d9574d15cd219ce169decc7d575f1f75ec7d950a31a0b77d65d
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/microsoft-foundry/foundry-agent/create/references/guardrails/guardrail-api-create.md
@@ -12433,7 +12491,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:906aded5e00b7303dd0fd703c63fa6c1e0b5ceff4288bda2e74c2bf82f3bd384
+  content_hash: sha256:964fac57870f522771f142d0f398efc7a97f6d3ebfa168c66bd9f550fd9fe2c8
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/test-endpoint.md
@@ -12541,7 +12599,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:1b82e7e7c09f4988a643a819bcf93c1656b2b764d4e7e7f9a4503803251cc21b
+  content_hash: sha256:ced9ba2ccc0cf526b7cd38a585b1220a3d9c198e9a0a23e49932994187182d54
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-noauth.md
@@ -12713,6 +12771,51 @@ deployments:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
   content_hash: sha256:46fbc87daada93ffc66f2b79569035e6139949ff69aaa2041c5a8d84f3332122
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/microsoft-foundry/foundry-agent/validate/references/default-rules.yaml
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:bba89ad3ce259acaf2734704657f788aadb6e5c2f2f887fd72be03bba4ede1af
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/microsoft-foundry/foundry-agent/validate/references/report-schema.json
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:88b8952b9446d26c704e443e758b55d312d7645e68374fa0786cf85a92d5bbb4
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/microsoft-foundry/foundry-agent/validate/references/report-template.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:10b7db0fa337303168ea18d67bcb3ffdb080be867c90eed4c2f57aebe0809b16
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/microsoft-foundry/foundry-agent/validate/references/rules-schema.json
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:8e156c8a8fb38382461f2f17659eefcb18aa7ad78cdf9b1d4b5d20361919b474
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/microsoft-foundry/foundry-agent/validate/validate.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:e8d1955f79a21c46dd0f3085eb712df8d422530334bc45a2ae561cb09311dc73
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/microsoft-foundry/models/deploy-model/SKILL.md
@@ -12955,7 +13058,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:08879da4fe988512940360c6572f533f9517b3a8cf18af6c31847dbd128b3f1e
+  content_hash: sha256:1fb39251c178ec8b3bb586bfceba793631faf7ab7de5037f4bdd01df9e6fb647
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/microsoft-foundry/references/agent-metadata-contract.md
@@ -13072,7 +13175,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:b9ddaace87157f40c15efa5b76c24c07d10ff4b152aa954e9eb47ecb915b8b84
+  content_hash: sha256:8e15a5a71b99668edb99505a2255892a37405559a0acd695329c7a143a5ccd9d
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/microsoft-foundry/resource/private-network/references/scaffold.md
@@ -13171,7 +13274,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:96dbda555233da8ee06fac318c9507298d1884dac250c587df3ef86e10252e5c
+  content_hash: sha256:35e0ab131f7422a1ad685f6a8a49852885916c5aba89c8092a7c92f2611c3a61
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/mtp-hot-reload
@@ -13189,7 +13292,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:2779894f8761a1b465f57b3fd81f13db5fab5516765ef8df246a99df151203a3
+  content_hash: sha256:2294ea9eb1702d50991cefeb00c0461344506e88bd735036b1f56c6040587925
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/platform-detection
@@ -13207,7 +13310,16 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:c2bd553a3169d4e3d623a0f5b23e7bcc4d714e6d4d49dfea3f65a81865d81acf
+  content_hash: sha256:a73b7c126af6249490a62454c55097cef93657f537b40794c2c52a4bbf58c35f
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/platform-detection/references/command-mode.md
+  runtime: null
+  scope: project
+  owners:
+  - dotnet/skills/plugins/dotnet-test
+  active_owner: dotnet/skills/plugins/dotnet-test
+  content_hash: sha256:08e276dcafe6bd5bfbaab435065ca24a5800a4eae3ffd7fc15daa1e81354bbc4
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/python-appservice-deploy
@@ -13351,7 +13463,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:0790463d50cccd1af22155301cb9a20dda1a7cbbcc9ee3cae7107232e37f08d8
+  content_hash: sha256:971e4d888a4435eb4c050079adfb6cb91fc73e3c756fa7a622b059c72fad7e3c
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/scaffold-dotnet-test-project
@@ -13369,7 +13481,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:7408dd7cb99bd8ca3920fc8914d6134476866520a23e31ff1aa123adc9808f5a
+  content_hash: sha256:0fc25989601e66e3a2abb572a712befbcb6b315f31b6daa34661d3911fa6aa32
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/setup-local-sdk
@@ -13522,7 +13634,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:0f589352ba88c5873e85a2bde65d44f72c75ec76a0547105ff6698271d813bf0
+  content_hash: sha256:62022253bc67bc32a0ae94ca3d2784a7b6811c42697e76f2ed63fee4a705fb4e
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/test-gap-analysis
@@ -13540,7 +13652,16 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:7701f2762d8612cf09ea7b45c2d63da9b980d8148ef0998ffa73436d8c9b38d6
+  content_hash: sha256:f440af358dc09d072be3cd689f32cffeaaa87c362c78c98b6ee87e2778866121
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/test-gap-analysis/references/mutation-catalog.md
+  runtime: null
+  scope: project
+  owners:
+  - dotnet/skills/plugins/dotnet-test
+  active_owner: dotnet/skills/plugins/dotnet-test
+  content_hash: sha256:a7b31dcd2ae1641f29f33fab720721b27f416f2379ae531c33d409740003482d
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/test-smell-detection
@@ -13558,7 +13679,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:73888755e509cfd455db5c00df6aaa20b9e7d4d7dc4b485f4add2c71f652dd4e
+  content_hash: sha256:4aa11579a99181fc15c0421a43d435e42e2bcd1363463780a4e85e22ade64402
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/test-smell-detection/references/test-smell-catalog.md
@@ -13567,7 +13688,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:001e04c54d73940df65090c6915e87b07aac8cddcc26be139c7d9770dc0a8b99
+  content_hash: sha256:974791cc1338c2c9d72556df47e3a7efec878aa90b28e72282018a3309a37a80
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/test-tagging
@@ -13585,7 +13706,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:874745af561a9b04b67f19adf587cb3b58f60d0e186345f1c799dfa23cf589e0
+  content_hash: sha256:be41dbfe15053b1b42348c46bdb9cd181731d2d82d81e1d3247750b8bf2830cc
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/testability-obstacle
@@ -13603,7 +13724,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:6050bf966c8fa023c75837ac6824b9020fa75f6cfa289b796598c11cf785b912
+  content_hash: sha256:094d442bf9ad1a8128319b770c1b96fde751637c40a5810fa3a773ac6366c587
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/writing-mstest-tests
@@ -13621,7 +13742,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:a13049108bc6a2f1825de4128abee9b5c98a9423268ba5bfa93466b16597468c
+  content_hash: sha256:9da7a07ba196350c5bf9e53a1dbdc4820080a4178804748211c12e58622459a0
 - kind: project-relative
   target: agents
   value: .agents/skills/azure-compute/workflows/vm-troubleshooter/references/cannot-connect-to-vm.md
@@ -13963,7 +14084,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:ce8b48afc7b3425df82320b727198d20a8970ea6fb28212d56931489b2661d8d
+  content_hash: sha256:28f061d54afdf33f6e1d6810d8f3b34e378cf4bb9fa2342fc97d6a981ae0ce52
 - kind: project-relative
   target: claude
   value: .claude/agents/code-testing-fixer.md
@@ -13981,7 +14102,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:2e40707070cae3535c242ecdb548c84c86e840746413d34f72229bd0b7ec2a6b
+  content_hash: sha256:8985a80f5fd7ca44a782295a1b169c22d4d9c1ffe8ed683dac21955b406b3946
 - kind: project-relative
   target: claude
   value: .claude/agents/code-testing-implementer.md
@@ -13990,7 +14111,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:83320cc1a77c979e156d1504bf2e0ec33a9fc90fe923c6a9f8248f2d9de3a54d
+  content_hash: sha256:0ae446eaec64028e698b0bd185f0f82a09e68f262ce6fcbe40f586ab326fb4b3
 - kind: project-relative
   target: claude
   value: .claude/agents/code-testing-linter.md
@@ -13999,7 +14120,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:c1f4d8aeeea267f7fd64db4b181376ad160dcfaa90820493a37a92b93dcc4e3a
+  content_hash: sha256:801f4b911200f684d110ec9f5021c8937270c5c643ddf52433a22934df50009f
 - kind: project-relative
   target: claude
   value: .claude/agents/code-testing-planner.md
@@ -14008,7 +14129,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:cad681c7b9de2ccd64b6faa7a200bc3fe77bf834d436088fea257e1d591b7bea
+  content_hash: sha256:53716ec19923dfac2b1179800e9dc99a1ef0173d791c159417ca8dacf7243770
 - kind: project-relative
   target: claude
   value: .claude/agents/code-testing-researcher.md
@@ -14017,7 +14138,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:fb5257ccb3963fd40f5381e6f95f97af4de757473889ae2c1222b5656d8b7e62
+  content_hash: sha256:8dfe73c8ce8c6909fd20d67a5993f6d6f6547b23d89c191a5c3de837dcd0dd34
 - kind: project-relative
   target: claude
   value: .claude/agents/code-testing-tester.md
@@ -14026,7 +14147,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:9e4f7018af351b554c19b3f7255b71850df84672558d6eba694c4a96df15e8ad
+  content_hash: sha256:fe67d1b3e6eefe8f90fdd7e489adb8cf913b1c0cbeece98338d172abc28f896c
 - kind: project-relative
   target: claude
   value: .claude/agents/test-quality-auditor.md
@@ -14047,13 +14168,31 @@ deployments:
   content_hash: sha256:d1a5d3686e3cef639f23aae16ede518c968042e200cc70d6d96a84d2dc45999c
 - kind: project-relative
   target: claude
+  value: .claude/hooks/azure-skills/hooks/package.json
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:8005a3491db7d92f36ac66369861589f9c47123d3a7c71e643fc2c06168cd45a
+- kind: project-relative
+  target: claude
+  value: .claude/hooks/azure-skills/hooks/scripts/track-telemetry.js
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:39d9420b2148e0c9940a2f2d07ee209308cdbd4d75567a938ebfc618b96a5a35
+- kind: project-relative
+  target: claude
   value: .claude/hooks/azure-skills/hooks/scripts/track-telemetry.ps1
   runtime: null
   scope: project
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:a6b82a1a175a159536f2a88f6858b3b901b287bd7766df837600eb6faf39bc54
+  content_hash: sha256:43113b1854af6dbc3f8ab1917c499afbf65f1997597eab57f5e954efd9ca624a
 - kind: project-relative
   target: claude
   value: .claude/hooks/azure-skills/hooks/scripts/track-telemetry.sh
@@ -14062,7 +14201,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:37dc1baf4b0244d124f7c52b1351c569657031b4cd7a468fa13d485f96ed9521
+  content_hash: sha256:7af56659cef14d56207223b38e3cd19a76722367e38dd91d1a01e6f9e90101e3
 - kind: project-relative
   target: claude
   value: .claude/skills/airunway-aks-setup
@@ -14314,7 +14453,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:1060250e6a930ab9e2e6854b4dbcc2315d2eff188f5aea5710d53e6ac0ee0060
+  content_hash: sha256:4c895a35d9f9aaa0f7ba997b9d50a52b1fbb61fca4a5db5c187354cf00d7075c
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-ai
@@ -17230,7 +17369,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:bc329fc8b330a775d77a4fec34c5f0598d635196563a13f173f14e368759ad02
+  content_hash: sha256:7e1b932f780b6348745b9d283437b64fc031ba452e8982ed9705849b9c19f50e
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-enterprise-infra-planner/references/bicep-generation.md
@@ -17239,7 +17378,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:0cf7f6219c25748701142286185b9574aa96653fac9bc29b12599578bf2e5032
+  content_hash: sha256:8c58939d852d74ceeede144f8083dcfaa2fdcb755093921c4093164ef4727d9e
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-enterprise-infra-planner/references/constraints/README.md
@@ -17374,7 +17513,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:217383bced7db728129130308460ec4e18eaa73b52703aa47a423d91a561373a
+  content_hash: sha256:b19d51e209f24ea0218adf3f3be31948c604ce9f7522e77a6a0eed861ff478a0
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-enterprise-infra-planner/references/phases/2-research-best-practices.md
@@ -17419,7 +17558,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:96cd941ab1fa90e54a4df523965a4e6eb985e9f4b2834181b2895b78efbb4269
+  content_hash: sha256:94e1f2e5798bdee5833e245a93c26cd6cb1d7fac470976f98c5e54f7ef1d7067
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-enterprise-infra-planner/references/phases/7-deploy.md
@@ -17429,6 +17568,15 @@ deployments:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
   content_hash: sha256:d2f0a8838c779accd2a7994b8922a45beb79cf0cda9dcddfdd1c712e4b27901c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/azure-enterprise-infra-planner/references/referenced-workload.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:adaa30f644e519c93fd994b29f202926d504f3c4a0ee68c6b0b8b4f08978ed6c
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-enterprise-infra-planner/references/resources/README.md
@@ -17545,7 +17693,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:be22ab12fbfc5b7102db1c34ae2d57edb95ffdd74edf6731e90223ed5a9d0d6a
+  content_hash: sha256:87b12e1ebc2a70f1caf05e5a99dd8fd72a4624b9dd56dd93fcb9c299eb2df0fa
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-enterprise-infra-planner/references/terraform-generation.md
@@ -17554,7 +17702,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:cee692face165859a317456498ed6e2e0006618a2835edb02e1cdf9964101278
+  content_hash: sha256:1a0f6360fc656aa7c7d71fac23deeafbc173460993bcb85db089a0a2f5905649
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-enterprise-infra-planner/references/verification.md
@@ -17581,7 +17729,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:6b9af4864a05e4599526ee519c0d0122eb2f8d12e6b40b67d7e3cb57458492c6
+  content_hash: sha256:cc68a27d9c87bf73ecd5cabc2a212dcac2d34b9e4a18314946f1e2430e36891a
 - kind: project-relative
   target: claude
   value: .claude/skills/azure-kubernetes
@@ -20533,7 +20681,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:723a3e73b01b8e033c1feddeea649e93489c5c36d52323ebd035604bb56c2c79
+  content_hash: sha256:b2dc595b8876fac9ee0773fd25a1a2ae2604103c706890845cb0ad2ae1fa4e6f
 - kind: project-relative
   target: claude
   value: .claude/skills/code-testing-agent/unit-test-generation.prompt.md
@@ -20569,7 +20717,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:68a46d9304efc0120c35eea73d5155dd21ccc84eb5dc8461118fe37289d6c1fc
+  content_hash: sha256:a685f7b660bd6cdb345469224e6dbb534602def108df1a4e03958cfcfd1cd873
 - kind: project-relative
   target: claude
   value: .claude/skills/code-testing-extensions/extensions/cpp.md
@@ -20587,7 +20735,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:034c4683312db43fbd4c6355c2006af054f740015b1483815b74cbfa07d82c11
+  content_hash: sha256:4e46ec56b1f96db33b65aa5a1213d380e4d979d1c97f7cce8ab9a3bc0a7e6813
 - kind: project-relative
   target: claude
   value: .claude/skills/code-testing-extensions/extensions/dotnet.md
@@ -20596,7 +20744,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:86c013435ae1b4ed26c0f7a2c66aaa920d607885df583b35d791de1ce9008a92
+  content_hash: sha256:c0b8fdd2342ca12969ddf0f50260e97c9c89c9a62761f8b3a860a99dae0b27ae
 - kind: project-relative
   target: claude
   value: .claude/skills/code-testing-extensions/extensions/go-examples.md
@@ -20605,7 +20753,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:4815e383e0b068e63bcbacc88cc6a6b5ee19823843da973e232e44596335e629
+  content_hash: sha256:e3f2ba1c40c0f1bde5cb62aec46aaad6674de0fc9813038f7845d1512658bf71
 - kind: project-relative
   target: claude
   value: .claude/skills/code-testing-extensions/extensions/go.md
@@ -20623,7 +20771,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:cdfcc33e33c21d0c1bee85c032f06065edb002e6e24992cd4c29078263645b47
+  content_hash: sha256:c6b0f5662b6a1c1526fd1315d77ab07539e688abeb64e6ccce747ff8b70ae492
 - kind: project-relative
   target: claude
   value: .claude/skills/code-testing-extensions/extensions/java.md
@@ -20641,7 +20789,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:a02cae6ec0a133ad12039f4cd616ed3b5cb9e4d34b12a803a98fccb2c603f739
+  content_hash: sha256:1d09702b3d6b06bb36b965788c7e8013dfb2fce6014aba29de97f356910c32e4
 - kind: project-relative
   target: claude
   value: .claude/skills/code-testing-extensions/extensions/kotlin.md
@@ -20659,7 +20807,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:c526ce52c4f7451f37d122a284e55a01dd4db986a6f49c64111b3918ba536725
+  content_hash: sha256:a3476eb18bb64f3cf4b89cff74ee5bafb7d53564c8eabec48a341ee96d5af339
 - kind: project-relative
   target: claude
   value: .claude/skills/code-testing-extensions/extensions/powershell.md
@@ -20677,7 +20825,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:93301c314fc5ea903d42fd6a697d0e0fa9e1469460ff8581f5a787ee6bce5746
+  content_hash: sha256:f75689a7b272a4fb87435b1cbae4865901b9d0ef73a6b5cb0577c39f2b455ec4
 - kind: project-relative
   target: claude
   value: .claude/skills/code-testing-extensions/extensions/python.md
@@ -20695,7 +20843,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:bc9d746417daa759f18cf0767beee969ce72f95cc41f29a0b7f4cc80fdd89563
+  content_hash: sha256:cc138ba9250b0b1c3d7ad712227c4d2988e12279e4686aaf6107aeed8b50349e
 - kind: project-relative
   target: claude
   value: .claude/skills/code-testing-extensions/extensions/ruby.md
@@ -20713,7 +20861,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:f8b46a1047ad2a8f06c4d0242d67c033064b7226d39821aa6240b60813ed009f
+  content_hash: sha256:18c0483fcc3af9d8ddc4d8bf0878b2244991423c7c5890bac95cda8c065838a9
 - kind: project-relative
   target: claude
   value: .claude/skills/code-testing-extensions/extensions/rust.md
@@ -20740,7 +20888,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:b2178b3c89a456ef06d9dbb317602b4a266a0fd93300c07647eb4eb9fd3ea0c5
+  content_hash: sha256:07866737ba49e48dcadb67d79b56b8f851435eb139f6776f156fac3158fa997c
 - kind: project-relative
   target: claude
   value: .claude/skills/code-testing-extensions/extensions/typescript.md
@@ -20767,7 +20915,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:d998a25af95ff99690b89b8ddbd613ee6e335030866d88dab0cdf58c23609e4a
+  content_hash: sha256:8ddb2cb8dceca5d83fad4642f40ce2cce808fbc278631399458082366f20f9e1
 - kind: project-relative
   target: claude
   value: .claude/skills/coverage-analysis/references/guidelines.md
@@ -20776,7 +20924,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:f5738895ba74c5853f87d8ed5beca839fae34e274e20550151efbbfdcc8219ec
+  content_hash: sha256:1482e2cd12389047c7f1aa6e1c4420967aafc430b25156d9246b1147fedfe071
 - kind: project-relative
   target: claude
   value: .claude/skills/coverage-analysis/references/output-format.md
@@ -20785,7 +20933,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:f2328f0250002c25276f51373ab3b935b15b41be09c161db02d3e22316ad78c4
+  content_hash: sha256:6731a634c278988f9b9c0c83defb3dfe8574176b9ad34a74ce9207069db8ce75
 - kind: project-relative
   target: claude
   value: .claude/skills/coverage-analysis/references/report-generation.md
@@ -20794,7 +20942,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:923ba6a89c3ba054dffb40398f33980548f5967a4dc8c6c52e372c8097b66c97
+  content_hash: sha256:f2583a688de77f950bc18446913531f603ca528839b35c3c394a77981eafd7bb
 - kind: project-relative
   target: claude
   value: .claude/skills/coverage-analysis/references/setup-discovery.md
@@ -20803,7 +20951,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:f8b1c1726bbe8dce4f7825628232600b8ff5791fc7e08ff781e598e993201cd9
+  content_hash: sha256:4a943c7bba9f392fc8241740d9770f6afa52bb1bba2627954dd85396551c83c9
 - kind: project-relative
   target: claude
   value: .claude/skills/coverage-analysis/references/test-execution.md
@@ -20812,7 +20960,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:b4b92390eadc8e508a09a9233c120895a217c0a12aca268c4eeed798b3a917c8
+  content_hash: sha256:0eb1b6ffc08dfac34a75c0effca13d9d749b56837deb883cdb5c0c799a8c9e9a
 - kind: project-relative
   target: claude
   value: .claude/skills/coverage-analysis/scripts/Compute-CrapScores.ps1
@@ -20848,7 +20996,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:9527711b6c30ec20feb06220c5aa021081ea11a4b1f4f074ca9a9e333499d724
+  content_hash: sha256:4254327d4d224f588b7a20601cb5b43637a71467844e512010755a5591a3952d
 - kind: project-relative
   target: claude
   value: .claude/skills/detect-static-dependencies
@@ -20866,7 +21014,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:bf743c24ddb6afe5c764897c9e5f43ba723e962718ea959209fd7ce702ddeb99
+  content_hash: sha256:ec8586b6f369c705e681ae737b4527044b21fa39a0645255bfd6f47eee72bc71
 - kind: project-relative
   target: claude
   value: .claude/skills/entra-agent-id
@@ -21118,7 +21266,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:ab2c30569d6c859e0f340880c7182ab87c4fe108fa65f618815d3ac85aedee52
+  content_hash: sha256:64c294d0fc2d0c4d5887d391c6684429fc4d7a66b6b9f99a475e6abe390c5d19
 - kind: project-relative
   target: claude
   value: .claude/skills/find-untested-sources
@@ -21136,7 +21284,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:b9e8d509604469418d998e18eecdadda3ee7e9afec612f6e11770053a9eef445
+  content_hash: sha256:df0e139888df7868420f2a48b20087b945a510af800a5a9b36105c1068f0023f
 - kind: project-relative
   target: claude
   value: .claude/skills/find-untested-sources/scripts/Find-UntestedSources.cs
@@ -21154,7 +21302,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:231dc55cd7558f54d09b292396370cb25f2430501bfb063266c62609ae55715f
+  content_hash: sha256:c19e34846e48cb4ecb9896f0af7b921b5ec702d6eac3056ffb5f0ba87ee5f7b9
 - kind: project-relative
   target: claude
   value: .claude/skills/generate-testability-wrappers
@@ -21172,7 +21320,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:d51a4f2a4beed405c5ef235ca048bfc960563b9013e1d0ab65ba29f08dd464b7
+  content_hash: sha256:58aac0affca5c0a56dab9e8e751f52ac4014533150355b734d6b5597ac8acec1
 - kind: project-relative
   target: claude
   value: .claude/skills/grade-tests
@@ -21190,7 +21338,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:1e14e1ae7749017b5183406a4e4369fed0eb662494e6774ac59e5007357fa03a
+  content_hash: sha256:2ab1ee96112aa585a3edc09e92cb30c9a4969e7605c6b0870a29b2c8fc0704a8
 - kind: project-relative
   target: claude
   value: .claude/skills/microsoft-code-reference
@@ -21253,7 +21401,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:01000770f81e1529afcb397d16564d3425566bdad7c9fefa4dfe536523ff2c55
+  content_hash: sha256:46718ed889e7ea84593a2f6d4213ab8a442e6f2d400491c4bd032df9e77296d5
 - kind: project-relative
   target: claude
   value: .claude/skills/microsoft-foundry/finetuning/SKILL.md
@@ -21649,7 +21797,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:484b5e170e5519b2c3c0447986e6f3d59133f74c65d19173968def5b1862dc68
+  content_hash: sha256:d8f04912e0641ffbed253a371d9d5b481b3969d649eeee20f6770654fda96d16
 - kind: project-relative
   target: claude
   value: .claude/skills/microsoft-foundry/foundry-agent/create/create-prompt.md
@@ -21694,7 +21842,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:913b8116164934311fe8979f479d08d083c8416130c65b545da09e675dba73df
+  content_hash: sha256:4300e98615e73d9574d15cd219ce169decc7d575f1f75ec7d950a31a0b77d65d
 - kind: project-relative
   target: claude
   value: .claude/skills/microsoft-foundry/foundry-agent/create/references/guardrails/guardrail-api-create.md
@@ -22225,7 +22373,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:906aded5e00b7303dd0fd703c63fa6c1e0b5ceff4288bda2e74c2bf82f3bd384
+  content_hash: sha256:964fac57870f522771f142d0f398efc7a97f6d3ebfa168c66bd9f550fd9fe2c8
 - kind: project-relative
   target: claude
   value: .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/test-endpoint.md
@@ -22333,7 +22481,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:1b82e7e7c09f4988a643a819bcf93c1656b2b764d4e7e7f9a4503803251cc21b
+  content_hash: sha256:ced9ba2ccc0cf526b7cd38a585b1220a3d9c198e9a0a23e49932994187182d54
 - kind: project-relative
   target: claude
   value: .claude/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-noauth.md
@@ -22505,6 +22653,51 @@ deployments:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
   content_hash: sha256:46fbc87daada93ffc66f2b79569035e6139949ff69aaa2041c5a8d84f3332122
+- kind: project-relative
+  target: claude
+  value: .claude/skills/microsoft-foundry/foundry-agent/validate/references/default-rules.yaml
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:bba89ad3ce259acaf2734704657f788aadb6e5c2f2f887fd72be03bba4ede1af
+- kind: project-relative
+  target: claude
+  value: .claude/skills/microsoft-foundry/foundry-agent/validate/references/report-schema.json
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:88b8952b9446d26c704e443e758b55d312d7645e68374fa0786cf85a92d5bbb4
+- kind: project-relative
+  target: claude
+  value: .claude/skills/microsoft-foundry/foundry-agent/validate/references/report-template.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:10b7db0fa337303168ea18d67bcb3ffdb080be867c90eed4c2f57aebe0809b16
+- kind: project-relative
+  target: claude
+  value: .claude/skills/microsoft-foundry/foundry-agent/validate/references/rules-schema.json
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:8e156c8a8fb38382461f2f17659eefcb18aa7ad78cdf9b1d4b5d20361919b474
+- kind: project-relative
+  target: claude
+  value: .claude/skills/microsoft-foundry/foundry-agent/validate/validate.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:e8d1955f79a21c46dd0f3085eb712df8d422530334bc45a2ae561cb09311dc73
 - kind: project-relative
   target: claude
   value: .claude/skills/microsoft-foundry/models/deploy-model/SKILL.md
@@ -22747,7 +22940,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:08879da4fe988512940360c6572f533f9517b3a8cf18af6c31847dbd128b3f1e
+  content_hash: sha256:1fb39251c178ec8b3bb586bfceba793631faf7ab7de5037f4bdd01df9e6fb647
 - kind: project-relative
   target: claude
   value: .claude/skills/microsoft-foundry/references/agent-metadata-contract.md
@@ -22864,7 +23057,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:b9ddaace87157f40c15efa5b76c24c07d10ff4b152aa954e9eb47ecb915b8b84
+  content_hash: sha256:8e15a5a71b99668edb99505a2255892a37405559a0acd695329c7a143a5ccd9d
 - kind: project-relative
   target: claude
   value: .claude/skills/microsoft-foundry/resource/private-network/references/scaffold.md
@@ -22963,7 +23156,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:96dbda555233da8ee06fac318c9507298d1884dac250c587df3ef86e10252e5c
+  content_hash: sha256:35e0ab131f7422a1ad685f6a8a49852885916c5aba89c8092a7c92f2611c3a61
 - kind: project-relative
   target: claude
   value: .claude/skills/mtp-hot-reload
@@ -22981,7 +23174,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:2779894f8761a1b465f57b3fd81f13db5fab5516765ef8df246a99df151203a3
+  content_hash: sha256:2294ea9eb1702d50991cefeb00c0461344506e88bd735036b1f56c6040587925
 - kind: project-relative
   target: claude
   value: .claude/skills/platform-detection
@@ -22999,7 +23192,16 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:c2bd553a3169d4e3d623a0f5b23e7bcc4d714e6d4d49dfea3f65a81865d81acf
+  content_hash: sha256:a73b7c126af6249490a62454c55097cef93657f537b40794c2c52a4bbf58c35f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/platform-detection/references/command-mode.md
+  runtime: null
+  scope: project
+  owners:
+  - dotnet/skills/plugins/dotnet-test
+  active_owner: dotnet/skills/plugins/dotnet-test
+  content_hash: sha256:08e276dcafe6bd5bfbaab435065ca24a5800a4eae3ffd7fc15daa1e81354bbc4
 - kind: project-relative
   target: claude
   value: .claude/skills/python-appservice-deploy
@@ -23143,7 +23345,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:0790463d50cccd1af22155301cb9a20dda1a7cbbcc9ee3cae7107232e37f08d8
+  content_hash: sha256:971e4d888a4435eb4c050079adfb6cb91fc73e3c756fa7a622b059c72fad7e3c
 - kind: project-relative
   target: claude
   value: .claude/skills/scaffold-dotnet-test-project
@@ -23161,7 +23363,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:7408dd7cb99bd8ca3920fc8914d6134476866520a23e31ff1aa123adc9808f5a
+  content_hash: sha256:0fc25989601e66e3a2abb572a712befbcb6b315f31b6daa34661d3911fa6aa32
 - kind: project-relative
   target: claude
   value: .claude/skills/setup-local-sdk
@@ -23314,7 +23516,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:0f589352ba88c5873e85a2bde65d44f72c75ec76a0547105ff6698271d813bf0
+  content_hash: sha256:62022253bc67bc32a0ae94ca3d2784a7b6811c42697e76f2ed63fee4a705fb4e
 - kind: project-relative
   target: claude
   value: .claude/skills/test-gap-analysis
@@ -23332,7 +23534,16 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:7701f2762d8612cf09ea7b45c2d63da9b980d8148ef0998ffa73436d8c9b38d6
+  content_hash: sha256:f440af358dc09d072be3cd689f32cffeaaa87c362c78c98b6ee87e2778866121
+- kind: project-relative
+  target: claude
+  value: .claude/skills/test-gap-analysis/references/mutation-catalog.md
+  runtime: null
+  scope: project
+  owners:
+  - dotnet/skills/plugins/dotnet-test
+  active_owner: dotnet/skills/plugins/dotnet-test
+  content_hash: sha256:a7b31dcd2ae1641f29f33fab720721b27f416f2379ae531c33d409740003482d
 - kind: project-relative
   target: claude
   value: .claude/skills/test-smell-detection
@@ -23350,7 +23561,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:73888755e509cfd455db5c00df6aaa20b9e7d4d7dc4b485f4add2c71f652dd4e
+  content_hash: sha256:4aa11579a99181fc15c0421a43d435e42e2bcd1363463780a4e85e22ade64402
 - kind: project-relative
   target: claude
   value: .claude/skills/test-smell-detection/references/test-smell-catalog.md
@@ -23359,7 +23570,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:001e04c54d73940df65090c6915e87b07aac8cddcc26be139c7d9770dc0a8b99
+  content_hash: sha256:974791cc1338c2c9d72556df47e3a7efec878aa90b28e72282018a3309a37a80
 - kind: project-relative
   target: claude
   value: .claude/skills/test-tagging
@@ -23377,7 +23588,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:874745af561a9b04b67f19adf587cb3b58f60d0e186345f1c799dfa23cf589e0
+  content_hash: sha256:be41dbfe15053b1b42348c46bdb9cd181731d2d82d81e1d3247750b8bf2830cc
 - kind: project-relative
   target: claude
   value: .claude/skills/testability-obstacle
@@ -23395,7 +23606,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:6050bf966c8fa023c75837ac6824b9020fa75f6cfa289b796598c11cf785b912
+  content_hash: sha256:094d442bf9ad1a8128319b770c1b96fde751637c40a5810fa3a773ac6366c587
 - kind: project-relative
   target: claude
   value: .claude/skills/writing-mstest-tests
@@ -23413,7 +23624,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:a13049108bc6a2f1825de4128abee9b5c98a9423268ba5bfa93466b16597468c
+  content_hash: sha256:9da7a07ba196350c5bf9e53a1dbdc4820080a4178804748211c12e58622459a0
 - kind: project-relative
   target: codex
   value: .codex/agents/code-testing-builder.toml
@@ -23422,7 +23633,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:b05affaf99aa41f56f91a0f5a4dc87ef3bf987db51a22be7316d369add2bde3d
+  content_hash: sha256:de3799e2cafd728a3db64b21896b8c67f3a5986744ca9efc2b994a9b7e666040
 - kind: project-relative
   target: codex
   value: .codex/agents/code-testing-fixer.toml
@@ -23440,7 +23651,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:e959af4066795d900acf629e408bb79fbf531d5be17ce8d4fd9a719d78781901
+  content_hash: sha256:d9357630e1ac31f65d932aa50fed5e53c324fbf77ad0dd620cda1252c01e81b9
 - kind: project-relative
   target: codex
   value: .codex/agents/code-testing-implementer.toml
@@ -23449,7 +23660,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:9e04a638256bb20713c8c0fc48a3118f35768caf8c4ddc55e9edc027c0f52a0c
+  content_hash: sha256:25f5934392b9a987dfddc23a79dca8e813b66cd5b3c97a011479f0f69a68194c
 - kind: project-relative
   target: codex
   value: .codex/agents/code-testing-linter.toml
@@ -23458,7 +23669,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:5883d2ccef6956474d80837c803516eb19fd4c2bbe3579f075290caebf64948b
+  content_hash: sha256:e750b05e179b73d1848697acc58ba791b21b174b2b87b2dc7eb84856c317a2fe
 - kind: project-relative
   target: codex
   value: .codex/agents/code-testing-planner.toml
@@ -23467,7 +23678,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:74c9856503dbaa3533d590678adb416e38d74e71a2d4f3069dfe20c40700ca43
+  content_hash: sha256:ba3e4c50741c8606bbe0e5c019e59be720b5564ba02c2513ad072adfa37f2702
 - kind: project-relative
   target: codex
   value: .codex/agents/code-testing-researcher.toml
@@ -23476,7 +23687,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:481ffdc1790f4dd0125a5b3bb280afc2534667691bbd265b8f2a0b62ea28aba5
+  content_hash: sha256:141073c0df0de53d0a33c521931ae2cdeb4ca3a48a67864a0ae2a907960ebe9b
 - kind: project-relative
   target: codex
   value: .codex/agents/code-testing-tester.toml
@@ -23485,7 +23696,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:ecb06a3a9b1d4b36baa78e974044c2fdcb93393f5aabe298691d44a85568422f
+  content_hash: sha256:3e64d0905357c8d370d2185077086b05c693cb83fa680cd41f1ca8a27ad7f118
 - kind: project-relative
   target: codex
   value: .codex/agents/test-quality-auditor.toml
@@ -23506,13 +23717,31 @@ deployments:
   content_hash: sha256:476e70856ed06b656ae606eba40f63004346085a89beb316ddc58fdf93560d6b
 - kind: project-relative
   target: codex
+  value: .codex/hooks/azure-skills/hooks/package.json
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:8005a3491db7d92f36ac66369861589f9c47123d3a7c71e643fc2c06168cd45a
+- kind: project-relative
+  target: codex
+  value: .codex/hooks/azure-skills/hooks/scripts/track-telemetry.js
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:39d9420b2148e0c9940a2f2d07ee209308cdbd4d75567a938ebfc618b96a5a35
+- kind: project-relative
+  target: codex
   value: .codex/hooks/azure-skills/hooks/scripts/track-telemetry.ps1
   runtime: null
   scope: project
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:a6b82a1a175a159536f2a88f6858b3b901b287bd7766df837600eb6faf39bc54
+  content_hash: sha256:43113b1854af6dbc3f8ab1917c499afbf65f1997597eab57f5e954efd9ca624a
 - kind: project-relative
   target: codex
   value: .codex/hooks/azure-skills/hooks/scripts/track-telemetry.sh
@@ -23521,7 +23750,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:37dc1baf4b0244d124f7c52b1351c569657031b4cd7a468fa13d485f96ed9521
+  content_hash: sha256:7af56659cef14d56207223b38e3cd19a76722367e38dd91d1a01e6f9e90101e3
 - kind: project-relative
   target: copilot
   value: .github/agents/code-testing-builder.agent.md
@@ -23530,7 +23759,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:ce8b48afc7b3425df82320b727198d20a8970ea6fb28212d56931489b2661d8d
+  content_hash: sha256:28f061d54afdf33f6e1d6810d8f3b34e378cf4bb9fa2342fc97d6a981ae0ce52
 - kind: project-relative
   target: copilot
   value: .github/agents/code-testing-fixer.agent.md
@@ -23548,7 +23777,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:2e40707070cae3535c242ecdb548c84c86e840746413d34f72229bd0b7ec2a6b
+  content_hash: sha256:8985a80f5fd7ca44a782295a1b169c22d4d9c1ffe8ed683dac21955b406b3946
 - kind: project-relative
   target: copilot
   value: .github/agents/code-testing-implementer.agent.md
@@ -23557,7 +23786,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:83320cc1a77c979e156d1504bf2e0ec33a9fc90fe923c6a9f8248f2d9de3a54d
+  content_hash: sha256:0ae446eaec64028e698b0bd185f0f82a09e68f262ce6fcbe40f586ab326fb4b3
 - kind: project-relative
   target: copilot
   value: .github/agents/code-testing-linter.agent.md
@@ -23566,7 +23795,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:c1f4d8aeeea267f7fd64db4b181376ad160dcfaa90820493a37a92b93dcc4e3a
+  content_hash: sha256:801f4b911200f684d110ec9f5021c8937270c5c643ddf52433a22934df50009f
 - kind: project-relative
   target: copilot
   value: .github/agents/code-testing-planner.agent.md
@@ -23575,7 +23804,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:cad681c7b9de2ccd64b6faa7a200bc3fe77bf834d436088fea257e1d591b7bea
+  content_hash: sha256:53716ec19923dfac2b1179800e9dc99a1ef0173d791c159417ca8dacf7243770
 - kind: project-relative
   target: copilot
   value: .github/agents/code-testing-researcher.agent.md
@@ -23584,7 +23813,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:fb5257ccb3963fd40f5381e6f95f97af4de757473889ae2c1222b5656d8b7e62
+  content_hash: sha256:8dfe73c8ce8c6909fd20d67a5993f6d6f6547b23d89c191a5c3de837dcd0dd34
 - kind: project-relative
   target: copilot
   value: .github/agents/code-testing-tester.agent.md
@@ -23593,7 +23822,7 @@ deployments:
   owners:
   - dotnet/skills/plugins/dotnet-test
   active_owner: dotnet/skills/plugins/dotnet-test
-  content_hash: sha256:9e4f7018af351b554c19b3f7255b71850df84672558d6eba694c4a96df15e8ad
+  content_hash: sha256:fe67d1b3e6eefe8f90fdd7e489adb8cf913b1c0cbeece98338d172abc28f896c
 - kind: project-relative
   target: copilot
   value: .github/agents/test-quality-auditor.agent.md
@@ -23623,13 +23852,22 @@ deployments:
   content_hash: sha256:16ae349703f4d9e9a60b7f697bf55038e2cc42424774116c6c95a2fc8b834aa1
 - kind: project-relative
   target: copilot
+  value: .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.js
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/azure-skills/.github/plugins/azure-skills
+  active_owner: microsoft/azure-skills/.github/plugins/azure-skills
+  content_hash: sha256:39d9420b2148e0c9940a2f2d07ee209308cdbd4d75567a938ebfc618b96a5a35
+- kind: project-relative
+  target: copilot
   value: .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.ps1
   runtime: null
   scope: project
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:a6b82a1a175a159536f2a88f6858b3b901b287bd7766df837600eb6faf39bc54
+  content_hash: sha256:43113b1854af6dbc3f8ab1917c499afbf65f1997597eab57f5e954efd9ca624a
 - kind: project-relative
   target: copilot
   value: .github/hooks/scripts/azure-skills/hooks/scripts/track-telemetry.sh
@@ -23638,7 +23876,7 @@ deployments:
   owners:
   - microsoft/azure-skills/.github/plugins/azure-skills
   active_owner: microsoft/azure-skills/.github/plugins/azure-skills
-  content_hash: sha256:37dc1baf4b0244d124f7c52b1351c569657031b4cd7a468fa13d485f96ed9521
+  content_hash: sha256:7af56659cef14d56207223b38e3cd19a76722367e38dd91d1a01e6f9e90101e3
 - kind: uri
   target: mcp
   value: azure
