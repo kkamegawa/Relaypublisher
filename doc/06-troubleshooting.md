@@ -393,8 +393,49 @@ If publish reports missing package metadata:
   payload entirely (`Win32LobAppPayloadMapper`), so Graph rejected the very first write for any new Windows
   app - `0 published, ... 1 failed` with no app created (the failure happens before content upload, so no
   partial/incomplete app is left behind in the tenant). Upgrade the CLI to a version that includes
-  `setupFilePath`/`fileName` mapping (doc/adr.md 2026-08-25 entry) and rerun `publish`; no manifest or
+  `setupFilePath`/`fileName` mapping (doc/adr/publishing.md 2026-08-25 entry) and rerun `publish`; no manifest or
   package change is needed since the value comes from the already-required `Package.IntuneWin.SetupFile`.
+
+## 6d. Multi-Package `publish` Fails on the Second (or Later) Entry With a SAS 403
+
+- **Symptom (fixed in this release)**: publishing a `manifest-list.json` with several entries succeeds for
+  the first entries, then dies with an unhandled `Azure.RequestFailedException`:
+
+  ```
+  Status: 403 (... AuthenticationFailed)
+  ErrorCode: AuthenticationFailed
+  AuthenticationErrorDetail: SAS identifier cannot be found for specified signed identifier
+    at AzureStorageBlockBlobUploader.UploadAsync ...
+  ```
+
+  `--dry-run` and `validate` both succeed because neither uploads a blob; only a real `publish` reaches the
+  Azure Storage call that can hit this. Older builds had no recovery for it: the process died mid-batch,
+  `--result-file` was never written, and doc/00-overview.md §6.10's "one failed entry does not stop the
+  batch" rule did not apply because the exception was not a `PublisherException`.
+
+- **What it means**: Intune's `azureStorageUri` is a service SAS scoped to a stored access policy (its
+  `si=` signed identifier). The exact cause is not fully confirmed (see doc/adr/publishing.md 2026-09-06), but the
+  leading explanation is that a policy just created or updated can take up to ~30 seconds to propagate
+  ([Define a stored access policy](https://learn.microsoft.com/rest/api/storageservices/define-stored-access-policy#create-or-modify-a-stored-access-policy)),
+  and a request against a SAS tied to a not-yet-propagated policy fails with exactly this error in the
+  interim. It is not a SAS expiry: the `403 AuthenticationFailed` / `AuthenticationErrorDetail` shape is
+  the same regardless, so do not assume expiry from this error alone.
+
+- **What happens now**: `AzureStorageBlockBlobUploader` retries the same SAS across a window sized past the
+  documented propagation delay (when the SAS is not itself near expiry), then falls back to a small,
+  bounded number of `renewUpload` calls, waiting again after each. Every retry logs the stage, attempt
+  count, elapsed time, seconds remaining before SAS expiry, renewal count, and the Azure Storage
+  `x-ms-request-id` - use those lines to tell a propagation delay (recovers within the same-SAS window,
+  usually well under a minute) from something a renewal was needed for. If recovery still cannot succeed
+  within its own deadline, only that manifest entry fails (`ContentUploadRejectedException`) and the batch
+  continues; `--result-file` always contains an entry for it now, whichever way the run ends.
+
+- **If it stops there anyway**: check that the run is not competing with another `publish` invocation
+  against the same tenant. The recovery above, and the separate recovery for a run interrupted mid-upload
+  (`azureStorageUriRequestSuccess` / `azureStorageUriRenewalSuccess` treated as resumable, see "Safe Rerun
+  Rules" below), both assume publish is serialized per doc/00-overview.md §6.9 (the GitHub Actions
+  `concurrency` group or the Azure Pipelines Exclusive Lock check). A local CLI run, or a run from an
+  environment not covered by that lock, is outside that guarantee.
 
 ## 7. Safe Rerun Rules
 
@@ -403,3 +444,4 @@ If publish reports missing package metadata:
 - `publish --dry-run` is safe to rerun.
 - Real `publish` is designed to converge, but the content activation step cannot be undone by the tool. Roll back by publishing the previous manifest version with `--allow-downgrade`.
 - Category `$ref` add/remove is idempotent: a duplicate add and a missing remove are both treated as success, so an interrupted category synchronization converges on the next run.
+- A run interrupted between the SAS being issued/renewed and the blob upload finishing leaves an uncommitted content file in `azureStorageUriRequestSuccess` or `azureStorageUriRenewalSuccess`; a rerun renews and resends it rather than failing (issue #150), under the same §6.9 serialization assumption as the previous item.

@@ -2,6 +2,141 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-09-06: manifest 作成スクリプトを Windows file detection に追従させる
+
+**ブランチ**: `feature/yamlcreate-manifest-tool`
+
+**対応 Issue / PR**: [#140](https://github.com/kkamegawa/Relaypublisher/issues/140) / [#139](https://github.com/kkamegawa/Relaypublisher/pull/139)(仕様変更元: [#141](https://github.com/kkamegawa/Relaypublisher/issues/141))
+
+### 実施内容
+
+PR #139 は `Detection` が script 固定だった頃の schema に対して書かれており、Issue #141 で入った
+`Detection.Type` の discriminator に追従していなかった。決定事項は [adr/manifest-tooling.md](adr/manifest-tooling.md) の同日エントリに記録した。
+
+1. `origin/main` を merge した(rebase・force push はしない)。衝突は `doc/adr.md` と `doc/task.md` の 2 ファイルのみで、
+   どちらもヘッダー直下への新 section 追加だったため、両者を日付降順で残して解決した。
+2. `tools/yamlcreate.ps1` に `$DetectionTypes` / `$FileSystemOperationTypes` / `$FileSystemOperators` と、
+   `ManifestValues` 由来の `$FileSystemVersionPattern` / `$TargetDevicePathRootPattern` /
+   `$TargetDeviceInvalidChars` を追加した。`notConfigured` は Graph の unset sentinel なので選択肢に含めない。
+3. `Test-TargetDeviceText` / `Test-TargetDevicePath` / `Test-TargetDeviceLeafName` と、再入力ループ付きの
+   `Read-TargetDevicePath` / `Read-TargetDeviceLeafName` / `Read-FileSystemVersion` を追加した。C# の
+   `HasInvalidFileSystemText` は invalid で true を返すため、本スクリプトの `Test-*` 規約に合わせて反転してある。
+4. `ConvertTo-YamlScalar` / `Add-YamlPair` に `-SingleQuote` を追加し、`Path` をシングルクォートで出力するようにした。
+5. Windows Detection の対話を `Type` の選択から始め、`script` は従来どおり、`file` は
+   `Path` / `FileOrFolderName` / `OperationType`(+ `version` のときだけ `Operator` / `ComparisonValue`)/
+   `Check32BitOn64System` を出力するようにした。「script 検出のみ対応」の注記は削除した。
+6. `$VersionBearingKeys` に `ComparisonValue` を追加し、comment-based help の更新対象フィールドを直した。
+7. [08-yamlcreate.md](08-yamlcreate.md) / [08-yamlcreate_ja.md](08-yamlcreate_ja.md) の §1 / §4.3 / §8.1 / §8.2 / §9 / §10 を
+   日英同時に更新した(283 行で一致、見出し位置も一致)。
+8. 回帰テストを 11 → 16 ケースに増やした。あわせて、応答されない必須プロンプトが無限ループでスイートを止めず
+   ケースの失敗になるよう、Windows 用レスポンダに同一プロンプトの反復ガードを入れた。
+9. 上記の追記で `doc/adr.md` が 231 行になり、ヘッダーが定める 200 行の分割閾値を越えたため、ADR を領域別に分割した。
+   `doc/02-dotnet-architecture.md` の Phase 1〜10 は初期実装のフェーズで、いずれも完了済みかつ現行の ADR
+   (保守判断)に対応しないため、「phase 単位」ではなく領域単位に分けている。
+   [adr/publishing.md](adr/publishing.md)(publish / Graph)、
+   [adr/manifest-tooling.md](adr/manifest-tooling.md)(manifest schema / `tools/yamlcreate.ps1`)、
+   [adr/ci-release.md](adr/ci-release.md)(CI / 配布 feed)の 3 ファイルに分け、`doc/adr.md` は全エントリを
+   日付降順で並べた索引として残した。2026-08-21 のエントリは 1 回の作業で publish 側と CI 側の両方を決めていたため、
+   領域ごとに 2 エントリへ分け、互いの所在を本文に明記した。`doc/06-troubleshooting.md` / `_ja`、
+   `doc/issues/issue-019` / `issue-150` の参照先も新しいファイルに更新した(過去の作業記録の記述は履歴なので変更しない)。
+
+### 検証結果
+
+- `pwsh -NoProfile -File tests/Tools/YamlCreate.Tests.ps1`: 16 ケース成功。
+- `YAMLCREATE_TEST_TOOL_PATH` で変更前の `tools/yamlcreate.ps1` を指した実行では、追加した 5 ケースのうち 4 ケースが失敗する
+  ことを確認した。残る 1 ケース(`New Windows script detection is unchanged by the Type discriminator`)は変更していない
+  経路の回帰ガードなので、変更前後どちらでも成功するのが正しい。
+- `dotnet build IntuneLobPublisher.slnx --configuration Release` / `dotnet test ... --no-build`: 後述の実行結果を参照。
+- `git diff --check`: 成功。
+
+Intune への実 publish は未実施。
+
+## 2026-09-06: Fail publish when result-file output fails (Issue #150 review follow-up)
+
+- Issue: [#150](https://github.com/kkamegawa/Relaypublisher/issues/150)
+- Pull request: [#151](https://github.com/kkamegawa/Relaypublisher/pull/151)
+- Plan: restore the nonzero exit status for result-file output failures while preserving
+  existing publish failures and caller cancellation, then verify and push the focused fix.
+- `PublishEntriesAsync` now tracks result-file write failures independently from per-entry
+  publish failures. A successful batch cannot return success when its requested result file
+  could not be saved. Existing abort and cancellation behavior is preserved.
+- Added four regression tests in `PublishCommandBatchAbortTests`, covering output failures
+  after success, batch abort, per-app failure, and caller cancellation. Existing-directory
+  output targets make the failures deterministic without relying on OS permission changes.
+- Validation:
+  - `dotnet test tests/IntuneLobPublisher.Core.Tests/IntuneLobPublisher.Core.Tests.csproj -c Release --filter FullyQualifiedName~PublishCommandBatchAbortTests`: 15 passed, 0 failed, 0 skipped.
+  - `dotnet build IntuneLobPublisher.slnx -c Release --no-restore --no-incremental`: 0 warnings, 0 errors.
+  - `dotnet test IntuneLobPublisher.slnx -c Release --no-build --no-restore`: 723 passed, 0 failed, 38 skipped.
+  - `git diff --check`: passed.
+- The initial sandboxed test invocation was blocked by MSBuild IPC permissions; the
+  successful validation above ran with the required local process permissions.
+
+## 2026-09-06: publish の SAS 認証 403 回復・result file 一本化・manifest エントリ単位の Graph セッション (Issue #150)
+
+**ブランチ**: `fix/150-sas-activation-retry-and-per-entry-session`
+
+**対応 Issue / PR**:
+
+- Issue: [#150](https://github.com/kkamegawa/Relaypublisher/issues/150)
+- Pull request: [#151](https://github.com/kkamegawa/Relaypublisher/pull/151)
+
+### 実施内容
+
+1. 本番の Azure Pipelines で、複数 manifest を含む `manifest-list.json` の `publish` が 2 件目のパッケージで
+   `Azure.RequestFailedException`(403 `AuthenticationFailed` /
+   `AuthenticationErrorDetail: SAS identifier cannot be found for specified signed identifier`)により
+   落ちる事象の報告を受け、実際のログを基に調査した。原因は未確定(stored access policy の伝播遅延が
+   最有力仮説)だが、必要な対処は仮説によらず同じであることを確認し、実装を進めた。
+2. `AzureStorageBlockBlobUploader` に SAS 認証 403 の回復処理を追加した。SAS の残り有効期限で経路を分岐し、
+   期限に余裕があれば同一 SAS で document 化された伝播時間を上回るまで再送し、それでも回復しなければ
+   `renewUpload` で SAS を取り直したうえで再度待機する。renewal 回数は 403 回復専用に少数へ制限し、
+   予防的 renewal とはカウンタを共有しない。回復全体は 1 回の stage/commit 呼び出しごとに 1 つの
+   deadline で区切り、呼び出し元の `CancellationToken` にリンクした専用の `CancellationTokenSource` で
+   実際にキャンセルし、呼び出し元のキャンセルとは区別する。
+3. 再送のたびにブロック本文を同じバイト列から作り直すようにし(既存の `MemoryStream` 再利用による
+   空/欠損送信のリスクを修正)、回復できない場合は新規 `ContentUploadRejectedException` に変換した
+   (`Status`/`ErrorCode`/`AuthenticationErrorDetail`/`x-ms-request-id` のみを保持し、元の例外・SAS を
+   含む情報は一切保持しない)。
+4. `MobileAppContentUploadOrchestrator.IsRecoverableUncommittedUploadState` に
+   `azureStorageUriRequestSuccess` / `azureStorageUriRenewalSuccess` を追加し、blob 送信だけが中断した
+   未 commit file も既存の file 数・metadata 一致条件のまま再送対象にした。
+5. `PublishCommand.PublishEntriesAsync` の result file 出力を単一の exit point(`finally`、
+   `CancellationToken.None`)に統合し、想定外の例外もエントリを記録してから中断するようにした。
+6. ユーザーの指示により、`publish` の Graph セッション(`HttpClient`・認証・トークンキャッシュ)を
+   manifest エントリごとに新規作成・破棄する構造に変更した(`IPublishSession` / `PublishComposition`)。
+   資格情報(`DefaultAzureCredential`)自体は実行全体で共有する。これは 403 の対策ではなく、指示された
+   構造変更であることを設計判断として明記した。
+7. `doc/00-overview.md`(6.10 / 6.12 / 6.16)、`doc/02-dotnet-architecture.md`、
+   `doc/06-troubleshooting.md` / `_ja`、`doc/05-operation.md` / `_ja`、`doc/adr.md` を更新し、
+   `doc/issues/issue-150-sas-activation-retry-and-per-entry-session.md` を追加した。
+
+### 検証結果
+
+```
+dotnet build IntuneLobPublisher.slnx
+→ ビルドに成功しました。0 エラー。
+
+dotnet test tests/IntuneLobPublisher.Core.Tests/IntuneLobPublisher.Core.Tests.csproj --no-build
+→ 成功! 失敗: 0、合格: 719、スキップ: 38(環境依存でスキップされる既存テスト。今回の変更とは無関係)、合計: 757
+```
+
+追加した主なテスト: 同一 SAS での再送成功、再送本文のバイト単位一致、同一 SAS window 超過後の
+renewal、renewal 上限超過時のライブロック回避、期限接近/期限切れ時の即時 renewal、待機中に期限を
+跨ぐ場合の切り替え、非認証エラー(404)の非リトライ、commit 側での 403 リトライ、呼び出し元
+キャンセルと回復 deadline の区別、例外メッセージ・`ToString()`・logger 出力への SAS 非漏洩、
+3 件バッチ(成功→失敗→成功)での result file と終了コード、中断状態からの復旧。
+
+### 保留事項
+
+- PR [#151](https://github.com/kkamegawa/Relaypublisher/pull/151) は Ready for review。CI の結果は
+  マージ前に確認すること。
+- Wiki(`plan/2026-09-06/`)への計画・Intune 知見の登録は別途実施する。
+- 実機(Intune テナントへの実 publish)での検証は未実施。今回落ちた
+  `Microsoft.GlobalSecureAccess` windows-arm64 / windows-x64 の再実行による確認が必要。手順は
+  `doc/06-troubleshooting.md` §6d および `doc/issues/issue-150-sas-activation-retry-and-per-entry-session.md`
+  の Verification 節を参照。
+- 診断ログを伴う実機での次回実行結果をもって、`doc/adr/publishing.md` の「原因未確定」を確定情報に更新すること。
+
 ## 2026-09-05: Windows file-system detection (Issue #141)
 
 **ブランチ**: `feature/141-windows-file-detection`
@@ -95,6 +230,49 @@ dotnet list IntuneLobPublisher.slnx package --vulnerable --include-transitive
   3 feed へ push される。publish 後に 3 feed への到達と package の同一性を確認して #144 / #141 を close する。
 - `intuneapps` の Global Secure Access manifest 更新、Azure Pipelines dry-run、本番 Intune publish は引き続き別
   repository / 別承認とする。
+
+## 2026-09-02: manifest 作成スクリプトのレビュー修正
+
+**ブランチ**: `feature/yamlcreate-manifest-tool`
+
+**対応 Issue / PR**: [#140](https://github.com/kkamegawa/Relaypublisher/issues/140) / [#139](https://github.com/kkamegawa/Relaypublisher/pull/139)
+
+### 実施内容
+
+ユーザーが承認したレビュー指摘 8 件について、設計の整合、実装修正、回帰検証の順で対応した。
+
+1. `.pkg` / `.exe` / `.tar.gz` などの拡張子直前の旧バージョンを更新し、より長いバージョンの一部分は置換しないようにした。
+2. New のプレビュー、Update の差分・残存行で URL の認証情報・クエリ・フラグメントを除去し、保存する YAML の値は維持した。取得エラーにも生の応答を表示しない。
+3. `azureBlob` の単一の認証選択肢を配列として保持し、StrictMode で停止しないようにした。
+4. `publicHttp` の認証選択肢を既存 provider の契約に合わせ、`none` に限定した。
+5. GitHub Release のハッシュ取得にアセット ID の REST API と `Accept: application/octet-stream` を使い、public / private 両方に対応した。
+6. `Auth` と `Sha256` の順序によらずソースごとの認証情報を読み取り、複数ソース間で混在しないようにした。
+7. CSV のグループ・フィルター選択で、エクスポーターの `GroupName` / `GroupId` と `FilterName` / `FilterId` を受け付けるようにした。
+8. ヘッダーのみの CSV を候補 0 件として扱い、手入力へ戻れるようにした。
+
+[08-yamlcreate.md](08-yamlcreate.md) と [adr.md](adr.md) を更新し、オフラインの PowerShell 回帰テストを追加した。
+CI の Windows / Linux 両ジョブで実行する。サブエージェントによる本体差分とテストの独立レビューで追加指摘はなかった。
+
+### 検証結果
+
+- `pwsh -NoProfile -File tests/Tools/YamlCreate.Tests.ps1`: 9 ケース成功(この後の Copilot レビュー対応で 2 ケース追加し、最終的に 11 ケースになった。「2026-09-02 追記」参照)。修正前のスクリプトを一時ディレクトリに展開して実行した場合は 9 ケースとも失敗することも確認した。
+- `dotnet build IntuneLobPublisher.slnx --configuration Release`: 成功、警告 0、エラー 0。
+- `dotnet test IntuneLobPublisher.slnx --configuration Release --no-build`: 693 件成功、失敗 0、スキップ 0。
+- CI YAML の構文確認、`git diff --check`: 成功。
+
+private GitHub Release の実ダウンロードと Intune への実 publish は未実施。HTTP リクエストの URL・ヘッダー・ハッシュ計算はテスト用の応答で検証した。
+
+### 2026-09-02 追記: Copilot レビュー対応
+
+PR #139 の追加コメント 2 件を、同じ Issue #140 のレビュー修正として対応した。
+
+- `Get-YamlScalarValue` がエスケープされた引用符で値を切り詰める問題を修正した。単一行の引用符付き値を切り出し、単一引用符の `''` と二重引用符の YAML エスケープを復元して Source / Auth へ渡す。
+- `PackageVersion` の行全体を置換する問題を修正した。ソースのバージョン関連フィールドと `Sha256` も値の範囲だけを編集し、引用符・空白・行末コメントを保持する。コメント中の旧バージョンは残存警告の対象になる。
+- [08-yamlcreate.md](08-yamlcreate.md) に既存のコメント保持仕様の具体的な動作を明記し、回帰テストを追加した。本体差分の独立レビューで追加指摘はなかった。
+
+`dotnet build IntuneLobPublisher.slnx --configuration Release` は成功(既存の CS8631 警告 2 件、エラー 0)、
+`dotnet test IntuneLobPublisher.slnx --configuration Release --no-build` は 693 件成功(失敗・スキップ 0)。
+`pwsh -NoProfile -File tests/Tools/YamlCreate.Tests.ps1` は 11 ケース成功。追加した 2 ケースは今回の修正前には失敗することも確認した。
 
 ## 2026-08-30: NuGet.org Trusted Publishing (OIDC) への移行
 
