@@ -307,22 +307,23 @@ jobs:
 
 | workflow | trigger | 役割 |
 |---|---|---|
-| `.github/workflows/release-draft.yml` | `push` tags `v*` | build / test / pack / single-file publish → **draft** GitHub release を作成し資産を添付する |
-| `.github/workflows/release-publish.yml` | `release: [published]` | draft release を人が publish した時点で、その資産を NuGet feed へ push する |
+| `.github/workflows/release-draft.yml` | `push` tags `v*` | build / test / pack / single-file publish → **draft** GitHub release を作成し資産を添付して、同一 `.nupkg` を Azure Artifacts へ内部テスト用に push する |
+| `.github/workflows/release-publish.yml` | `release: [published]` | draft release を人が publish した時点で、その資産を GitHub Packages と nuget.org へ push する |
 
 ### なぜ 2 本に分けるか
 
 NuGet feed は一度 push した version を削除できない(unlist しかできない)。したがって
-「tag を打った瞬間に feed へ公開が確定する」構成は取らず、**draft release を人がレビューして
-publish する操作を最後の関門にする**。tag の打ち直しは draft release を消せばやり直せる。
+「tag を打った瞬間に public feed へ公開が確定する」構成は取らず、**draft release を人がレビューして
+publish する操作を public 配布の最後の関門にする**。ただし Azure Artifacts は内部テスト用 feed であるため、
+tag の検証後に draft workflow から先行 push する。tag の打ち直しは draft release を消せばやり直せる。
 
 ### 配布先 feed
 
 | feed | 想定利用者 | 認証 |
 |---|---|---|
 | GitHub Packages (このリポジトリ) | リポジトリを直接見ている利用者 | `GITHUB_TOKEN` (`packages: write`) |
-| Azure Artifacts | 社内 CI / 閉じたネットワーク | OIDC (workload identity federation) + artifacts-credprovider |
-| nuget.org | 一般利用者 | NuGet Trusted Publishing (OIDC) + `NuGet/login` |
+| Azure Artifacts | 社内 CI / 閉じたネットワークでの内部テスト | `release-draft.yml` から OIDC (workload identity federation) + artifacts-credprovider |
+| nuget.org | 一般利用者 | `release-publish.yml` から NuGet Trusted Publishing (OIDC) + `NuGet/login` |
 
 ### nuget.org Trusted Publishing (OIDC)
 
@@ -346,7 +347,8 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
 
 ### release-draft.yml の設計上のポイント
 
-- trigger は `v*` tag push のみ。job は `verify`(build/test)/ `guard`(provenance)/ `draft-release` の 3 本。
+- trigger は `v*` tag push のみ。job は `verify`(build/test)/ `guard`(provenance)/ `draft-release` /
+  `push-azure-artifacts`(内部テスト用 package push) の 4 本。
 - **`guard` job は read-only で、ビルドコードを一切実行しない。** version 検証と main 到達性検証を
   ここで済ませてから、`contents: write` を持つ `draft-release` job を動かす。
 - version は tag から抽出し、`^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$` で検証してから
@@ -359,13 +361,24 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
 - pack 対象は `src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj` のみ。
 - `dotnet build` / `dotnet test` を ubuntu / windows の matrix で先に通してから pack する。
 - 添付する資産: `.nupkg`、3 RID の single-file app zip、`SHA256SUMS.txt`。
-- `gh release view` で存在確認してから create / upload を出し分け、同一 tag での再実行を冪等にする。
+- `gh release view` で存在確認してから create / 検証を出し分け、同一 tag での再実行を冪等にする。
+- **既存 draft の asset は更新しない**。Azure Artifacts に先行 push 済みの同じ version と asset が
+  食い違うことを防ぐため、既存 draft には expected package があることだけを確認して保持する。
 - **ただし既に publish 済みの release には絶対に upload しない**(`isDraft` を確認して fail させる)。
   publish 済み release に tag を打ち直して資産だけ差し替えると、`release: published` は再発火しないため、
   release に添付された資産と feed に push 済みの package が食い違ったまま公開され続ける。
   その場合は新しい version tag を切る。
 - prerelease version (`-` を含む) の場合は `--prerelease` を付ける。
 - `contents: write` は draft release 作成に必要。
+- `push-azure-artifacts` は `draft-release` 完了後に、draft release へ添付済みの
+  `relaypublisher.<version>.nupkg` を exact name で download して Azure Artifacts へ push する。
+  package を再ビルドせず、内部テスト対象を release asset と一致させるためである。
+- Azure Artifacts job は既存の `release` environment を使用し、`contents: read` と
+  `id-token: write` だけを持つ。`draft-release` の pack/publish job と Azure OIDC credential を分離する。
+- Azure Artifacts の認証は `azure/login` → version 固定の credential provider install →
+  `az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798` →
+  `VSS_NUGET_ACCESSTOKEN` / `VSS_NUGET_URI_PREFIXES` → `dotnet nuget push --api-key AzureDevOps` の順とする。
+  feed URL と access token はマスクし、`--skip-duplicate` で再実行を冪等にする。
 
 ### release-publish.yml の設計上のポイント
 
@@ -387,20 +400,8 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
 - nuget.org は `NuGet/login` による Trusted Publishing (OIDC) を使う。`id-token: write` を持つ job で
   `NUGET_USER` を渡し、返された一時 output を直後の `dotnet nuget push` にだけ渡す。長期有効な
   API key secret は使わない。
-- Azure Artifacts は Microsoft Learn の
-  [GitHub Actions → Azure Artifacts quickstart (managed identity)](https://learn.microsoft.com/azure/devops/artifacts/quickstarts/github-actions?view=azure-devops)
-  に準拠する。`azure/login` → credential provider install →
-  `az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798` →
-  `VSS_NUGET_ACCESSTOKEN` / `VSS_NUGET_URI_PREFIXES` を設定 → `dotnet nuget push --api-key AzureDevOps`。
-  `499b84ac-1321-427f-aa17-267ca6975798` は Azure DevOps の固定リソース ID。
-  ただし credential provider の install だけは Learn の例(`curl ... aka.ms/... | sh`)を採らず、
-  署名済み NuGet package `Microsoft.Artifacts.CredentialProvider.NuGet.Tool` を version 固定で
-  `dotnet tool install` する(§11a の共通方針)。
-- **feed URL は secret** (`AZURE_ARTIFACTS_FEED_URL`)。`VSS_NUGET_URI_PREFIXES` はその場で導出し、
-  `::add-mask::` でマスクしてからログに出さないようにする。取得した access token も同様にマスクする。
-- 3 feed とも `--skip-duplicate` を付け、release publish のやり直しを冪等にする。
-- 3 feed の push step は独立させる。どれか 1 つが失敗したら job は失敗する
-  (`continue-on-error` は使わない)。
+- GitHub Packages と nuget.org の 2 feed とも `--skip-duplicate` を付け、release publish のやり直しを
+  冪等にする。push step は独立させ、どちらかが失敗したら job は失敗する(`continue-on-error` は使わない)。
 
 ### 必要な secrets (environment `release`)
 
@@ -419,7 +420,8 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
 
 - Azure Artifacts 側の事前セットアップ(managed identity 作成、federated credential 設定、
   Azure DevOps プロジェクトの Contributors への追加)は `doc/05-operation.md` §6 を参照する。
-- `release` environment には `NUGET_USER` と Azure Artifacts 用の 4 secrets だけを登録する。
+- `release` environment は `release-draft.yml` の Azure Artifacts job と `release-publish.yml` の
+  nuget.org job で共用し、`NUGET_USER` と Azure Artifacts 用の 4 secrets を登録する。
   Environment protection rules はこの移行では変更しない。
 - NuGet の policy と workflow の値は一致させる。特に実ファイル名は `release-publish.yml` (hyphen) であり、
   `release_publish.yml` や `.github/workflows/release-publish.yml` は指定しない。

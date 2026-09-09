@@ -1,4 +1,4 @@
-# Push the reviewed release artifacts to the NuGet feeds.
+# Push the reviewed release artifacts to the public NuGet feeds.
 #
 # Triggered when a human publishes the draft release that release-draft.yml created.
 # The packages are downloaded from the release instead of being rebuilt, so the bits that
@@ -87,7 +87,7 @@ jobs:
           fi
 
   push-packages:
-    name: push to GitHub Packages, Azure Artifacts and nuget.org
+    name: push to GitHub Packages and nuget.org
     runs-on: ubuntu-latest
     needs: guard
     # Scope the publishing secrets (and optionally required reviewers) to this environment.
@@ -95,7 +95,7 @@ jobs:
     permissions:
       contents: read # gh release download
       packages: write # GitHub Packages
-      id-token: write # Azure workload identity federation and NuGet Trusted Publishing
+      id-token: write # NuGet Trusted Publishing
     env:
       TAG_NAME: ${{ github.event.release.tag_name }}
       PACKAGE: ${{ needs.guard.outputs.package }}
@@ -126,44 +126,6 @@ jobs:
           dotnet nuget push "./artifacts/nuget/${{ env.PACKAGE }}"
           --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
           --api-key "${{ secrets.GITHUB_TOKEN }}"
-          --skip-duplicate
-
-      - name: Sign in to Azure with workload identity federation
-        uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
-        with:
-          client-id: ${{ secrets.AZURE_ARTIFACTS_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_ARTIFACTS_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_ARTIFACTS_SUBSCRIPTION_ID }}
-
-      # Installed as a version-pinned, signed NuGet package rather than by piping a script
-      # from a mutable aka.ms redirect into a shell: this job holds the publishing secrets
-      # and an Azure token, so the install must not be a moving target.
-      - name: Install the Azure Artifacts credential provider
-        run: >
-          dotnet tool install --global Microsoft.Artifacts.CredentialProvider.NuGet.Tool
-          --version 2.0.4
-          --source https://api.nuget.org/v3/index.json
-
-      - name: Acquire an Azure DevOps token for the credential provider
-        run: |
-          set -euo pipefail
-          # 499b84ac-1321-427f-aa17-267ca6975798 is the fixed Azure DevOps resource id.
-          TOKEN="$(az account get-access-token \
-            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
-            --query accessToken -o tsv)"
-          echo "::add-mask::$TOKEN"
-          echo "VSS_NUGET_ACCESSTOKEN=$TOKEN" >> "$GITHUB_ENV"
-          # The feed URL is a secret, so derive the organization prefix here and mask it too.
-          FEED='${{ secrets.AZURE_ARTIFACTS_FEED_URL }}'
-          PREFIX="$(printf '%s' "$FEED" | sed -E 's#^(https://[^/]+/[^/]+)/.*#\1/#')"
-          echo "::add-mask::$PREFIX"
-          echo "VSS_NUGET_URI_PREFIXES=$PREFIX" >> "$GITHUB_ENV"
-
-      - name: Push to Azure Artifacts
-        run: >
-          dotnet nuget push "./artifacts/nuget/${{ env.PACKAGE }}"
-          --api-key AzureDevOps
-          --source '${{ secrets.AZURE_ARTIFACTS_FEED_URL }}'
           --skip-duplicate
 
       # Exchange the GitHub OIDC token for a short-lived nuget.org API key immediately

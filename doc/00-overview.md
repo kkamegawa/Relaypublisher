@@ -122,7 +122,8 @@ repo/
 
 `.github/workflows/` 配下は **この repository 自身の CI/CD** であり、実際に動作する。
 `ci.yml` が pull request の build / test / 成果物生成、`release-draft.yml` が `v*` tag からの draft release
-作成、`release-publish.yml` が draft release の手動 publish をトリガーとする NuGet feed への push を行う。
+作成と Azure Artifacts への内部テスト用 package push、`release-publish.yml` が draft release の手動 publish を
+トリガーとする GitHub Packages / nuget.org への push を行う。
 詳細は `doc/03-ci-github-actions.md` §11b / §12a を参照する。
 
 `workflows/` 配下は**利用者向けの参照用サンプル**であり、この repository では有効にならない。

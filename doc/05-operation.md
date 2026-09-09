@@ -93,7 +93,8 @@ Release version policy:
 - Package version source: Git tag `vX.Y.Z` injected by CI (`-p:Version=X.Y.Z`)
 - Release flow: pushing a `v*` tag onto main creates a **draft** GitHub release with the `.nupkg`,
   the self-contained single-file apps (`win-x64`, `win-arm64`, `osx-arm64`) and `SHA256SUMS.txt`.
-  Publishing that draft release by hand is what pushes the package to the three feeds.
+  The draft workflow pushes its exact `.nupkg` to Azure Artifacts for internal testing. Publishing
+  that draft release by hand then pushes the same package to GitHub Packages and nuget.org.
   See [03-ci-github-actions.md](03-ci-github-actions.md) section 12a.
 - The single-file apps are neither code-signed nor notarized. macOS shows a Gatekeeper warning.
 
@@ -597,7 +598,8 @@ This applies to the Relaypublisher repository itself, not to consumer repositori
   `release` environment, with audience `api://AzureADTokenExchange`.
 - [ ] In Azure DevOps, add the managed identity to the target project's **Contributors** group so it can
   push to the feed.
-- [ ] Confirm `release-publish.yml` is the only workflow with `packages: write` and `id-token: write`.
+- [ ] Confirm `release-draft.yml` grants `id-token: write` only to its Azure Artifacts internal-test job,
+  while `release-publish.yml` grants `packages: write` and `id-token: write` only to its public publishing job.
 - [ ] Confirm `ci.yml` references no secrets, so pull requests from forks still pass.
 
 #### NuGet Trusted Publishing values
@@ -630,12 +632,14 @@ GitHub secrets.
 
 Run these checks only after the workflow and policy configuration are present on the repository's default branch:
 
-1. Publish a new draft release and start `release-publish.yml` so `NuGet/login` obtains a fresh OIDC token and temporary
+1. Push a new version tag and confirm that `release-draft.yml` creates the draft release and pushes its attached exact
+   package to Azure Artifacts for internal testing.
+2. Publish the draft release and start `release-publish.yml` so `NuGet/login` obtains a fresh OIDC token and temporary
    API key. Confirm that the package is accepted by nuget.org without a stored `NUGET_API_KEY` secret.
-2. Confirm the Trusted Publishing policy shows numeric GitHub owner and repository IDs, if displayed, and that those IDs
+3. Confirm the Trusted Publishing policy shows numeric GitHub owner and repository IDs, if displayed, and that those IDs
    identify the intended repository. Confirm that the policy is active for the intended owner, repository, workflow file,
    and `release` environment.
-3. Re-run the same release workflow. It must obtain another fresh OIDC token and complete successfully with
+4. Re-run the same release workflow. It must obtain another fresh OIDC token and complete successfully with
    `--skip-duplicate` when the package already exists; a duplicate package must not be treated as a publish failure.
 
 ## 7. Production Checklist
