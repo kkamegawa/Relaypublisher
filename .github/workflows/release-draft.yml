@@ -162,6 +162,15 @@ jobs:
               echo "::error::draft release ${GITHUB_REF_NAME} does not contain ${PACKAGE}; refusing to replace its assets."
               exit 1
             fi
+            EXISTING_DIR="$(mktemp -d)"
+            trap 'rm -rf "$EXISTING_DIR"' EXIT
+            gh release download "$GITHUB_REF_NAME" \
+              --pattern "$PACKAGE" \
+              --dir "$EXISTING_DIR"
+            if ! cmp -s "./artifacts/release/${PACKAGE}" "$EXISTING_DIR/${PACKAGE}"; then
+              echo "::error::draft release ${GITHUB_REF_NAME} contains a different ${PACKAGE}; cut a new version tag instead."
+              exit 1
+            fi
             echo "Draft release already exists; retaining its assets."
           else
             ARGS=(--title "relaypublisher v${VERSION}" --draft --generate-notes)

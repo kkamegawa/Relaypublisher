@@ -93,7 +93,8 @@ dotnet tool list --global | grep relaypublisher
 - Package version source: Git tag `vX.Y.Z` を CI が `-p:Version=X.Y.Z` で注入する
 - リリースの流れ: main に `v*` tag を push すると、`.nupkg`、self-contained single-file app
   (`win-x64` / `win-arm64` / `osx-arm64`)、`SHA256SUMS.txt` を添付した **draft** GitHub release が作られます。
-  その draft release を手動で publish した時点で 3 つの feed への push が走ります。
+  draft workflow は exact な `.nupkg` を内部テスト用に Azure Artifacts へ push します。その draft release を
+  手動で publish すると、同じ package が GitHub Packages と nuget.org へ push されます。
   詳細は [03-ci-github-actions.md](03-ci-github-actions.md) §12a を参照してください。
 - single-file app には署名・notarization を行っていません。macOS では Gatekeeper の警告が出ます。
 
@@ -583,7 +584,8 @@ Apps:
 - [ ] その managed identity に、この repository の `release` environment を信頼する federated identity
   credential を audience `api://AzureADTokenExchange` で設定する。
 - [ ] Azure DevOps 側で、その managed identity を対象プロジェクトの **Contributors** グループに追加する。
-- [ ] `packages: write` と `id-token: write` を持つ workflow が `release-publish.yml` だけであることを確認する。
+- [ ] `release-draft.yml` が Azure Artifacts の internal-test job にだけ `id-token: write` を付与し、
+  `release-publish.yml` が public publishing job にだけ `packages: write` と `id-token: write` を付与していることを確認する。
 - [ ] `ci.yml` が secrets を一切参照していないことを確認する（fork からの PR を通すため）。
 
 #### NuGet Trusted Publishing の値
@@ -615,13 +617,15 @@ GitHub numeric ID は NuGet policy の受入情報です。workflow や GitHub s
 
 workflow と policy の設定を repository の default branch に反映した後、次を確認します:
 
-1. 新しい draft release を publish し、`release-publish.yml` を起動して `NuGet/login` が fresh OIDC token と
-   temporary API key を取得することを確認します。保存された `NUGET_API_KEY` secret なしで nuget.org が package を
-   受け付けることを確認します。
-2. Trusted Publishing policy に GitHub owner と repository の numeric ID が表示される場合は、その ID が対象
+1. 新しい version tag を push し、`release-draft.yml` が draft release を作成し、添付された exact な package を
+   内部テスト用に Azure Artifacts へ push することを確認します。
+2. draft release を publish して `release-publish.yml` を起動し、`NuGet/login` が fresh OIDC token と temporary
+   API key を取得することを確認します。保存された `NUGET_API_KEY` secret なしで nuget.org が package を受け付ける
+   ことを確認します。
+3. Trusted Publishing policy に GitHub owner と repository の numeric ID が表示される場合は、その ID が対象
    repository を示すことを確認し、owner、repository、workflow file、`release` environment に対して policy が
    active であることを確認します。
-3. 同じ release workflow を再実行します。別の fresh OIDC token を取得し、package が既に存在していても
+4. 同じ release workflow を再実行します。別の fresh OIDC token を取得し、package が既に存在していても
    `--skip-duplicate` により正常終了することを確認します。duplicate package を publish failure として扱わないことを確認します。
 
 ## 7. Production checklist
