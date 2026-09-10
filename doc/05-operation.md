@@ -96,6 +96,9 @@ Release version policy:
   The draft workflow pushes its exact `.nupkg` to Azure Artifacts for internal testing. Publishing
   that draft release by hand then pushes the same package to GitHub Packages and nuget.org.
   See [03-ci-github-actions.md](03-ci-github-actions.md) section 12a.
+- Azure Artifacts package lifecycle: a package can be deleted into the recycle bin, but its version
+  identifier remains permanently reserved and cannot be republished. Re-run the same draft workflow
+  only when the normalized package contents and metadata are unchanged.
 - The single-file apps are neither code-signed nor notarized. macOS shows a Gatekeeper warning.
 
 ## 1. Microsoft Entra App Registration

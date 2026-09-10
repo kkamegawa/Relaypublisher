@@ -38,7 +38,7 @@
 
 - **決定**: NuGet feed への push の trigger を `push: tags` から `release: published` に変更し、
   release workflow を `release-draft.yml` と `release-publish.yml` の 2 本に分割する。
-  - **理由**: NuGet feed は一度 push した version を削除できない(unlist しかできない)。
+  - **理由**: nuget.org / GitHub Packages は一度 push した version を削除できない(unlist しかできない)。
     「tag を打った瞬間に公開が確定する」構成だと、誤った tag からの publish を取り消せない。
     draft release を人がレビューして publish する操作を最後の関門に置くことで、tag の打ち直しは
     draft release を消すだけでやり直せるようにする。
@@ -71,3 +71,5 @@
     pack job から Azure credential を分離し、release asset と同じ package だけを push する。
   - **今後の注意**: Azure Artifacts 用の federated credential は `release` environment の subject を信頼し続ける。
     feed URL と access token はマスクし、`--skip-duplicate` により tag workflow の再実行を冪等にする。
+    package は recycle bin へ削除できるが、version identifier は永久に予約され、同じ version は
+    再 publish できない。
