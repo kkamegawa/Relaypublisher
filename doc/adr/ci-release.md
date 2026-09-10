@@ -58,3 +58,16 @@
   - **影響**: public 化後は fork からの PR が走るため、`ci.yml` は secrets を一切参照しない設計にした
     (`pull_request_target` も使わない)。`doc/00-overview.md` のリポジトリ構成図と
     `doc/05-operation.md` §6 の checklist を、利用者向けと Relaypublisher 自身向けに分けて記述し直した。
+
+## 2026-09-10: Azure Artifacts の内部テスト先行配布 (Issue #153)
+
+- **決定**: Azure Artifacts への package push は `.github/workflows/release-draft.yml` で行い、
+  draft GitHub release に添付済みの exact `.nupkg` を download して内部テスト feed へ送る。
+  `.github/workflows/release-publish.yml` は GitHub Packages と nuget.org の public 配布だけを担当する。
+  - **理由**: 社内 CI / 閉じたネットワークの利用者が、手動 release publish による public 配布前に package を検証できるようにするため。
+    Azure Artifacts は内部テスト用と位置づけ、public feed の review gate と分離する。
+  - **影響**: `release-draft.yml` に `push-azure-artifacts` job を追加する。この job は既存の
+    `release` environment を共用し、Azure workload identity federation のために `id-token: write` を持つ。
+    pack job から Azure credential を分離し、release asset と同じ package だけを push する。
+  - **今後の注意**: Azure Artifacts 用の federated credential は `release` environment の subject を信頼し続ける。
+    feed URL と access token はマスクし、`--skip-duplicate` により tag workflow の再実行を冪等にする。
