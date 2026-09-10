@@ -17,26 +17,22 @@ public sealed class MacOsAppPayloadMapperTests
     [TestMethod]
     [DataRow(null)]
     [DataRow("pkg")]
-    public void ResolveTarget_Pkg_UsesBetaAndPkgODataType(string? appType)
+    public void ResolveTarget_Pkg_UsesPkgODataType(string? appType)
     {
         var app = TestManifests.CreateValidMacOsApp(appType: appType);
 
         var target = MacOsAppPayloadMapper.ResolveTarget(app);
 
-        Assert.IsTrue(target.UseBeta);
         Assert.AreEqual("#microsoft.graph.macOSPkgApp", target.ODataType);
     }
 
     [TestMethod]
-    public void ResolveTarget_Lob_UsesBetaAndLobODataType()
+    public void ResolveTarget_Lob_UsesLobODataType()
     {
-        // macOSLobApp moved to Graph beta (doc/adr/publishing.md 2026-09-10 entry): roleScopeTagIds
-        // only exists there, and v1.0's macOSMinimumOperatingSystem has no macOS 14+ flags.
         var app = TestManifests.CreateValidMacOsApp(appType: "lob");
 
         var target = MacOsAppPayloadMapper.ResolveTarget(app);
 
-        Assert.IsTrue(target.UseBeta);
         Assert.AreEqual("#microsoft.graph.macOSLobApp", target.ODataType);
     }
 

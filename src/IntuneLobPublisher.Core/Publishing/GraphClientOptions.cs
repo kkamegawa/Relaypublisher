@@ -3,8 +3,12 @@ namespace IntuneLobPublisher.Core.Publishing;
 /// <summary>Configuration for the Microsoft Graph HTTP pipeline (authentication, tenant guard, retry).</summary>
 public sealed class GraphClientOptions
 {
-    /// <summary>Graph base address. v1.0 unless overridden for testing against a stub server.</summary>
-    public Uri BaseAddress { get; init; } = new("https://graph.microsoft.com/v1.0/");
+    /// <summary>
+    /// Graph base address. Beta unless overridden for testing against a stub server: every Intune app
+    /// resource this tool writes (win32LobApp, macOSPkgApp, macOSLobApp) is on Graph beta
+    /// (doc/adr/publishing.md 2026-09-10 entry), so there is no longer a per-call v1.0/beta split.
+    /// </summary>
+    public Uri BaseAddress { get; init; } = new("https://graph.microsoft.com/beta/");
 
     /// <summary>OAuth scope requested from <c>DefaultAzureCredential</c>.</summary>
     public string Scope { get; init; } = "https://graph.microsoft.com/.default";

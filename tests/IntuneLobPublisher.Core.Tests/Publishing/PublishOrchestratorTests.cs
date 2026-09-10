@@ -180,7 +180,7 @@ public sealed class PublishOrchestratorTests
                 existingAppId ?? PublishOrchestrator.NewAppPlaceholderId, desired, current));
         }
 
-        public Task ApplyAsync(CategoryPlan plan, AppManifest app, CancellationToken cancellationToken)
+        public Task ApplyAsync(CategoryPlan plan, CancellationToken cancellationToken)
         {
             Calls.Add($"apply {plan.AppId}");
             _log.Add($"category apply {plan.AppId}");

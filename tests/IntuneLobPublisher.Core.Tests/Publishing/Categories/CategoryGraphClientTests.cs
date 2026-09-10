@@ -47,7 +47,7 @@ public sealed class CategoryGraphClientTests
 
     private static (CategoryGraphClient Client, QueueHandler Handler) CreateClient(
         params Func<HttpRequestMessage, HttpResponseMessage>[] responses)
-        => CreateClient(new Uri("https://graph.microsoft.com/v1.0/"), responses);
+        => CreateClient(new Uri("https://graph.microsoft.com/beta/"), responses);
 
     private static (CategoryGraphClient Client, QueueHandler Handler) CreateClient(
         Uri baseAddress, params Func<HttpRequestMessage, HttpResponseMessage>[] responses)
@@ -60,7 +60,7 @@ public sealed class CategoryGraphClientTests
     [TestMethod]
     public async Task ListTenantCategoriesAsync_FollowsNextLink()
     {
-        var nextLink = "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileAppCategories?$skiptoken=page2";
+        var nextLink = "https://graph.microsoft.com/beta/deviceAppManagement/mobileAppCategories?$skiptoken=page2";
         var (client, handler) = CreateClient(
             _ => JsonResponse(HttpStatusCode.OK, $$"""
                 {
@@ -72,26 +72,14 @@ public sealed class CategoryGraphClientTests
                 { "value": [ { "id": "cat-2", "displayName": "Productivity" } ] }
                 """));
 
-        var categories = await client.ListTenantCategoriesAsync(useBeta: false, CancellationToken.None);
+        var categories = await client.ListTenantCategoriesAsync(CancellationToken.None);
 
         CollectionAssert.AreEqual(
             new[] { "Business Apps", "Productivity" }, categories.Select(c => c.DisplayName).ToList());
         Assert.AreEqual(
-            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileAppCategories?$select=id,displayName",
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileAppCategories?$select=id,displayName",
             handler.Requests[0].Uri);
         Assert.AreEqual(nextLink, handler.Requests[1].Uri);
-    }
-
-    [TestMethod]
-    public async Task ListTenantCategoriesAsync_UsesBetaForPkgApps()
-    {
-        var (client, handler) = CreateClient(
-            _ => JsonResponse(HttpStatusCode.OK, """{ "value": [] }"""));
-
-        await client.ListTenantCategoriesAsync(useBeta: true, CancellationToken.None);
-
-        StringAssert.StartsWith(
-            handler.Requests.Single().Uri, "https://graph.microsoft.com/beta/deviceAppManagement/mobileAppCategories");
     }
 
     [TestMethod]
@@ -102,7 +90,7 @@ public sealed class CategoryGraphClientTests
             _ => ErrorResponse(HttpStatusCode.Forbidden, "Forbidden", "Access denied"));
 
         var exception = await Assert.ThrowsExactlyAsync<GraphAccessDeniedException>(
-            () => client.ListTenantCategoriesAsync(useBeta: false, CancellationToken.None));
+            () => client.ListTenantCategoriesAsync(CancellationToken.None));
 
         Assert.AreEqual(403, exception.StatusCode);
     }
@@ -114,13 +102,13 @@ public sealed class CategoryGraphClientTests
             _ => ErrorResponse(HttpStatusCode.InternalServerError, "InternalError", "Boom"));
 
         await Assert.ThrowsExactlyAsync<GraphRequestException>(
-            () => client.ListTenantCategoriesAsync(useBeta: false, CancellationToken.None));
+            () => client.ListTenantCategoriesAsync(CancellationToken.None));
     }
 
     [TestMethod]
     public async Task ListAppCategoriesAsync_FollowsNextLinkAndUsesTheAppScopedPath()
     {
-        var nextLink = "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/categories?$skiptoken=page2";
+        var nextLink = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/categories?$skiptoken=page2";
         var (client, handler) = CreateClient(
             _ => JsonResponse(HttpStatusCode.OK, $$"""
                 {
@@ -132,11 +120,11 @@ public sealed class CategoryGraphClientTests
                 { "value": [ { "id": "cat-9", "displayName": "Legacy" } ] }
                 """));
 
-        var categories = await client.ListAppCategoriesAsync(AppId, useBeta: false, CancellationToken.None);
+        var categories = await client.ListAppCategoriesAsync(AppId, CancellationToken.None);
 
         Assert.AreEqual(2, categories.Count);
         Assert.AreEqual(
-            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/categories?$select=id,displayName",
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/categories?$select=id,displayName",
             handler.Requests[0].Uri);
         Assert.AreEqual(nextLink, handler.Requests[1].Uri);
     }
@@ -149,28 +137,26 @@ public sealed class CategoryGraphClientTests
             _ => ErrorResponse(HttpStatusCode.Forbidden, "Forbidden", "Access denied"));
 
         await Assert.ThrowsExactlyAsync<GraphRequestException>(
-            () => client.ListAppCategoriesAsync(AppId, useBeta: false, CancellationToken.None));
+            () => client.ListAppCategoriesAsync(AppId, CancellationToken.None));
     }
 
     [TestMethod]
-    [DataRow(false, "v1.0")]
-    [DataRow(true, "beta")]
-    public async Task AddCategoryAsync_PostsRefWithMatchingODataIdVersion(bool useBeta, string version)
+    public async Task AddCategoryAsync_PostsRefWithMatchingODataId()
     {
         var (client, handler) = CreateClient(_ => EmptyResponse(HttpStatusCode.NoContent));
 
-        var added = await client.AddCategoryAsync(AppId, CategoryId, useBeta, CancellationToken.None);
+        var added = await client.AddCategoryAsync(AppId, CategoryId, CancellationToken.None);
 
         Assert.IsTrue(added);
         var request = handler.Requests.Single();
         Assert.AreEqual("POST", request.Method);
         Assert.AreEqual(
-            $"https://graph.microsoft.com/{version}/deviceAppManagement/mobileApps/app-1/categories/$ref",
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/categories/$ref",
             request.Uri);
 
         using var document = JsonDocument.Parse(request.Body!);
         Assert.AreEqual(
-            $"https://graph.microsoft.com/{version}/deviceAppManagement/mobileAppCategories/cat-1",
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileAppCategories/cat-1",
             document.RootElement.GetProperty("@odata.id").GetString());
     }
 
@@ -180,10 +166,10 @@ public sealed class CategoryGraphClientTests
         // The host must come from GraphClientOptions.BaseAddress, not a hardcoded graph.microsoft.com,
         // so stub servers and sovereign clouds work.
         var (client, handler) = CreateClient(
-            new Uri("https://graph.example.test:8443/v1.0/"),
+            new Uri("https://graph.example.test:8443/beta/"),
             _ => EmptyResponse(HttpStatusCode.NoContent));
 
-        await client.AddCategoryAsync(AppId, CategoryId, useBeta: true, CancellationToken.None);
+        await client.AddCategoryAsync(AppId, CategoryId, CancellationToken.None);
 
         using var document = JsonDocument.Parse(handler.Requests.Single().Body!);
         Assert.AreEqual(
@@ -196,7 +182,7 @@ public sealed class CategoryGraphClientTests
     {
         var (client, handler) = CreateClient(_ => EmptyResponse(HttpStatusCode.NoContent));
 
-        await client.AddCategoryAsync("app/1", "cat 1", useBeta: false, CancellationToken.None);
+        await client.AddCategoryAsync("app/1", "cat 1", CancellationToken.None);
 
         var request = handler.Requests.Single();
         StringAssert.Contains(request.Uri, "mobileApps/app%2F1/categories/$ref");
@@ -212,7 +198,7 @@ public sealed class CategoryGraphClientTests
         // GraphRetryHandler replays POST bodies, so a duplicate add must converge instead of failing.
         var (client, _) = CreateClient(_ => ErrorResponse((HttpStatusCode)statusCode, code, message));
 
-        var added = await client.AddCategoryAsync(AppId, CategoryId, useBeta: false, CancellationToken.None);
+        var added = await client.AddCategoryAsync(AppId, CategoryId, CancellationToken.None);
 
         Assert.IsFalse(added, "An existing relationship is success, but it changed nothing.");
     }
@@ -226,23 +212,21 @@ public sealed class CategoryGraphClientTests
         var (client, _) = CreateClient(_ => ErrorResponse((HttpStatusCode)statusCode, code, message));
 
         await Assert.ThrowsExactlyAsync<GraphRequestException>(
-            () => client.AddCategoryAsync(AppId, CategoryId, useBeta: false, CancellationToken.None));
+            () => client.AddCategoryAsync(AppId, CategoryId, CancellationToken.None));
     }
 
     [TestMethod]
-    [DataRow(false, "v1.0")]
-    [DataRow(true, "beta")]
-    public async Task RemoveCategoryAsync_DeletesTheAppSideRef(bool useBeta, string version)
+    public async Task RemoveCategoryAsync_DeletesTheAppSideRef()
     {
         var (client, handler) = CreateClient(_ => EmptyResponse(HttpStatusCode.NoContent));
 
-        var removed = await client.RemoveCategoryAsync(AppId, CategoryId, useBeta, CancellationToken.None);
+        var removed = await client.RemoveCategoryAsync(AppId, CategoryId, CancellationToken.None);
 
         Assert.IsTrue(removed);
         var request = handler.Requests.Single();
         Assert.AreEqual("DELETE", request.Method);
         Assert.AreEqual(
-            $"https://graph.microsoft.com/{version}/deviceAppManagement/mobileApps/app-1/categories/cat-1/$ref",
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/categories/cat-1/$ref",
             request.Uri);
     }
 
@@ -251,7 +235,7 @@ public sealed class CategoryGraphClientTests
     {
         var (client, _) = CreateClient(_ => ErrorResponse(HttpStatusCode.NotFound, "NotFound", "Resource not found."));
 
-        var removed = await client.RemoveCategoryAsync(AppId, CategoryId, useBeta: false, CancellationToken.None);
+        var removed = await client.RemoveCategoryAsync(AppId, CategoryId, CancellationToken.None);
 
         Assert.IsFalse(removed);
     }
@@ -262,7 +246,7 @@ public sealed class CategoryGraphClientTests
         var (client, _) = CreateClient(_ => ErrorResponse(HttpStatusCode.BadRequest, "BadRequest", "Malformed id."));
 
         await Assert.ThrowsExactlyAsync<GraphRequestException>(
-            () => client.RemoveCategoryAsync(AppId, CategoryId, useBeta: false, CancellationToken.None));
+            () => client.RemoveCategoryAsync(AppId, CategoryId, CancellationToken.None));
     }
 
     [TestMethod]
@@ -287,7 +271,7 @@ public sealed class CategoryGraphClientTests
         var httpClient = new HttpClient(retryHandler) { BaseAddress = options.BaseAddress };
         var client = new CategoryGraphClient(httpClient);
 
-        var added = await client.AddCategoryAsync(AppId, CategoryId, useBeta: false, CancellationToken.None);
+        var added = await client.AddCategoryAsync(AppId, CategoryId, CancellationToken.None);
 
         Assert.IsTrue(added);
         Assert.AreEqual(2, inner.Requests.Count);

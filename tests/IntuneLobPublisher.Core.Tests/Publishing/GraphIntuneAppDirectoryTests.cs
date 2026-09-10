@@ -30,7 +30,7 @@ public sealed class GraphIntuneAppDirectoryTests
 
     private static HttpClient CreateClient(QueueHandler handler) => new(handler)
     {
-        BaseAddress = new Uri("https://graph.microsoft.com/v1.0/"),
+        BaseAddress = new Uri("https://graph.microsoft.com/beta/"),
     };
 
     [TestMethod]
