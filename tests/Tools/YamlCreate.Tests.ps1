@@ -329,6 +329,10 @@ Invoke-Case 'New AppType lob offers macOS 14/15/26 and renders the selected vers
     foreach ($expected in @('14.0', '15.0', '26.0', '10.13', '13.0')) {
         Assert-Contains ($versionCall.Options -join ',') $expected "AppType: lob should still offer $expected."
     }
+    # Default is now the last shared entry (26.0) regardless of AppType - previously AppType: lob had
+    # its own filtered options list ending at 13.0, so this also guards against that filtering (and its
+    # different default) coming back for lob only.
+    Assert-Equal '26.0' $versionCall.Default 'AppType: lob should default to the same last entry (26.0) as pkg.'
     Assert-Contains $rendered 'AppType: lob' 'AppType: lob was not rendered.'
     Assert-Contains $rendered 'MinimumOSVersion: "14.0"' 'The selected macOS 14 version was not rendered.'
 }

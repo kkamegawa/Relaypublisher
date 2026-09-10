@@ -329,12 +329,16 @@ If publish reports missing package metadata:
   a version that retains the stale failed file. It does not automatically delete the app, content version, or
   files. Multiple versions, multiple matching files, or ambiguous committed state also fail safely.
 - **`GraphRequestException` 400 mentioning `v14_0`/`v15_0` "does not exist on type
-  'microsoft.graph.macOSMinimumOperatingSystem'" (fixed)**: earlier versions always serialized `v14_0`
-  and `v15_0` (even as `false`) on every macOS app payload, but Graph v1.0's `macOSMinimumOperatingSystem`
-  has no such properties at all - only the beta resource does. This made every `AppType: lob` create/update
-  fail, regardless of `Requirements.MinimumOSVersion`. `MacOsMinimumOperatingSystemPayload` now leaves
-  those fields (and the newly-added beta-only `v26_0`) null for a v1.0 target, so they are omitted from
-  the request body instead of sent as a literal `false`.
+  'microsoft.graph.macOSMinimumOperatingSystem'" (historical, fixed)**: at the time, `AppType: lob`
+  (`macOSLobApp`) stayed on Graph v1.0, whose `macOSMinimumOperatingSystem` has no `v14_0`/`v15_0`
+  properties at all - only the beta resource does - but earlier versions always serialized them (even as
+  `false`) on every macOS app payload. This made every `AppType: lob` create/update fail, regardless of
+  `Requirements.MinimumOSVersion`. The fix at the time was for `MacOsMinimumOperatingSystemPayload` to
+  leave those fields (and the newly-added beta-only `v26_0`) null for a v1.0 target, omitting them from
+  the request body instead of sending a literal `false`. **This no longer applies**: `AppType: lob` now
+  uses Graph beta too (section 6f below), so there is no v1.0 target left to omit these fields for - the
+  payload still only sets the one matched version flag, but purely to keep the JSON minimal, not because
+  a null/false distinction matters for a particular API version.
 - **`GraphRequestException` with a 403/404 specific to macOS `AppType: pkg` entries**: pkg apps are
   created, updated, and content-uploaded entirely through Graph **beta** (`macOSPkgApp` does not exist in
   v1.0). Confirm the service principal's Graph permissions (section 2a) and the tenant's beta API

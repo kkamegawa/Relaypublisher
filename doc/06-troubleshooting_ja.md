@@ -328,12 +328,16 @@ Publish が package metadata missing を報告した場合:
   stale な失敗 file が残る version を Intune が activate できないため、追加 file を作成せず停止する。app、content version、
   file は自動削除しない。複数 version、複数の一致 file、または曖昧な commit state も明確なエラーで停止する。
 - **`v14_0`/`v15_0` が `'microsoft.graph.macOSMinimumOperatingSystem'` に存在しないという 400
-  (`GraphRequestException`、修正済み)**: 旧バージョンはすべての macOS app payload に `v14_0`/`v15_0` を
-  (`false` であっても)常に含めていたが、Graph v1.0 の `macOSMinimumOperatingSystem` にはこれらのプロパティ
-  自体が存在しない(beta のみに存在する)。このため `Requirements.MinimumOSVersion` の値に関わらず、
-  `AppType: lob` の create/update がすべて失敗していた。`MacOsMinimumOperatingSystemPayload` は現在、
-  v1.0 向けの場合はこれらのフィールド(および新規追加した beta 専用の `v26_0`)を null のままにし、
-  リクエストボディから省略する(`false` として送信しない)。
+  (`GraphRequestException`、過去の経緯、修正済み)**: 当時 `AppType: lob`(`macOSLobApp`)は Graph v1.0 の
+  ままで、その `macOSMinimumOperatingSystem` には `v14_0`/`v15_0` プロパティ自体が存在しなかった
+  (beta のみに存在)。しかし旧バージョンはすべての macOS app payload にこれらを(`false` であっても)
+  常に含めており、`Requirements.MinimumOSVersion` の値に関わらず `AppType: lob` の create/update が
+  すべて失敗していた。当時の修正は、`MacOsMinimumOperatingSystemPayload` が v1.0 向けの場合はこれらの
+  フィールド(および新規追加した beta 専用の `v26_0`)を null のままにし、リクエストボディから省略する
+  (`false` として送信しない)というものだった。**この区別は現在は不要**: `AppType: lob` も現在は Graph
+  beta を使用するため(下記 6f 節)、フィールドを省略すべき v1.0 対象はもう存在しない。payload が一致した
+  1 つのバージョンフラグだけを設定するのは変わらないが、それは特定の API バージョン向けに null/false を
+  使い分けているからではなく、単に JSON を最小限に保つためである。
 - **macOS `AppType: pkg` entry に特有の 403/404(`GraphRequestException`)**: pkg app の作成・更新・
   content upload はすべて Graph **beta** 経由で行われる(`macOSPkgApp` は v1.0 に存在しない)。service
   principal の Graph 権限(section 2a)とテナントの beta API 可用性を確認する。pkg entry だけが失敗し

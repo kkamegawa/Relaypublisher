@@ -405,10 +405,11 @@ Graph が `Resource not found for the segment 'contentVersions'`(HTTP 400)を返
 `renewUpload` を使用する。不一致 file が残る場合、同じ version への file 追加では activation できないため安全に fail する。
 
 **サポートする `Requirements.MinimumOSVersion`**(`MacOsMinimumOperatingSystemTable` が保持するマッピング):
-`10.13` / `10.14` / `10.15` / `11`(`11.0`)/ `12`(`12.0`)/ `13`(`13.0`)は `AppType: pkg` / `lob` の両方で
-使用できる。`14`(`14.0`)/ `15`(`15.0`)/ `26`(`26.0`)は Graph beta 専用の `v14_0` / `v15_0` / `v26_0`
-フラグを使うため `AppType: pkg` でのみ使用でき、`AppType: lob` で指定すると `UnsupportedMacOsVersionException`
-で fail する。上記いずれのマッピングも持たないバージョン文字列も同様に fail する。
+`10.13` / `10.14` / `10.15` / `11`(`11.0`)/ `12`(`12.0`)/ `13`(`13.0`)/ `14`(`14.0`)/ `15`(`15.0`)/
+`26`(`26.0`)のいずれも `AppType: pkg` / `lob` の両方で使用できる。`14`/`15`/`26` は Graph beta 専用の
+`v14_0` / `v15_0` / `v26_0` フラグを使うが、`macOSPkgApp` / `macOSLobApp` の両方の Graph 呼び出しが
+すでに beta に統一されているため(前段落参照)、`AppType` による区別は無い。上記いずれのマッピングも
+持たないバージョン文字列は `UnsupportedMacOsVersionException` で fail する。
 
 **pre/post install script**(`AppType: pkg` 限定、issue #86): Graph `macOSPkgApp` は `preInstallScript` /
 `postInstallScript`(型 `macOSAppScript`、プロパティは base64 エンコードされた `scriptContent` のみ)を持つが、
