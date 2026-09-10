@@ -339,9 +339,11 @@ If publish reports missing package metadata:
 - **`GraphRequestException` with a 403/404 specific to macOS `AppType: pkg` entries**: pkg apps are
   created, updated, and content-uploaded entirely through Graph **beta** (`macOSPkgApp` does not exist in
   v1.0). Confirm the service principal's Graph permissions (section 2a) and the tenant's beta API
-  availability; this does not affect Windows or `AppType: lob` publishes, which stay on v1.0, so it
-  fails only the pkg entries and lets the rest of the batch continue - unlike a 403 on the app listing,
-  which stops the whole run.
+  availability; this is independent of a `macOSLobApp` (`AppType: lob`, still Graph v1.0) publish
+  succeeding or failing, so a pkg-specific 403/404 fails only the pkg entries and lets the rest of the
+  batch continue - unlike a 403 on the app listing, which stops the whole run. Windows (`win32LobApp`) is
+  also on Graph beta (section 6e above), but for an unrelated reason - `displayVersion`/`roleScopeTagIds`
+  availability, not `macOSPkgApp` existing only in beta.
 - **Device error `2016214710` ("The preinstall script provided by the admin failed")**: the
   `Scripts.PreInstall` script returned a non-zero exit code on the device. This may be expected if the
   script is waiting for a precondition; Intune retries it at the next device check-in. If it persists,
@@ -436,6 +438,29 @@ If publish reports missing package metadata:
   Rules" below), both assume publish is serialized per doc/00-overview.md §6.9 (the GitHub Actions
   `concurrency` group or the Azure Pipelines Exclusive Lock check). A local CLI run, or a run from an
   environment not covered by that lock, is outside that guarantee.
+
+## 6e. Windows Update Fails With `400 NoPropertyForSelectedVersion`
+
+- **Symptom (fixed in this release)**: re-publishing an *existing* Windows Win32 app fails after content
+  upload has already succeeded:
+
+  ```
+  error: <package-identifier> windows-<arch>: Graph request to 'deviceAppManagement/mobileApps/<id>'
+  returned 400 (NoPropertyForSelectedVersion). ...
+  ```
+
+- **Cause**: `Win32LobAppPayloadMapper` always sets `displayVersion` (and `roleScopeTagIds` when the
+  manifest sets `RoleScopeTagIds`), but older builds sent the `win32LobApp` create/update requests to
+  Graph **v1.0**, where `win32LobApp` has neither property - both exist only on the beta resource. Content
+  upload happens before this PATCH in the publish flow (doc/00-overview.md §6.10), so the symptom is: the
+  app's content is already committed, but the metadata PATCH, category sync, and assignment sync never run
+  for that entry.
+- **Fix**: `win32LobApp` create/update/content-upload/notes-patch calls now use Graph beta throughout
+  (doc/adr/publishing.md 2026-09-10 entry), the same API version macOS `AppType: pkg` already used.
+- **Recovery**: rebuild the CLI to a version that includes this fix and rerun `publish` with the same
+  package artifact - **do not delete or recreate the app**. Content is already committed and will be
+  skipped by the input-hash check; the rerun only needs to complete the metadata PATCH, category sync, and
+  assignment sync that failed previously.
 
 ## 7. Safe Rerun Rules
 

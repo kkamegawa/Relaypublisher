@@ -337,9 +337,11 @@ Publish が package metadata missing を報告した場合:
   リクエストボディから省略する(`false` として送信しない)。
 - **macOS `AppType: pkg` entry に特有の 403/404(`GraphRequestException`)**: pkg app の作成・更新・
   content upload はすべて Graph **beta** 経由で行われる(`macOSPkgApp` は v1.0 に存在しない)。service
-  principal の Graph 権限(section 2a)とテナントの beta API 可用性を確認する。Windows や
-  `AppType: lob`(v1.0 のまま)の publish には影響しないため、pkg entry だけが失敗し batch は継続する。
-  App 一覧取得の 403 が run 全体を止めるのとは異なる。
+  principal の Graph 権限(section 2a)とテナントの beta API 可用性を確認する。`macOSLobApp`
+  (`AppType: lob`、現在も Graph v1.0)の publish が成功するか失敗するかとは無関係なので、pkg entry だけが
+  失敗し batch は継続する。App 一覧取得の 403 が run 全体を止めるのとは異なる。Windows(`win32LobApp`)も
+  Graph beta を使用する(6e 節)が、こちらは `macOSPkgApp` が beta にしか存在しないためではなく、
+  `displayVersion`/`roleScopeTagIds` の可用性が理由であり、別の話である。
 - **デバイス側エラー `2016214710`("The preinstall script provided by the admin failed")**:
   `Scripts.PreInstall` のスクリプトがデバイス上で非 0 終了した。スクリプトが前提条件を待っている場合の想定内
   挙動のこともあり、Intune は次回 device check-in で再試行する。継続して失敗する場合はスクリプトのロジックと
@@ -428,6 +430,30 @@ Publish が package metadata missing を報告した場合:
   doc/00-overview.md §6.9 の直列化(GitHub Actions の `concurrency` グループ、または Azure Pipelines の
   Exclusive Lock check)が実際に効いていることを前提にしている。ローカル CLI からの実行や、その保護の
   対象外の environment からの実行は、この前提の外側にある。
+
+## 6e. Windows の更新が `400 NoPropertyForSelectedVersion` で失敗する
+
+- **症状(このリリースで修正済み)**: 既存の Windows Win32 app を再 publish すると、content upload が
+  成功した後に失敗する:
+
+  ```
+  error: <package-identifier> windows-<arch>: Graph request to 'deviceAppManagement/mobileApps/<id>'
+  returned 400 (NoPropertyForSelectedVersion). ...
+  ```
+
+- **原因**: `Win32LobAppPayloadMapper` は常に `displayVersion` を(manifest が `RoleScopeTagIds` を
+  指定していれば `roleScopeTagIds` も)設定するが、旧バージョンは `win32LobApp` の create/update
+  リクエストを Graph **v1.0** に送っていた。v1.0 の `win32LobApp` にはどちらのプロパティも存在せず、
+  両方とも beta リソースにしかない。publish フローでは content upload がこの PATCH より先に走るため
+  (doc/00-overview.md §6.10)、症状としては「content は既に commit 済みだが、そのエントリの
+  メタデータ PATCH・category 同期・assignment 同期が一度も走らない」という形になる。
+- **修正**: `win32LobApp` の create/update/content upload/notes patch はすべて Graph beta を使うように
+  なった(doc/adr/publishing.md 2026-09-10 エントリ)。macOS `AppType: pkg` が既に使っているのと同じ
+  API バージョンである。
+- **復旧手順**: この修正を含むバージョンに CLI を再ビルドし、同じ package artifact で `publish` を
+  再実行する。**app を削除・再作成する必要はない**。content は既に commit 済みで input hash の
+  一致により skip されるため、再実行では失敗していたメタデータ PATCH・category 同期・assignment 同期
+  だけが完了する。
 
 ## 7. Safe rerun rules
 

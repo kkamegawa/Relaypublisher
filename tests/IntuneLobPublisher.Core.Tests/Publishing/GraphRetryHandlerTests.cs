@@ -106,6 +106,7 @@ public sealed class GraphRetryHandlerTests
         Assert.AreEqual("client-id-1", ex.ClientRequestId);
         Assert.AreEqual("request-id-1", ex.RequestId);
         Assert.AreEqual(4, inner.RequestCount);
+        StringAssert.Contains(ex.Message, "Graph GET request to");
     }
 
     [TestMethod]

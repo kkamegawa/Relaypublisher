@@ -524,8 +524,10 @@ Intune の app category は tenant 共有の `mobileAppCategory` リソースで
   | 関連付け | `POST /{version}/deviceAppManagement/mobileApps/{appId}/categories/$ref` |
   | 関連解除 | `DELETE /{version}/deviceAppManagement/mobileApps/{appId}/categories/{categoryId}/$ref` |
 
-- API version は既存 client と同じ規則(Windows `win32LobApp` と macOS `macOSLobApp` は v1.0、macOS `macOSPkgApp` は
-  beta)。`$ref` body の `@odata.id` は `GraphClientOptions.BaseAddress` の scheme + authority と、**その request と
+- API version は既存 client と同じ規則(Windows `win32LobApp` と macOS `macOSPkgApp` は beta、macOS `macOSLobApp` は
+  v1.0)。`win32LobApp` が beta なのは `displayVersion` / `roleScopeTagIds` が beta にしか存在しないため
+  (doc/adr/publishing.md 2026-09-10 エントリ)であり、`macOSPkgApp` が beta なのはリソース自体が v1.0 に
+  存在しないためで、理由は異なる。`$ref` body の `@odata.id` は `GraphClientOptions.BaseAddress` の scheme + authority と、**その request と
   同じ version segment** から組み立てる。host も version もハードコードしない(`BaseAddress` は `/v1.0/` で終わるため、
   そこに相対結合すると beta request に v1.0 の参照を載せてしまう)。
 - **処理順序**は次で固定する(6.10 のトランザクション境界に従う)。
