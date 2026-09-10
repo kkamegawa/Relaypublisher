@@ -299,8 +299,9 @@ manifest schema に optional field を追加するときの hash 互換性(#99):
 
 ### 6.7.1 Windows file-system detection (Issue #141)
 
-Windows の `Detection.Type` は既存の `script` に加えて `file` をサポートする。`file` は Graph v1.0 の
-`win32LobAppFileSystemRule` を使い、対象端末上の file / folder の存在または file version で検出する。
+Windows の `Detection.Type` は既存の `script` に加えて `file` をサポートする。`file` は Graph の
+`win32LobAppFileSystemRule`(v1.0 / beta で同じ形状。呼び出し自体は beta を経由する。doc/adr/publishing.md
+2026-09-10 エントリ)を使い、対象端末上の file / folder の存在または file version で検出する。
 
 - このリリースで許可する `OperationType` は `exists` と `version` だけとする。`modifiedDate`、`createdDate`、
   `sizeInMB` は comparison value の形式と十分な検証を定義してから追加する。
