@@ -51,15 +51,15 @@ public sealed record CategoryPlan(
 
 /// <summary>
 /// Picks the Graph API version for category calls the same way the app and content clients do
-/// (doc/00-overview.md §6.13): Windows (<c>win32LobApp</c>) and macOS <c>AppType: pkg</c>
-/// (<c>macOSPkgApp</c>) both stay on beta (the former because <c>displayVersion</c> /
-/// <c>roleScopeTagIds</c> are beta-only; doc/adr/publishing.md 2026-09-10 entry). Category
-/// relationships exist on <c>mobileApp</c> in both API versions, so this only has to stay
-/// consistent with the version the rest of the app's calls use.
+/// (doc/00-overview.md §6.13): Windows (<c>win32LobApp</c>) and macOS (<c>macOSPkgApp</c> /
+/// <c>macOSLobApp</c>, both <c>AppType</c> values) all stay on beta - Windows because
+/// <c>displayVersion</c>/<c>roleScopeTagIds</c> are beta-only, macOS because <c>macOSPkgApp</c>
+/// doesn't exist in v1.0 and <c>macOSLobApp</c> shares the same <c>roleScopeTagIds</c> gap
+/// (doc/adr/publishing.md 2026-09-10 entry). Category relationships exist on <c>mobileApp</c> in
+/// both API versions, so this only has to stay consistent with the version the rest of the app's
+/// calls use - which, for every platform this tool supports, is now always beta.
 /// </summary>
 public static class CategoryApiVersion
 {
-    public static bool UseBeta(AppManifest app)
-        => app.Platform == "windows"
-            || (app.Platform == "macos" && (app.AppType ?? ManifestValues.DefaultMacOsAppType) == ManifestValues.DefaultMacOsAppType);
+    public static bool UseBeta(AppManifest app) => true;
 }

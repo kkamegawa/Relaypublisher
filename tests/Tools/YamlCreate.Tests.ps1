@@ -276,6 +276,63 @@ Invoke-Case 'New macOS azureBlob source accepts its single workloadIdentity auth
     Assert-Equal 0 @($script:ChoiceCalls | Where-Object Prompt -eq 'Auth type').Count 'azureBlob should not prompt for a fixed auth option.'
 }
 
+Invoke-Case 'New AppType lob offers macOS 14/15/26 and renders the selected version' {
+    # Regression test for the lifted restriction (doc/adr/publishing.md 2026-09-10 entry):
+    # AppType: lob used to exclude the beta-only 14.0/15.0/26.0 values from this prompt.
+    $script:NoDownload = $true
+    $script:Sha256 = $null
+    $script:Platform = 'macos'
+    $script:Architecture = 'arm64'
+    $script:ChoiceCalls = [System.Collections.Generic.List[object]]::new()
+    function script:Read-Choice {
+        param([string]$Prompt, [string[]]$Options, [string]$Default, [hashtable]$Annotations)
+        $script:ChoiceCalls.Add([pscustomobject]@{ Prompt = $Prompt; Options = @($Options); Default = $Default })
+        if ($Prompt -eq 'AppType') { return 'lob' }
+        if ($Prompt -eq 'Source type') { return 'azureBlob' }
+        if ($Prompt -eq 'MinimumOSVersion') { return '14.0' }
+        if (-not [string]::IsNullOrWhiteSpace($Default)) { return $Default }
+        return $Options[0]
+    }
+    # Icon existence/extension enforcement (Read-RelativePath -MustExist, Test-IconFile) is exercised
+    # by other cases; short-circuiting it here keeps this case focused on the MinimumOSVersion choice.
+    function script:Read-RelativePath {
+        param([string]$Prompt, [string]$Root, [string]$Default, [switch]$Required, [switch]$MustExist, [string]$Hint)
+        if ($Prompt -like 'Icon*') { return 'assets/icons/tool.png' }
+        return $Default
+    }
+    function script:Test-IconFile {
+        param([string]$RelativePath, [string]$Root)
+    }
+    function script:Read-Host {
+        param([string]$Prompt)
+        switch -Regex ($Prompt) {
+            '^PackageIdentifier' { return 'Contoso.Tool' }
+            '^PackageName' { return 'Contoso Tool' }
+            '^Publisher' { return 'Contoso' }
+            '^Description' { return 'test' }
+            '^PackageVersion' { return '1.2' }
+            '^Source type' { return '3' }
+            '^Auth type' { return '' }
+            '^Sha256' { return ('a' * 64) }
+            '^Storage account name' { return 'contosostorage' }
+            '^Container name' { return 'packages' }
+            '^Blob name' { return 'tool/1.2/tool.pkg' }
+            '^BundleId' { return 'com.contoso.tool' }
+            '^BundleVersion' { return '1.2' }
+            default { return '' }
+        }
+    }
+    $rendered = (Read-ManifestContent -Root $testRepoRoot).Lines -join "`n"
+
+    $versionCall = $script:ChoiceCalls | Where-Object Prompt -eq 'MinimumOSVersion'
+    Assert-Equal 1 @($versionCall).Count 'MinimumOSVersion should be prompted exactly once.'
+    foreach ($expected in @('14.0', '15.0', '26.0', '10.13', '13.0')) {
+        Assert-Contains ($versionCall.Options -join ',') $expected "AppType: lob should still offer $expected."
+    }
+    Assert-Contains $rendered 'AppType: lob' 'AppType: lob was not rendered.'
+    Assert-Contains $rendered 'MinimumOSVersion: "14.0"' 'The selected macOS 14 version was not rendered.'
+}
+
 Invoke-Case 'New publicHttp offers only none and does not produce a token auth block' {
     $script:NoDownload = $true
     $script:Sha256 = $null
