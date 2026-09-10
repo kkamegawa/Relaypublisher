@@ -20,7 +20,8 @@
   | `actions/checkout` | v7.0.1 | `3d3c42e5aac5ba805825da76410c181273ba90b1` |
   | `actions/setup-dotnet` | v6.0.0 | `a98b56852c35b8e3190ac28c8c2271da59106c68` |
   | `actions/upload-artifact` | v7.0.1 | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` |
-  | `azure/login` | v3.0.1 | `f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca` |
+  | `actions/download-artifact` | v7.0.0 | `37930b1c2abaa49bbe596cd826c3c89aef350131` |
+  | `azure/login` | v3.0.2 | `7ddb5af1ef8758cf1353cf3b42f940aee27ba21c` |
   | `NuGet/login` | v1.2.0 | `8d196754b4036150537f80ac539e15c2f1028841` |
 
 - **`actions/checkout` は必ず `persist-credentials: false` を指定する。** 既定の `true` は job token を
@@ -370,15 +371,17 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
   食い違うことを防ぐため、既存 draft に expected package があることを確認し、ZIP の展開後に package
   contents と metadata が今回生成した package と一致する場合だけ保持する。NuGet ZIP の entry timestamp
   は build ごとに変わり得るため比較対象にせず、実際の差分がある場合は新しい version tag を切る。
+  一致した場合は、新規 draft では今回 attach した package、既存 draft では既存 draft asset の bytes を
+  `release-package` workflow artifact として upload する。
 - **ただし既に publish 済みの release には絶対に upload しない**(`isDraft` を確認して fail させる)。
   publish 済み release に tag を打ち直して資産だけ差し替えると、`release: published` は再発火しないため、
   release に添付された資産と feed に push 済みの package が食い違ったまま公開され続ける。
   その場合は新しい version tag を切る。
 - prerelease version (`-` を含む) の場合は `--prerelease` を付ける。
 - `contents: write` は draft release 作成に必要。
-- `push-azure-artifacts` は `draft-release` 完了後に、draft release へ添付済みの
-  `relaypublisher.<version>.nupkg` を exact name で download して Azure Artifacts へ push する。
-  package を再ビルドせず、内部テスト対象を release asset と一致させるためである。
+- `push-azure-artifacts` は `draft-release` 完了後に、短期保持の `release-package` workflow artifact から
+  `relaypublisher.<version>.nupkg` を exact name で download して Azure Artifacts へ push する。draft release
+  を read-only token で download せず、package を再ビルドせず、内部テスト対象を release asset と一致させるためである。
 - Azure Artifacts job は既存の `release` environment を使用し、`contents: read` と
   `id-token: write` だけを持つ。`draft-release` の pack/publish job と Azure OIDC credential を分離する。
 - Azure Artifacts の認証は `azure/login` → version 固定の credential provider install →

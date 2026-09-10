@@ -176,6 +176,8 @@ jobs:
               echo "::error::draft release ${GITHUB_REF_NAME} contains a different ${PACKAGE}; cut a new version tag instead."
               exit 1
             fi
+            mkdir -p ./artifacts/nuget-selected
+            cp "$EXISTING_DIR/${PACKAGE}" "./artifacts/nuget-selected/${PACKAGE}"
             echo "Draft release already exists; retaining its assets."
           else
             ARGS=(--title "relaypublisher v${VERSION}" --draft --generate-notes)
@@ -183,18 +185,32 @@ jobs:
               ARGS+=(--prerelease)
             fi
             gh release create "$GITHUB_REF_NAME" "${ARGS[@]}" ./artifacts/release/*
+            mkdir -p ./artifacts/nuget-selected
+            cp "./artifacts/release/${PACKAGE}" "./artifacts/nuget-selected/${PACKAGE}"
           fi
+          test -f "./artifacts/nuget-selected/${PACKAGE}"
+          echo "Selected package staged for workflow artifact handoff."
           echo "Draft release ready. Publish it manually to trigger public NuGet feed push."
 
-  # Keep Azure credentials out of the job that packs and publishes the application. Downloading
-  # the exact package from the draft release also makes the internal-test bits auditable.
+      - name: Upload selected package handoff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-package
+          path: ./artifacts/nuget-selected/${{ env.PACKAGE }}
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  # Keep Azure credentials out of the job that packs and publishes the application. The draft
+  # job hands off the exact selected package through a short-lived workflow artifact so this job
+  # does not need release write access or draft-release download access.
   push-azure-artifacts:
     name: push to Azure Artifacts for internal testing
     runs-on: ubuntu-latest
     needs: [guard, draft-release]
     environment: release
     permissions:
-      contents: read # gh release download
+      contents: read # checkout global.json without repository write access
       id-token: write # Azure workload identity federation
     env:
       PACKAGE: ${{ needs.guard.outputs.package }}
@@ -207,15 +223,14 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Download the draft package
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          mkdir -p ./artifacts/nuget
-          gh release download "$GITHUB_REF_NAME" --pattern "$PACKAGE" --dir ./artifacts/nuget
-          test -f "./artifacts/nuget/${PACKAGE}"
-          ls -l ./artifacts/nuget
+      - name: Download selected package handoff
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: release-package
+          path: ./artifacts/nuget
+
+      - name: Verify selected package handoff
+        run: test -f "./artifacts/nuget/${PACKAGE}"
 
       - name: Sign in to Azure with workload identity federation
         uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2

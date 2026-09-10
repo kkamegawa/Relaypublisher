@@ -20,3 +20,20 @@ This is the English counterpart for the release-distribution decision recorded i
     `--skip-duplicate` retains existing package bytes; a draft-workflow rerun is valid only when
     normalized package contents and metadata are unchanged. If they differ, create a new version
     tag rather than attempting to republish the existing version.
+
+## 2026-09-10: Draft Release Package Workflow Artifact Handoff (Issue #157)
+
+- **Decision**: The `push-azure-artifacts` job does not download `.nupkg` assets from the draft
+  release. The `draft-release` job uploads the exact selected package bytes as a `release-package`
+  workflow artifact with one-day retention, and the Azure Artifacts job downloads that artifact
+  before pushing it.
+  - **Reason**: A job token with only `contents: read` cannot retrieve draft release assets, and
+    granting `contents: write` to the Azure credential-bearing job would combine repository/release
+    write access with Azure OIDC credentials in one job.
+  - **Impact**: New drafts hand off the freshly attached package. Safe reruns against existing
+    drafts first compare normalized package contents and metadata, then hand off the existing draft
+    asset bytes when they match. Azure Artifacts therefore receives bytes identical to the draft
+    asset while its job keeps only `contents: read` and `id-token: write`.
+  - **Operational note**: The handoff artifact contains only the `.nupkg`, logs no package
+    contents, and is used only for job-to-job transfer. The public release gate remains manual
+    publication of the draft release.

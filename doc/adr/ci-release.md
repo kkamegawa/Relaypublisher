@@ -73,3 +73,18 @@
     feed URL と access token はマスクし、`--skip-duplicate` により tag workflow の再実行を冪等にする。
     package は recycle bin へ削除できるが、version identifier は永久に予約され、同じ version は
     再 publish できない。
+
+## 2026-09-10: draft release package の workflow artifact handoff (Issue #157)
+
+- **決定**: `push-azure-artifacts` job は draft release から `.nupkg` を download しない。
+  `draft-release` job が選択した exact package bytes を `release-package` workflow artifact として
+  1 日保持で upload し、Azure Artifacts job はその artifact を download して push する。
+  - **理由**: `contents: read` の job token では draft release asset を取得できず、Azure credential を持つ
+    job に `contents: write` を付与すると repository/release write 権限と Azure OIDC credential が
+    同じ job に集まってしまうため。
+  - **影響**: 新規 draft では今回 attach した package を handoff する。既存 draft の rerun では、
+    正規化した package contents と metadata が一致することを確認したうえで、既存 draft asset の bytes を
+    handoff する。これにより Azure Artifacts に push される package は draft asset と一致し、
+    `push-azure-artifacts` は `contents: read` と `id-token: write` だけを維持する。
+  - **今後の注意**: handoff artifact には `.nupkg` だけを含め、package contents をログに出さない。
+    artifact は job 間 transfer 専用で、public release gate は引き続き draft release の手動 publish とする。
