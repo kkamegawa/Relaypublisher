@@ -50,7 +50,7 @@ GitHub Packages / Azure Artifacts からの install 手順は
 
 | | Windows (`win32LobApp`) | macOS `AppType: pkg`(既定、`macOSPkgApp`) | macOS `AppType: lob`(`macOSLobApp`) |
 |---|---|---|---|
-| Graph API バージョン | v1.0 | beta | v1.0 |
+| Graph API バージョン | beta | beta | v1.0 |
 | 署名 | 不要 | 不要 | Developer ID Installer 署名必須 |
 | package サイズ上限 | - | 8 GB | 2 GB |
 | Icon | 任意 | 任意 | 必須 |
@@ -59,7 +59,9 @@ GitHub Packages / Azure Artifacts からの install 手順は
 | pre/post install script | 対象外 | 対応(`Scripts`、任意) | 非対応 |
 
 macOS manifest の詳細な形式と validation ルールは [doc/01-manifest-schema.md](doc/01-manifest-schema.md) §5.3-5.4 を、
-設計の背景(`macOSPkgApp` が Graph beta を必要とする理由を含む)は [doc/00-overview.md](doc/00-overview.md) §6.13 を参照してください。
+設計の背景(`macOSPkgApp` が Graph beta を必要とする理由を含む)は [doc/00-overview.md](doc/00-overview.md) §6.13 を、
+`win32LobApp` も beta に統一した理由(`displayVersion`/`roleScopeTagIds` が beta にしか存在しないため)は
+[doc/adr/publishing.md](doc/adr/publishing.md)(2026-09-10 エントリ)を参照してください。
 
 ## このリポジトリでできること
 
