@@ -13,10 +13,13 @@ public sealed class MacOsMinimumOperatingSystemTableTests
     [DataRow("11")]
     [DataRow("11.0")]
     [DataRow("12")]
+    [DataRow("12.0")]
     [DataRow("13")]
     [DataRow("14")]
     [DataRow("14.0")]
     [DataRow("15")]
+    [DataRow("15.0")]
+    [DataRow("26")]
     [DataRow("26.0")]
     public void Map_KnownVersion_SetsExactlyOneFlag(string version)
     {
