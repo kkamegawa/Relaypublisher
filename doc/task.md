@@ -592,3 +592,24 @@ content は input hash 一致で skip され、失敗していたメタデータ
 挙動の変更はなく、#162・#163 で既にリリース済みの動作を実装内部で整理しただけ。
 
 これで親 Issue #161(Intune app 関連の Graph 呼び出しを beta に統一する)の子 Issue はすべて完了。
+
+## 2026-09-10: PR レビュー指摘対応(#165 / #166)
+
+CI Autofix 経由で Copilot のレビューを受け、以下を各 PR に反映した。
+
+- **PR #165(fix/162)**: `GraphRetryHandlerTests` に capturing `ILogger` を追加し、transient retry・
+  throttled retry・terminal error の各ログに HTTP method が含まれることを検証する回帰テストを 3 件追加。
+  あわせて `README.md` / `README_ja.md` の対応プラットフォーム表(Graph API バージョン列)が
+  Windows を古い v1.0 のまま記載していたのを beta に修正。
+- **PR #166(fix/163)**: `CategoryApiVersion.UseBeta` が `AppType: lob` で `false`(v1.0)を返したままに
+  なっていたバグを修正(常に `true` を返すよう変更)。`CategoryServiceTests` / `CategoryApiVersionTests`
+  がこのバグを期待値として埋め込んでいたため修正し、`doc/00-overview.md` の該当段落も訂正。
+  `tools/yamlcreate.ps1` の `MinimumOSVersion` prompt が `AppType: lob` でも macOS 14/15/26 を提示する
+  ことを検証する回帰ケースを `tests/Tools/YamlCreate.Tests.ps1` に追加(19/19 pass、直接実行で確認)。
+- ドキュメントの日英併記(AGENTS.md の規約)を求める Copilot のコメント 5 件については、リポジトリの
+  CLAUDE.md が「ドキュメントは当面日本語のまま」と明記しており AGENTS.md の規約と矛盾するため、
+  翻訳は行わずスレッドで理由を説明し、ユーザーの判断を仰ぐ形でオープンのまま残した。
+
+`fix/163` に `fix/162` を、`fix/164` に `fix/163` をそれぞれ merge して 3 ブランチの整合を取った。
+`fix/164` では `CategoryApiVersion` を巡るマージコンフリクトを、PR #164(#168)側の削除を正として解決した。
+3 ブランチとも `dotnet build` + `dotnet test` が成功(0 failed)、`tools/yamlcreate.ps1` の回帰スイートも成功。
