@@ -1,7 +1,12 @@
 # Build a release candidate from a `v*` tag and attach it to a DRAFT GitHub release.
 #
-# The internal Azure Artifacts feed receives the exact package attached to the draft release.
-# Publishing the draft release by hand remains the review gate for GitHub Packages and nuget.org.
+# The internal Azure Artifacts feed receives a repack of the package attached to the draft
+# release: only the version in its .nuspec is rewritten to a per-build "preview" version, so
+# every build (including re-runs of the same tag) is always a new version and never collides
+# with a previous push. The extracted payload files remain byte-identical to the reviewed draft
+# asset, but the outer .nupkg archive is intentionally different because its .nuspec content is
+# changed and the zip is rebuilt. Publishing the draft release by hand remains the review gate
+# for GitHub Packages and nuget.org, which keep the tag's official version untouched.
 name: Release (draft)
 
 on:
@@ -213,6 +218,7 @@ jobs:
       contents: read # checkout global.json without repository write access
       id-token: write # Azure workload identity federation
     env:
+      VERSION: ${{ needs.guard.outputs.version }}
       PACKAGE: ${{ needs.guard.outputs.package }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -231,6 +237,41 @@ jobs:
 
       - name: Verify selected package handoff
         run: test -f "./artifacts/nuget/${PACKAGE}"
+
+      # Azure Artifacts must always see a new version, even when this job is re-run for the
+      # same tag. run_number and run_attempt guarantee uniqueness even if two runs land in the
+      # same UTC minute; the timestamp alone keeps the version human-readable and sortable.
+      - name: Compute preview version
+        run: |
+          set -euo pipefail
+          TIMESTAMP="$(date -u +%Y%m%d%H%M)"
+          # Use the SemVer core so prerelease tags still produce the documented X.Y.Z-preview form.
+          VERSION_CORE="${VERSION%%-*}"
+          PREVIEW_VERSION="${VERSION_CORE}-preview.${TIMESTAMP}.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          PREVIEW_PACKAGE="relaypublisher.${PREVIEW_VERSION}.nupkg"
+          echo "PREVIEW_VERSION=$PREVIEW_VERSION" >> "$GITHUB_ENV"
+          echo "PREVIEW_PACKAGE=$PREVIEW_PACKAGE" >> "$GITHUB_ENV"
+          echo "computed preview version: $PREVIEW_VERSION"
+
+      # Rewrite only the .nuspec <version> element of the already-reviewed package rather than
+      # rebuilding from source, so the payload files Azure Artifacts receives remain byte-
+      # identical to the ones attached to the draft release. The outer .nupkg archive differs
+      # because the version metadata changes and the zip is rebuilt.
+      - name: Repackage for Azure Artifacts preview version
+        run: |
+          set -euo pipefail
+          WORKDIR="$(mktemp -d)"
+          trap 'rm -rf "$WORKDIR"' EXIT
+          unzip -q "./artifacts/nuget/${PACKAGE}" -d "$WORKDIR"
+          NUSPEC="$(find "$WORKDIR" -maxdepth 1 -name '*.nuspec')"
+          test -n "$NUSPEC"
+          # Matches only the package's own <version>...</version> element, not the
+          # version="..." attributes used on <dependency>/<frameworkReference> entries.
+          sed -i -E "s#(<version>)[^<]+(</version>)#\1${PREVIEW_VERSION}\2#" "$NUSPEC"
+          grep -qF "<version>${PREVIEW_VERSION}</version>" "$NUSPEC"
+          mkdir -p ./artifacts/nuget-preview
+          (cd "$WORKDIR" && zip -qr "$GITHUB_WORKSPACE/artifacts/nuget-preview/${PREVIEW_PACKAGE}" .)
+          test -f "./artifacts/nuget-preview/${PREVIEW_PACKAGE}"
 
       - name: Sign in to Azure with workload identity federation
         uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
@@ -262,7 +303,7 @@ jobs:
 
       - name: Push to Azure Artifacts
         run: >
-          dotnet nuget push "./artifacts/nuget/${{ env.PACKAGE }}"
+          dotnet nuget push "./artifacts/nuget-preview/${{ env.PREVIEW_PACKAGE }}"
           --api-key AzureDevOps
           --source '${{ secrets.AZURE_ARTIFACTS_FEED_URL }}'
           --skip-duplicate

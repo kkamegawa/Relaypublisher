@@ -11,20 +11,20 @@ workflow:
 
 | Workflow | Trigger | Responsibility |
 | --- | --- | --- |
-| `.github/workflows/release-draft.yml` | Push of a `v*` tag | Build, test, pack, publish single-file apps, create a **draft** GitHub release with its assets, and push the exact same `.nupkg` to Azure Artifacts for internal testing. |
+| `.github/workflows/release-draft.yml` | Push of a `v*` tag | Build, test, pack, publish single-file apps, create a **draft** GitHub release with its assets, and repackage the selected `.nupkg` into a per-build preview-version package for Azure Artifacts internal testing. |
 | `.github/workflows/release-publish.yml` | `release: [published]` | When a person publishes the draft release, push its reviewed package asset to GitHub Packages and nuget.org. |
 
 nuget.org does not permit deleting a published package version and can only unlist one. Therefore,
 publishing a draft GitHub release remains the final human gate for public distribution. Azure
-Artifacts is an internal-test feed, so the draft workflow pushes the release asset there after
-validating the tag.
+Artifacts is an internal-test feed, so after validating the tag the draft workflow repackages the
+selected `.nupkg` by rewriting only its package `<version>` in the `.nuspec` to
+`{X.Y.Z}-preview.{yyyyMMddHHmm}.{run_number}.{run_attempt}` before pushing it there.
+Dependency `version="..."` attributes are left unchanged.
 
-An Azure Artifacts package can be deleted into the recycle bin, but its version identifier remains
-permanently reserved and cannot be republished. If a draft workflow may have reached the Azure
-Artifacts push, do not reuse that version tag after deleting the draft release; create a new version
-tag instead. The draft workflow may be rerun with the same version tag only when the normalized
-package contents and metadata are unchanged. `--skip-duplicate` retains the already-published
-package bytes; it does not allow different package content to be republished under the same version.
+Each Azure Artifacts push therefore uses a fresh preview version, so rerunning the same tag no
+longer collides with an earlier internal-feed version. The official tag version remains unchanged
+on the draft release asset and in `.github/workflows/release-publish.yml`, which still pushes the
+reviewed official-version package to GitHub Packages and nuget.org.
 
 ### Safe draft-workflow reruns
 
@@ -37,9 +37,10 @@ new version tag. When the normalized contents match, the draft workflow uploads 
 a new draft, or the existing draft asset bytes for an existing draft.
 
 The Azure Artifacts job must download that `release-package` workflow artifact by exact package
-name and push it without rebuilding. It keeps only `contents: read` plus `id-token: write`; it must
-not download the draft release with its read-only token and must not receive repository write
-permission alongside Azure credentials.
+name, then rewrite only the package `<version>` in its `.nuspec` (leaving dependency version
+attributes untouched) and push the rebuilt preview package without rebuilding from source. It keeps
+only `contents: read` plus `id-token: write`; it must not download the draft release with its
+read-only token and must not receive repository write permission alongside Azure credentials.
 
 Never upload replacement assets to a published release. The `release: [published]` event does not
 fire again when assets are replaced, which could otherwise leave the release asset inconsistent with

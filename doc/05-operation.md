@@ -8,8 +8,9 @@ For a complete local terminal procedure, see [07-local-e2e.md](07-local-e2e.md).
 
 ## 0. Tool Installation and Version Control
 
-Relaypublisher is distributed as a NuGet global tool. The same package version is published to three
-feeds, so pick the one your environment can reach:
+Relaypublisher is distributed as a NuGet global tool. nuget.org and GitHub Packages publish the
+official tag version, while Azure Artifacts carries per-build preview versions for internal testing,
+so pick the feed your environment can reach:
 
 | Feed | Intended consumer |
 | --- | --- |
@@ -93,12 +94,17 @@ Release version policy:
 - Package version source: Git tag `vX.Y.Z` injected by CI (`-p:Version=X.Y.Z`)
 - Release flow: pushing a `v*` tag onto main creates a **draft** GitHub release with the `.nupkg`,
   the self-contained single-file apps (`win-x64`, `win-arm64`, `osx-arm64`) and `SHA256SUMS.txt`.
-  The draft workflow pushes its exact `.nupkg` to Azure Artifacts for internal testing. Publishing
-  that draft release by hand then pushes the same package to GitHub Packages and nuget.org.
-  See [03-ci-github-actions.md](03-ci-github-actions.md) section 12a.
-- Azure Artifacts package lifecycle: a package can be deleted into the recycle bin, but its version
-  identifier remains permanently reserved and cannot be republished. Re-run the same draft workflow
-  only when the normalized package contents and metadata are unchanged.
+  The draft workflow then repackages that reviewed `.nupkg` for Azure Artifacts by rewriting only
+  the package `<version>` in the `.nuspec` to
+  `{X.Y.Z}-preview.{yyyyMMddHHmm}.{run_number}.{run_attempt}` and pushes that preview-version
+  package for internal testing; dependency version attributes are left unchanged. Publishing the
+  draft release by hand still pushes the original
+  official-version package to GitHub Packages and nuget.org unchanged. See
+  [03-ci-github-actions.md](03-ci-github-actions.md) section 12a.
+- Azure Artifacts package lifecycle: every draft-workflow run mints a fresh preview version, so a
+  rerun publishes a new internal-test package instead of colliding with an earlier Azure Artifacts
+  version. Operators should validate/install the preview version from Azure Artifacts and the
+  official tag version from the draft release, GitHub Packages, or nuget.org.
 - The single-file apps are neither code-signed nor notarized. macOS shows a Gatekeeper warning.
 
 ## 1. Microsoft Entra App Registration
@@ -635,8 +641,9 @@ GitHub secrets.
 
 Run these checks only after the workflow and policy configuration are present on the repository's default branch:
 
-1. Push a new version tag and confirm that `release-draft.yml` creates the draft release and pushes its attached exact
-   package to Azure Artifacts for internal testing.
+1. Push a new version tag and confirm that `release-draft.yml` creates the draft release and pushes
+   a preview-version repack of its selected `.nupkg` to Azure Artifacts for internal testing,
+   while the draft asset itself keeps the official tag version.
 2. Publish the draft release and start `release-publish.yml` so `NuGet/login` obtains a fresh OIDC token and temporary
    API key. Confirm that the package is accepted by nuget.org without a stored `NUGET_API_KEY` secret.
 3. Confirm the Trusted Publishing policy shows numeric GitHub owner and repository IDs, if displayed, and that those IDs

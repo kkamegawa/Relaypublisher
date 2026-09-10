@@ -62,17 +62,20 @@
 ## 2026-09-10: Azure Artifacts の内部テスト先行配布 (Issue #153)
 
 - **決定**: Azure Artifacts への package push は `.github/workflows/release-draft.yml` で行い、
-  draft GitHub release に添付済みの exact `.nupkg` を download して内部テスト feed へ送る。
+  `draft-release` job が選択した `.nupkg` を起点に、`.nuspec` の package 自身の `<version>` だけを
+  `{X.Y.Z}-preview.{yyyyMMddHHmm}.{run_number}.{run_attempt}` へ差し替えた preview-version package を
+  内部テスト feed へ送る。`<dependency version="...">` などの属性値は変更しない。
   `.github/workflows/release-publish.yml` は GitHub Packages と nuget.org の public 配布だけを担当する。
   - **理由**: 社内 CI / 閉じたネットワークの利用者が、手動 release publish による public 配布前に package を検証できるようにするため。
     Azure Artifacts は内部テスト用と位置づけ、public feed の review gate と分離する。
   - **影響**: `release-draft.yml` に `push-azure-artifacts` job を追加する。この job は既存の
     `release` environment を共用し、Azure workload identity federation のために `id-token: write` を持つ。
-    pack job から Azure credential を分離し、release asset と同じ package だけを push する。
+    pack job から Azure credential を分離し、release asset の payload を保ったまま Azure Artifacts だけ
+    一意な preview version で push する。
   - **今後の注意**: Azure Artifacts 用の federated credential は `release` environment の subject を信頼し続ける。
-    feed URL と access token はマスクし、`--skip-duplicate` により tag workflow の再実行を冪等にする。
-    package は recycle bin へ削除できるが、version identifier は永久に予約され、同じ version は
-    再 publish できない。
+    feed URL と access token はマスクする。Azure Artifacts では run ごとに新しい preview version を採番するため、
+    tag workflow の rerun は duplicate version と衝突しない。draft release asset と public feed は
+    引き続き official な tag version を使う。
 
 ## 2026-09-10: draft release package の workflow artifact handoff (Issue #157)
 
@@ -84,7 +87,7 @@
     同じ job に集まってしまうため。
   - **影響**: 新規 draft では今回 attach した package を handoff する。既存 draft の rerun では、
     正規化した package contents と metadata が一致することを確認したうえで、既存 draft asset の bytes を
-    handoff する。これにより Azure Artifacts に push される package は draft asset と一致し、
+    handoff する。これにより Azure Artifacts へ push する preview package は draft asset を起点に再構成され、
     `push-azure-artifacts` は `contents: read` と `id-token: write` だけを維持する。
   - **今後の注意**: handoff artifact には `.nupkg` だけを含め、package contents をログに出さない。
     artifact は job 間 transfer 専用で、public release gate は引き続き draft release の手動 publish とする。
