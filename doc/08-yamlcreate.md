@@ -101,7 +101,7 @@ Fields that apply only to the other platform are neither prompted for nor writte
 |---|---|
 | `AppType` | Defaults to `pkg`. Selecting `lob` makes the top-level `Icon` required |
 | `Source` | One source item as described in §5 |
-| `Requirements.MinimumOSVersion` | Lists all keys in `MacOsMinimumOperatingSystemTable`, for both `AppType: pkg` and `lob` - both use Graph beta (doc/adr/publishing.md 2026-09-10 entry), so 14.0 / 15.0 / 26.0 are available to either. Always quoted in the output (YAML reads an unquoted `14.0` as a float, which no longer matches the version table key) |
+| `Requirements.MinimumOSVersion` | Lists the dotted supported choices (`10.13` / `10.14` / `10.15` / `11.0` / `12.0` / `13.0` / `14.0` / `15.0` / `26.0`) - a subset of `MacOsMinimumOperatingSystemTable`'s keys, which also accepts undotted aliases (`11`, `12`, `13`, `14`, `15`, `26`) not offered by this prompt. Offered identically for both `AppType: pkg` and `lob` - both use Graph beta (doc/adr/publishing.md 2026-09-10 entry), so 14.0 / 15.0 / 26.0 are available to either. Always quoted in the output (YAML reads an unquoted `14.0` as a float, which no longer matches the version table key) |
 | `Detection.IgnoreAppVersion` | Defaults to false |
 | `Detection.IncludedApps[]` | One or more `BundleId` + `BundleVersion` pairs. `BundleVersion` defaults to `PackageVersion` |
 | `Scripts.PreInstall` / `PostInstall` | Prompted for only when `AppType: pkg`. Validates the `.sh` extension, file existence, length below 15360 characters, absence of a BOM, and a leading `#!`. Omits the `Scripts` block if both are empty |

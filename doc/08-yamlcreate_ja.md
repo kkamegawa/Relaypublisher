@@ -101,7 +101,7 @@
 |---|---|
 | `AppType` | 既定 `pkg`。`lob` を選ぶと top-level `Icon` が必須になる |
 | `Source` | §5 のソース item を 1 つ |
-| `Requirements.MinimumOSVersion` | `MacOsMinimumOperatingSystemTable` の全キーを、`AppType: pkg` / `lob` の両方に提示する ― どちらも Graph beta を使用するため(doc/adr/publishing.md 2026-09-10 エントリ)、14.0 / 15.0 / 26.0 もどちらで選択可能。常にクォートして出力する(裸の `14.0` は YAML が float として読み、version table のキーと一致しなくなる) |
+| `Requirements.MinimumOSVersion` | 小数点付きの対応選択肢(`10.13` / `10.14` / `10.15` / `11.0` / `12.0` / `13.0` / `14.0` / `15.0` / `26.0`)を提示する ― `MacOsMinimumOperatingSystemTable` のキーの一部で、同テーブルはこのプロンプトが提示しない小数点なしの別名(`11`、`12`、`13`、`14`、`15`、`26`)も受け付ける。`AppType: pkg` / `lob` の両方に同じ選択肢を提示する ― どちらも Graph beta を使用するため(doc/adr/publishing.md 2026-09-10 エントリ)、14.0 / 15.0 / 26.0 もどちらで選択可能。常にクォートして出力する(裸の `14.0` は YAML が float として読み、version table のキーと一致しなくなる) |
 | `Detection.IgnoreAppVersion` | 既定 false |
 | `Detection.IncludedApps[]` | `BundleId` + `BundleVersion` を 1 件以上。`BundleVersion` の既定は `PackageVersion` |
 | `Scripts.PreInstall` / `PostInstall` | `AppType: pkg` のときだけ質問する。`.sh` / 実在 / 15360 文字未満 / BOM なし / `#!` 開始を検証。両方空なら `Scripts` ブロックを出力しない |
