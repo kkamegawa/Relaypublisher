@@ -257,7 +257,9 @@ content upload の Graph URL は app の具体的な OData 型でキャストす
 `mobileLobApp` から継承されるため、型キャストを省略した `/mobileApps/{id}/contentVersions` は
 Graph によって解決できず、`Resource not found for the segment 'contentVersions'`(HTTP 400)になる。
 `AppType: pkg` は beta の `microsoft.graph.macOSPkgApp`、`AppType: lob` は v1.0 の
-`microsoft.graph.macOSLobApp`、Windows は v1.0 の `microsoft.graph.win32LobApp` を使用する。
+`microsoft.graph.macOSLobApp`、Windows は beta の `microsoft.graph.win32LobApp`
+(`displayVersion` / `roleScopeTagIds` が beta にしか無いため。doc/adr/publishing.md 2026-09-10 エントリ)
+を使用する。
 content version の作成後も、files、状態取得、`renewUpload`、`commit` に同じ具体型のキャストを付ける。
 中断状態の復旧は package metadata が一致する既存 file の `renewUpload` で行い、content version / file の
 DELETE や PATCH には依存しない。不一致 file が残る場合は追加 file を作成せず安全に fail する。
