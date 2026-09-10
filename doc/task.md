@@ -546,9 +546,10 @@ content は input hash 一致で skip され、失敗していたメタデータ
    `doc/adr/publishing.md`(2026-09-10 エントリに追記)を更新。
 6. 回帰テストを追加・更新(`MacOsMinimumOperatingSystemTableTests` を beta 前提に書き換え、
    `MacOsAppPayloadMapperTests` に macOS 14 lob の positive テストを追加、`MacOsAppPublisherTests` に
-   pkg/lob 両方が beta を使うことを確認するテストを追加)。PowerShell 構文チェック(`pwsh` の Parser)は
-   成功。Pester (`tests/Tools/YamlCreate.Tests.ps1`) はこの sandbox に未インストールのため未実行 ―
-   CI での確認が必要。
+   pkg/lob 両方が beta を使うことを確認するテストを追加)。`tests/Tools/YamlCreate.Tests.ps1` は Pester ではなく
+   `Invoke-Case`/`Assert-*` による独立した PowerShell harness で、`pwsh -NoProfile -File
+   tests/Tools/YamlCreate.Tests.ps1` で直接実行し 19/19 成功を確認した(新設した `AppType: lob` macOS
+   14/15/26 提示ケースを含む)。
 
 `dotnet build` + `dotnet test` は 735 件成功・0 件失敗(既存の skip 38 件は無関係)。
 
