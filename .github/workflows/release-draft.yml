@@ -245,7 +245,9 @@ jobs:
         run: |
           set -euo pipefail
           TIMESTAMP="$(date -u +%Y%m%d%H%M)"
-          PREVIEW_VERSION="${VERSION}-preview.${TIMESTAMP}.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          # Use the SemVer core so prerelease tags still produce the documented X.Y.Z-preview form.
+          VERSION_CORE="${VERSION%%-*}"
+          PREVIEW_VERSION="${VERSION_CORE}-preview.${TIMESTAMP}.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
           PREVIEW_PACKAGE="relaypublisher.${PREVIEW_VERSION}.nupkg"
           echo "PREVIEW_VERSION=$PREVIEW_VERSION" >> "$GITHUB_ENV"
           echo "PREVIEW_PACKAGE=$PREVIEW_PACKAGE" >> "$GITHUB_ENV"
