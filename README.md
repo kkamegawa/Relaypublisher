@@ -36,7 +36,7 @@ The Japanese translation is available in [README_ja.md](README_ja.md).
 
 | | Windows (`win32LobApp`) | macOS `AppType: pkg` (`macOSPkgApp`, default) | macOS `AppType: lob` (`macOSLobApp`) |
 |---|---|---|---|
-| Graph API version | v1.0 | beta | v1.0 |
+| Graph API version | beta | beta | v1.0 |
 | Signing | Not required | Not required | Developer ID Installer required |
 | Max package size | - | 8 GB | 2 GB |
 | Icon | Optional | Optional | Required |
@@ -45,8 +45,10 @@ The Japanese translation is available in [README_ja.md](README_ja.md).
 | Pre/post install script | Not applicable | Supported (`Scripts`, optional) | Not supported |
 
 See [doc/01-manifest-schema.md](doc/01-manifest-schema.md) §5.3-5.4 for the full macOS manifest shape
-and validation rules, and [doc/00-overview.md](doc/00-overview.md) §6.13 for the design rationale
-(including why `macOSPkgApp` requires Graph beta).
+and validation rules, [doc/00-overview.md](doc/00-overview.md) §6.13 for the design rationale
+(including why `macOSPkgApp` requires Graph beta), and
+[doc/adr/publishing.md](doc/adr/publishing.md) (2026-09-10 entry) for why `win32LobApp` also moved to
+beta (`displayVersion`/`roleScopeTagIds` are beta-only there too).
 
 ## What This Repository Provides
 
