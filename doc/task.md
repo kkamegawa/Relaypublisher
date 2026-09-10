@@ -557,3 +557,38 @@ content は input hash 一致で skip され、失敗していたメタデータ
 適用できる。
 
 残タスクは親 Issue #161 の子 Issue として継続: v1.0/beta 切り替え機構の削除 (#164)。
+
+## 2026-09-10: v1.0/beta 切り替え機構を削除し、beta を唯一の Graph API バージョンにする
+
+**ブランチ**: `fix/164-remove-graph-version-switch`(`fix/163-macos-lob-graph-beta` 上に stack)
+
+**対応 Issue / PR**: [#164](https://github.com/kkamegawa/Relaypublisher/issues/164)(親: [#161](https://github.com/kkamegawa/Relaypublisher/issues/161)) / PR は #166 に stack して作成予定
+
+### 実施内容
+
+#162・#163 の完了により win32LobApp・macOSPkgApp・macOSLobApp のすべてが常に Graph beta を使うことに
+なったため、呼び出しごとに v1.0/beta を判定していた `useBeta` 引数と `VersionSegment` / `WithGraphVersion`
+ヘルパーが到達不能なコードになっていた。初期開発段階でデータ移行や後方互換を考慮する必要がないため、
+死んだコードとして残さず削除した。
+
+1. `GraphClientOptions.BaseAddress` の既定値を `https://graph.microsoft.com/beta/` に変更。
+2. `GraphWin32LobAppClient` / `GraphMacOsAppClient` / `GraphMobileAppContentClient`
+   (+ `IMobileAppContentUploadOrchestrator` / `MobileAppContentUploadOrchestrator`) /
+   `CategoryGraphClient`(+ `CategoryService`。`CategoryApiVersion` は削除) /
+   `AssignmentGraphClient`(`WithGraphVersion` 拡張メソッドを削除) / `GraphIntuneAppDirectory` から
+   `useBeta` 引数と絶対パス組み立てを削除し、すべて `HttpClient.BaseAddress` からの相対パスに統一。
+3. `MacOsAppTarget` から `UseBeta` を削除し `ODataType` のみに。
+4. `CategoryGraphClient.BuildCategoryODataId` を `HttpClient.BaseAddress` からそのまま組み立てるよう簡略化。
+5. `ICategoryService.ApplyAsync` から使われなくなった `AppManifest app` 引数を削除。
+6. `doc/00-overview.md`(§6.13 の category 呼び出し表・`@odata.id` の説明)、`doc/02-dotnet-architecture.md`
+   (`ICategoryGraphClient` / `ICategoryService` のシグネチャ例)、`doc/adr/publishing.md`
+   (2026-09-10 エントリに追記)を更新。
+7. 影響を受けた 12 個のテストファイルを更新(`useBeta` 引数の削除、期待 URI を beta に統一、
+   v1.0/beta 切り替えをテストしていた `[DataRow]` パラメータ化テストや専用テストの削除・簡略化)。
+   `CategoryApiVersionTests.cs` は対象の型が削除されたため削除。
+
+`dotnet build` + `dotnet test` は 721 件成功・0 件失敗(既存の skip 38 件は無関係)。
+
+挙動の変更はなく、#162・#163 で既にリリース済みの動作を実装内部で整理しただけ。
+
+これで親 Issue #161(Intune app 関連の Graph 呼び出しを beta に統一する)の子 Issue はすべて完了。
