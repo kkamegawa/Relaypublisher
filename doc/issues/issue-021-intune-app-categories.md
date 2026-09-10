@@ -93,9 +93,12 @@ segment から組み立てる。`BaseAddress` は `/v1.0/` で終わり request 
 
 API version は既存 publisher と同じルールにする。
 
-- Windows `win32LobApp`: v1.0
-- macOS `macOSLobApp`: v1.0
+- Windows `win32LobApp`: beta
+- macOS `macOSLobApp`: beta
 - macOS `macOSPkgApp`: beta
+
+(2026-09-10 追記: `displayVersion` / `roleScopeTagIds` が v1.0 の `win32LobApp`/`macOSLobApp` に存在しないため、
+カテゴリ操作を含む Intune アプリ関連の Graph 呼び出しはすべて beta に統一した。`doc/adr/publishing.md` 参照。)
 
 既存の `GraphRetryHandler`、ページング、tenant guard、request-id logging、secret masking を共用する。
 アプリカテゴリ操作に必要な application permission は既存の `DeviceManagementApps.ReadWrite.All` のままとする
