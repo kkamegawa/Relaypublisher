@@ -551,7 +551,8 @@ content は input hash 一致で skip され、失敗していたメタデータ
    tests/Tools/YamlCreate.Tests.ps1` で直接実行し 19/19 成功を確認した(新設した `AppType: lob` macOS
    14/15/26 提示ケースを含む)。
 
-`dotnet build` + `dotnet test` は 735 件成功・0 件失敗(既存の skip 38 件は無関係)。
+`dotnet build` + `dotnet test` は 741 件成功・0 件失敗(既存の skip 38 件は無関係。レビュー対応で追加した
+`MacOsMinimumOperatingSystemTableTests` の "12.0"/"15.0"/"26" ケース分、735 から増加)。
 
 既存の macOS 13 以前を指定した lob manifest の挙動は変わらない。macOS 14 以降を指定した既存アプリで
 `RoleScopeTagIds` が原因の障害が発生していた場合も、#162 と同じ復旧手順(削除・再作成不要で再実行)が
