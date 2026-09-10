@@ -28,6 +28,24 @@ Intune / Microsoft Graph への publish、content upload、payload mapping に�
     (Issue #164)。この決定は 2026-08-21 の「v1.0 では v14_0/v15_0 を省略する」エントリ、および
     2026-08-25 の win32LobApp v1.0 Learn リンクを置き換えるものであり、「対象 API に存在しない
     プロパティを送らない」という同じ原則に基づくため矛盾しない。
+- **決定**(Issue #163): `MacOsAppPayloadMapper.ResolveTarget` を変更し、`AppType: lob`
+  (`macOSLobApp`)も `AppType: pkg` と同じく Graph beta を使うようにする。`MacOsMinimumOperatingSystemTable`
+  からは `IsBetaOnly` 判定と `useBeta` 引数を削除し、`v14_0`/`v15_0`/`v26_0` を含む全バージョンを
+  `AppType` に関わらず使用できるようにする。`UnsupportedMacOsVersionException` から
+  `requiresBetaOnlyFlag` 分岐を削除する。
+  - **理由**: 上記 win32LobApp と同じ調査で、`macOSLobApp` にも `roleScopeTagIds` が v1.0 に存在しない
+    という同種のバグが確認できた。あわせて v1.0 の `macOSMinimumOperatingSystem` が macOS 14 以降の
+    フラグを持たないため、`AppType: lob` は `Requirements.MinimumOSVersion` に macOS 14 以降を指定
+    できないという既知の制限も、同じ「lob は beta を使わない」という前提から生じていた。lob を beta に
+    揃えることで両方を同時に解消する。
+  - **影響範囲**: `tools/yamlcreate.ps1` の `$MacOsVersions` から beta 専用フラグと `AppType: lob` での
+    除外処理を削除し、対話式スクリプトでも `lob` から macOS 14 以降を選べるようにした。既存の macOS 13
+    以前を指定した `lob` manifest の挙動(YAML・publish の入出力)は変わらない。
+  - **今後の注意**: これで Intune app 関連の Graph 呼び出し(win32LobApp・macOSPkgApp・macOSLobApp)は
+    すべて beta に揃った。Issue #164 で `useBeta` 引数と `/v1.0/` ⇔ `/beta/` の per-call 切り替え機構
+    (`GraphMacOsAppClient` / `GraphWin32LobAppClient` / `GraphMobileAppContentClient` /
+    `CategoryGraphClient` / `AssignmentGraphClient` / `GraphIntuneAppDirectory` の `VersionSegment` 等)
+    自体を削除し、`GraphClientOptions.BaseAddress` を beta 既定にする。
 
 ## 2026-09-06: publish の SAS 認証 403 回復・result file 一本化・manifest エントリ単位の Graph セッション (Issue #150)
 

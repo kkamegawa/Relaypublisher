@@ -14,9 +14,13 @@ public sealed class MacOsMinimumOperatingSystemTableTests
     [DataRow("11.0")]
     [DataRow("12")]
     [DataRow("13")]
-    public void Map_KnownV1Version_SetsExactlyOneFlag(string version)
+    [DataRow("14")]
+    [DataRow("14.0")]
+    [DataRow("15")]
+    [DataRow("26.0")]
+    public void Map_KnownVersion_SetsExactlyOneFlag(string version)
     {
-        var payload = MacOsMinimumOperatingSystemTable.Map(version, useBeta: false);
+        var payload = MacOsMinimumOperatingSystemTable.Map(version);
 
         var flags = new[]
         {
@@ -30,12 +34,12 @@ public sealed class MacOsMinimumOperatingSystemTableTests
     [DataRow("10.13")]
     [DataRow("11")]
     [DataRow("13")]
-    public void Map_V1Version_LeavesBetaOnlyFlagsNull(string version)
+    public void Map_PreV14Version_LeavesBetaOnlyFlagsNull(string version)
     {
-        // v1.0's macOSMinimumOperatingSystem has no v14_0/v15_0/v26_0 property at all, so these must
-        // stay null (and therefore be omitted from the JSON) rather than serialize as a literal false,
-        // which Graph rejects on a macOSLobApp (v1.0) request.
-        var payload = MacOsMinimumOperatingSystemTable.Map(version, useBeta: false);
+        // Only the matched version's flag is ever set to true; the v14_0/v15_0/v26_0 flags stay null
+        // (and therefore omitted from the JSON) for any version below macOS 14, keeping the payload
+        // minimal even though both macOSPkgApp and macOSLobApp now always target Graph beta.
+        var payload = MacOsMinimumOperatingSystemTable.Map(version);
 
         Assert.IsNull(payload.V14_0);
         Assert.IsNull(payload.V15_0);
@@ -43,46 +47,30 @@ public sealed class MacOsMinimumOperatingSystemTableTests
     }
 
     [TestMethod]
-    public void Map_MacOs14WithUseBetaTrue_SetsV14Flag()
+    public void Map_MacOs14_SetsV14Flag()
     {
-        var payload = MacOsMinimumOperatingSystemTable.Map("14.0", useBeta: true);
+        var payload = MacOsMinimumOperatingSystemTable.Map("14.0");
 
         Assert.AreEqual(true, payload.V14_0);
         Assert.IsFalse(payload.V13_0);
     }
 
     [TestMethod]
-    public void Map_MacOs15WithUseBetaTrue_SetsV15Flag()
+    public void Map_MacOs15_SetsV15Flag()
     {
-        var payload = MacOsMinimumOperatingSystemTable.Map("15", useBeta: true);
+        var payload = MacOsMinimumOperatingSystemTable.Map("15");
 
         Assert.AreEqual(true, payload.V15_0);
     }
 
     [TestMethod]
-    public void Map_MacOs26WithUseBetaTrue_SetsV26Flag()
+    public void Map_MacOs26_SetsV26Flag()
     {
-        var payload = MacOsMinimumOperatingSystemTable.Map("26.0", useBeta: true);
+        var payload = MacOsMinimumOperatingSystemTable.Map("26.0");
 
         Assert.AreEqual(true, payload.V26_0);
         Assert.IsNull(payload.V14_0);
         Assert.IsNull(payload.V15_0);
-    }
-
-    [TestMethod]
-    [DataRow("14")]
-    [DataRow("14.0")]
-    [DataRow("15")]
-    [DataRow("15.0")]
-    [DataRow("26")]
-    [DataRow("26.0")]
-    public void Map_BetaOnlyVersionWithUseBetaFalse_ThrowsRequiresBetaOnlyFlag(string version)
-    {
-        var ex = Assert.ThrowsExactly<UnsupportedMacOsVersionException>(
-            () => MacOsMinimumOperatingSystemTable.Map(version, useBeta: false));
-
-        Assert.IsTrue(ex.RequiresBetaOnlyFlag);
-        StringAssert.Contains(ex.Message, "AppType 'pkg'");
     }
 
     [TestMethod]
@@ -92,16 +80,15 @@ public sealed class MacOsMinimumOperatingSystemTableTests
     public void Map_UnknownVersion_Throws(string version)
     {
         var ex = Assert.ThrowsExactly<UnsupportedMacOsVersionException>(
-            () => MacOsMinimumOperatingSystemTable.Map(version, useBeta: true));
+            () => MacOsMinimumOperatingSystemTable.Map(version));
 
-        Assert.IsFalse(ex.RequiresBetaOnlyFlag);
         Assert.AreEqual(version, ex.MinimumOsVersion);
     }
 
     [TestMethod]
     public void Map_TrimsWhitespace()
     {
-        var payload = MacOsMinimumOperatingSystemTable.Map(" 13.0 ", useBeta: false);
+        var payload = MacOsMinimumOperatingSystemTable.Map(" 13.0 ");
 
         Assert.IsTrue(payload.V13_0);
     }

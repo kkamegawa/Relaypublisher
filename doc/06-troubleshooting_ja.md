@@ -294,8 +294,9 @@ Publish が package metadata missing を報告した場合:
 ## 6a. macOS 固有の失敗
 
 - **`UnsupportedMacOsVersionException`("no known macOS minimum-operating-system mapping")**:
-  `Requirements.MinimumOSVersion` が `MacOsMinimumOperatingSystemTable` の認識する値(`10.13`〜`13.0`、または
-  `AppType: pkg` のみ有効な `14`/`14.0`/`15`/`15.0`/`26`/`26.0`)のいずれでもない。この mapping は `publish`(および
+  `Requirements.MinimumOSVersion` が `MacOsMinimumOperatingSystemTable` の認識する値(`10.13`〜`13.0`、
+  `14`/`14.0`、`15`/`15.0`、`26`/`26.0`。いずれも `AppType: pkg` / `lob` の両方が Graph beta を使用するため
+  両方で使用可能。下記の修正済みエントリ参照)のいずれでもない。この mapping は `publish`(および
   `--dry-run`)時にのみ実行され `package` では行われないため、publish 前に manifest のバージョン文字列を修正する。
 - **`Resource not found for the segment 'contentVersions'` (HTTP 400)**: 古い CLI が app ID 直後の
   OData 型キャストを付けずに content endpoint を呼び出している。Release 構成で CLI を再ビルドし、同じ
@@ -303,13 +304,11 @@ Publish が package metadata missing を報告した場合:
   `microsoft.graph.macOSLobApp`（lob）、`microsoft.graph.win32LobApp`（Windows）の型付き URLを
   content version 作成から files/commit まで一貫して使用する。このエラーが content version 作成時に
   発生した場合、app を削除・再作成する必要はない。
-- **`UnsupportedMacOsVersionException`("AppType 'pkg'" に言及)**: manifest が `AppType: lob` かつ
-  `Requirements.MinimumOSVersion` に macOS 14 以降を指定している。`macOSLobApp` は Graph v1.0 のままで、
-  macOS 13 より先の minimum-OS フラグが無い。`MinimumOSVersion` を下げるか、`AppType: pkg`(Graph beta、
-  14/15 に対応)に切り替える。これは Graph API バージョンの制約であり manifest schema のルールではないため
-  `validate` では検出されない。`package` も `MinimumOSVersion` を Graph の値へ mapping することは無いため
-  検出できず、`publish` 時(および、Graph へ書き込む前にこの種のエラーを表面化させる `publish --dry-run`)に
-  のみ表面化する。
+- **`UnsupportedMacOsVersionException`("AppType 'pkg'" に言及、修正済み)**: 旧バージョンは `AppType: lob` かつ
+  `Requirements.MinimumOSVersion` に macOS 14 以降を指定した manifest を拒否していた。`macOSLobApp` が
+  Graph v1.0 のままで、macOS 13 より先の minimum-OS フラグを持たなかったため。`macOSLobApp` は現在 Graph
+  beta を使用する(下記 6f 節)ため、`AppType: lob` も `AppType: pkg` と同様に macOS 14 以降を指定できる。
+  この例外の「beta が必要」という variant は今後発生しない。
 - **`Detection.IncludedApps` が欠落または空**: macOS のすべての app entry は `IncludedApps` を 1 件以上
   (`BundleId` + `BundleVersion`)必要とする。これは `publish` ではなく `validate` で fail する。
 - **PKG で `commitFileFailed` になる(または content upload が `commitFileSuccess` に到達しない)**:
@@ -337,11 +336,12 @@ Publish が package metadata missing を報告した場合:
   リクエストボディから省略する(`false` として送信しない)。
 - **macOS `AppType: pkg` entry に特有の 403/404(`GraphRequestException`)**: pkg app の作成・更新・
   content upload はすべて Graph **beta** 経由で行われる(`macOSPkgApp` は v1.0 に存在しない)。service
-  principal の Graph 権限(section 2a)とテナントの beta API 可用性を確認する。`macOSLobApp`
-  (`AppType: lob`、現在も Graph v1.0)の publish が成功するか失敗するかとは無関係なので、pkg entry だけが
-  失敗し batch は継続する。App 一覧取得の 403 が run 全体を止めるのとは異なる。Windows(`win32LobApp`)も
-  Graph beta を使用する(6e 節)が、こちらは `macOSPkgApp` が beta にしか存在しないためではなく、
-  `displayVersion`/`roleScopeTagIds` の可用性が理由であり、別の話である。
+  principal の Graph 権限(section 2a)とテナントの beta API 可用性を確認する。pkg entry だけが失敗し
+  batch は継続する ― App 一覧取得の 403 が run 全体を止めるのとは異なる。`macOSLobApp`
+  (`AppType: lob`)も現在は Graph beta を使用する(下記 6f 節)が、こちらは `roleScopeTagIds` の
+  可用性が理由であり `macOSPkgApp` が beta にしか存在しないためではないので、この pkg 特有の障害から
+  `lob` の publish が成功するか失敗するかは判断できない。Windows(`win32LobApp`)も Graph beta を
+  使用する(6e 節)が、同様に `roleScopeTagIds`/`displayVersion` の可用性が理由である。
 - **デバイス側エラー `2016214710`("The preinstall script provided by the admin failed")**:
   `Scripts.PreInstall` のスクリプトがデバイス上で非 0 終了した。スクリプトが前提条件を待っている場合の想定内
   挙動のこともあり、Intune は次回 device check-in で再試行する。継続して失敗する場合はスクリプトのロジックと
@@ -454,6 +454,21 @@ Publish が package metadata missing を報告した場合:
   再実行する。**app を削除・再作成する必要はない**。content は既に commit 済みで input hash の
   一致により skip されるため、再実行では失敗していたメタデータ PATCH・category 同期・assignment 同期
   だけが完了する。
+
+## 6f. `AppType: lob` が Graph beta を使用するようになった
+
+- **変更点(このリリース)**: `macOSLobApp`(`AppType: lob`)の create/update/content upload/notes patch、
+  および category 同期も、`macOSPkgApp`(`AppType: pkg`)と Windows の `win32LobApp`(6e 節)と同様に
+  Graph beta を使用するようになった。`macOSLobApp` は v1.0 にも存在するが `roleScopeTagIds` が存在せず、
+  これは 6e 節で修正した Windows のバグと同種のものだった。調査の過程で、`AppType: lob` に別途あった
+  macOS 14 以降の制限(上記の「`UnsupportedMacOsVersionException`("AppType 'pkg'" に言及)」エントリ)も
+  同じ理由で撤廃した。
+- **実際の影響**: `Requirements.MinimumOSVersion` に macOS 14 / 15 / 26 を指定しても、`pkg` だけでなく
+  `AppType: lob` でも動作するようになった。macOS 13 以前の既存 `lob` entry には manifest 変更は不要 ―
+  `publish` の挙動自体は変わらず、内部で使う Graph API バージョンだけが変わっている。
+- **既存の `lob` app の更新が `RoleScopeTagIds` 指定により `400 NoPropertyForSelectedVersion` で
+  失敗していた場合**: 6e 節と同じ復旧手順が適用できる。修正版 CLI で同じ package artifact を使って
+  `publish` を再実行する。app の削除・再作成は不要。
 
 ## 7. Safe rerun rules
 

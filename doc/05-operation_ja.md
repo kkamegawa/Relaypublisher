@@ -403,12 +403,13 @@ macOS 対応(doc/00-overview.md §6.13)には `AppType` によって Graph・運
 - `AppType: pkg`(既定、`macOSPkgApp`): 未署名可、8 GB まで、`Intent: uninstall` 非対応。この app 種別に関する
   すべての Graph 呼び出し(作成・更新、content upload、notes/committedContentVersion の patch、app resolution
   での一覧取得)は Graph **beta** を経由する。`macOSPkgApp` が v1.0 に存在しないためで、これは内部的に処理され
-  operator の作業は不要だが、テナント側で beta API に障害があると `pkg` の publish のみが影響を受ける点に注意する。
-- `AppType: lob`(`macOSLobApp`): Developer ID Installer 署名必須、2 GB 上限、top-level `Icon` 必須で、Graph
-  **v1.0** のまま。v1.0 の `minimumSupportedOperatingSystem` には macOS 13 より先のフラグが無いため、
-  `Requirements.MinimumOSVersion` に macOS 14 以降を指定した `lob` の manifest entry は `publish`(および
-  `--dry-run`)時に `UnsupportedMacOsVersionException` で fail し、`AppType: pkg` への変更を促すメッセージが出る。
-  これは Graph API バージョンの制約であり manifest schema のルールではないため、`validate` では検出されない。
+  operator の作業は不要だが、テナント側で beta API に障害があると macOS の publish 全般(`pkg` と `lob` の
+  両方。次の項目参照)が影響を受ける点に注意する。
+- `AppType: lob`(`macOSLobApp`): Developer ID Installer 署名必須、2 GB 上限、top-level `Icon` 必須で、こちらも
+  Graph **beta** を使用する(doc/adr/publishing.md 2026-09-10 エントリ)。`macOSLobApp` 自体は v1.0 にも存在
+  するが `roleScopeTagIds` が存在しないため、`pkg` と同様にすべての呼び出しが beta になる。これも operator の
+  作業は不要で、副次的に `Requirements.MinimumOSVersion` に macOS 14 以降を指定しても `pkg` と同様に動作する
+  ようになった。
 - `.pkg` の content は publish 時にその場で暗号化される(macOS には IntuneWinAppUtil に相当する packaging 時
   ツールが無い)。そのため Windows のように「暗号化済み package を再生成する」個別の手順は無く、`publish` を
   再実行すればその時点で staging されている `.pkg` が再暗号化される。

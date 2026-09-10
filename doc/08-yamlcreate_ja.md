@@ -101,7 +101,7 @@
 |---|---|
 | `AppType` | 既定 `pkg`。`lob` を選ぶと top-level `Icon` が必須になる |
 | `Source` | §5 のソース item を 1 つ |
-| `Requirements.MinimumOSVersion` | `MacOsMinimumOperatingSystemTable` のキーのみを提示。`AppType: lob` では beta 専用の 14.0 / 15.0 / 26.0 を選択肢から除外する。常にクォートして出力する(裸の `14.0` は YAML が float として読み、version table のキーと一致しなくなる) |
+| `Requirements.MinimumOSVersion` | `MacOsMinimumOperatingSystemTable` の全キーを、`AppType: pkg` / `lob` の両方に提示する ― どちらも Graph beta を使用するため(doc/adr/publishing.md 2026-09-10 エントリ)、14.0 / 15.0 / 26.0 もどちらで選択可能。常にクォートして出力する(裸の `14.0` は YAML が float として読み、version table のキーと一致しなくなる) |
 | `Detection.IgnoreAppVersion` | 既定 false |
 | `Detection.IncludedApps[]` | `BundleId` + `BundleVersion` を 1 件以上。`BundleVersion` の既定は `PackageVersion` |
 | `Scripts.PreInstall` / `PostInstall` | `AppType: pkg` のときだけ質問する。`.sh` / 実在 / 15360 文字未満 / BOM なし / `#!` 開始を検証。両方空なら `Scripts` ブロックを出力しない |
@@ -247,7 +247,7 @@ Windows の `Detection.ComparisonValue` を対象に含めるのは、`greaterTh
 - `DisplayName` が `PackageVersion` を含まないこと
 - `Icon` の拡張子(`.png` / `.jpg` / `.jpeg`)、1 MiB 上限、実在
 - macOS `Scripts` の `.sh` 拡張子、実在、15360 文字未満、BOM なし、`#!` 開始
-- `AppType: lob` で `Icon` が指定されていること、macOS 14 以降を選べないこと
+- `AppType: lob` で `Icon` が指定されていること
 - `AppType: pkg` で `Intent: uninstall` を選べないこと
 
 保存後、`relaypublisher` が PATH にあれば `relaypublisher validate --manifest <保存先> --repo-root <RepoRoot>`

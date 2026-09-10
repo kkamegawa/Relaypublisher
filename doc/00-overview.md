@@ -385,14 +385,15 @@ validation ルール:
 - `AppType: pkg` の app に `Intent: uninstall` の assignment があれば fail。
 - `AppType: lob` の場合は Icon(ロゴ)を必須とし、2 GB 超の PKG を fail とする。
 
-**Graph API バージョン**: `macOSPkgApp` は **beta 専用**(v1.0 に存在しない)。そのため `AppType: pkg` の app に
-関するすべての Graph 呼び出し ― 作成・更新、content upload(contentVersions/files/commit)、notes /
-committedContentVersion の patch、app resolution 用の一覧取得 ― は `/beta/` を経由する。`macOSLobApp` は
-v1.0 に存在するため `AppType: lob` は `/v1.0/` のまま。両者は同一の CLI 実行内で混在しうるため、Graph 呼び出し
-の実装(`GraphMacOsAppClient` / `GraphMobileAppContentClient` / `GraphIntuneAppDirectory`)は各呼び出しごとに
-使用する API バージョンを判定する。副作用として、v1.0 の `macOSMinimumOperatingSystem` には macOS 14 以降の
-フラグが無いため、`AppType: lob` で `Requirements.MinimumOSVersion` に macOS 14 以降を指定すると publish 時に
-fail する(`AppType: pkg` への切り替えが必要)。
+**Graph API バージョン**: `macOSPkgApp` は **beta 専用**(v1.0 に存在しない)。`macOSLobApp` は v1.0 にも
+存在するが、`roleScopeTagIds` が beta の `mobileApp` にしか存在しないため(doc/adr/publishing.md
+2026-09-10 エントリ)、`AppType: lob` の Graph 呼び出しも beta に統一している。結果として `AppType: pkg` /
+`lob` いずれの app についても ― 作成・更新、content upload(contentVersions/files/commit)、notes /
+committedContentVersion の patch、app resolution 用の一覧取得 ― すべて `/beta/` を経由する
+(`GraphMacOsAppClient` / `GraphMobileAppContentClient` / `GraphIntuneAppDirectory`)。副作用として、
+v1.0 専用だった時期に `AppType: lob` で `Requirements.MinimumOSVersion` に macOS 14 以降を指定すると
+publish 時に fail していた制限は撤廃されており、`AppType: pkg` / `lob` のどちらでも macOS 14 以降を
+指定できる。
 
 `contentVersions` は `mobileLobApp` から継承されるため、content upload の URL では app ID の直後に
 具体的な OData 型キャスト(`microsoft.graph.win32LobApp` / `microsoft.graph.macOSPkgApp` /

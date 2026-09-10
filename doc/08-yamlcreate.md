@@ -101,7 +101,7 @@ Fields that apply only to the other platform are neither prompted for nor writte
 |---|---|
 | `AppType` | Defaults to `pkg`. Selecting `lob` makes the top-level `Icon` required |
 | `Source` | One source item as described in §5 |
-| `Requirements.MinimumOSVersion` | Lists only the keys in `MacOsMinimumOperatingSystemTable`. For `AppType: lob`, the beta-only values 14.0 / 15.0 / 26.0 are excluded. Always quoted in the output (YAML reads an unquoted `14.0` as a float, which no longer matches the version table key) |
+| `Requirements.MinimumOSVersion` | Lists all keys in `MacOsMinimumOperatingSystemTable`, for both `AppType: pkg` and `lob` - both use Graph beta (doc/adr/publishing.md 2026-09-10 entry), so 14.0 / 15.0 / 26.0 are available to either. Always quoted in the output (YAML reads an unquoted `14.0` as a float, which no longer matches the version table key) |
 | `Detection.IgnoreAppVersion` | Defaults to false |
 | `Detection.IncludedApps[]` | One or more `BundleId` + `BundleVersion` pairs. `BundleVersion` defaults to `PackageVersion` |
 | `Scripts.PreInstall` / `PostInstall` | Prompted for only when `AppType: pkg`. Validates the `.sh` extension, file existence, length below 15360 characters, absence of a BOM, and a leading `#!`. Omits the `Scripts` block if both are empty |
@@ -247,7 +247,7 @@ Each check matches the corresponding rule in `src/IntuneLobPublisher.Core/Valida
 - Ensure `DisplayName` does not contain `PackageVersion`
 - Validate the `Icon` extension (`.png` / `.jpg` / `.jpeg`), 1 MiB size limit, and file existence
 - Validate macOS `Scripts`: `.sh` extension, file existence, length below 15360 characters, no BOM, and a leading `#!`
-- Ensure `AppType: lob` has an `Icon` and cannot select macOS 14 or later
+- Ensure `AppType: lob` has an `Icon`
 - Ensure `AppType: pkg` cannot select `Intent: uninstall`
 
 After saving, if `relaypublisher` is on PATH, the script runs `relaypublisher validate --manifest <saved-path> --repo-root <RepoRoot>`.
