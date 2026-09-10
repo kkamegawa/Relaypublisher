@@ -490,3 +490,35 @@ Codex によるレビューで、上記の実装変更(`MacOsMinimumOperatingSys
 - [06-troubleshooting.md](06-troubleshooting.md) / [06-troubleshooting_ja.md](06-troubleshooting_ja.md) —
   `UnsupportedMacOsVersionException` の説明にある既知バージョン列挙に `26`/`26.0` を追加。
 - `samples/manifests/README.md` / `README_ja.md` — 「v1.0 に無いフラグ」の列挙に `v26_0` を追加。
+
+## 2026-09-10: Windows win32LobApp を Graph beta に統一 (400 NoPropertyForSelectedVersion の修正)
+
+**ブランチ**: `fix/162-win32-graph-beta`
+
+**対応 Issue / PR**: [#162](https://github.com/kkamegawa/Relaypublisher/issues/162)(親: [#161](https://github.com/kkamegawa/Relaypublisher/issues/161)) / [#165](https://github.com/kkamegawa/Relaypublisher/pull/165)
+
+### 実施内容
+
+既存 Windows app 2 件(x64/arm64)への再 publish が、content upload 成功後の `win32LobApp` 全体 PATCH で
+`400 NoPropertyForSelectedVersion` により失敗した。Microsoft Learn で v1.0 / beta の `win32LobApp` resource
+type を照合し、`Win32LobAppPayloadMapper` が常に送る `displayVersion`(および manifest 指定時の
+`roleScopeTagIds`)が v1.0 の `win32LobApp` には存在せず beta のみに存在することを確認した。
+
+1. `GraphWin32LobAppClient` の create/update を絶対パス `/beta/deviceAppManagement/mobileApps[/{id}]` に変更。
+2. `WindowsAppPublisher` の `useBeta` 引数(processing-state 待機・content upload)を `true` に変更。
+3. `CategoryApiVersion.UseBeta` を windows でも `true` を返すよう変更。
+4. `GraphErrorReader` / `GraphRetryHandler` のエラーメッセージ・ログに HTTP メソッドを追加。
+5. `doc/00-overview.md`、`doc/06-troubleshooting.md` / `_ja`(6e 節を新設)、`doc/adr/publishing.md`
+   (2026-09-10 エントリ)、`doc/adr.md` を更新。
+6. 回帰テストを追加(`GraphWin32LobAppClientTests` の displayVersion/roleScopeTagIds シリアライズ確認、
+   `WindowsAppPublisherTests`・`CategoryServiceTests`・新規 `CategoryApiVersionTests` の beta=True 確認、
+   `GraphErrorReaderTests`・`GraphRetryHandlerTests` のメソッド表示確認)。既存の Windows/beta=False 前提
+   テストを beta=True に更新。
+
+`dotnet build` + `dotnet test` は 733 件成功・0 件失敗(既存の skip 38 件は無関係)。
+
+障害が発生した既存 2 app は content が commit 済みのため削除・再作成は不要。この修正版で再実行すれば
+content は input hash 一致で skip され、失敗していたメタデータ PATCH・category 同期・assignment 同期が
+完了する見込み。
+
+残タスクは親 Issue #161 の子 Issue として継続: macOS lob の beta 化 (#163)、v1.0/beta 切り替え機構の削除 (#164)。
