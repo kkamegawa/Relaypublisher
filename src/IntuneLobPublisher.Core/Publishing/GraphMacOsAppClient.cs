@@ -19,13 +19,17 @@ public interface IMacOsAppClient
 
 /// <summary>
 /// Calls Microsoft Graph using the caller-supplied <see cref="HttpClient"/>. Builds an absolute
-/// <c>/beta/</c> path per call, the same technique <see cref="Assignments.AssignmentGraphClient"/> and
-/// <see cref="GraphMobileAppContentClient"/> use: every macOS app call stays on beta, whether the app
-/// is <c>macOSPkgApp</c> (beta-only) or <c>macOSLobApp</c> (also on beta because
-/// <c>roleScopeTagIds</c> only exists there; doc/adr/publishing.md 2026-09-10 entry). Payloads are
-/// serialized against their concrete runtime type (<c>payload.GetType()</c>) so the derived
-/// pkg/lob-only properties are included - serializing against the <see cref="MacOsAppPayloadBase"/>
-/// static type would silently drop them.
+/// <c>/v1.0/</c> or <c>/beta/</c> path per call from the caller-supplied <c>useBeta</c>,
+/// the same technique <see cref="Assignments.AssignmentGraphClient"/> and
+/// <see cref="GraphMobileAppContentClient"/> use. <c>macOSPkgApp</c> is beta-only, so its caller
+/// (<see cref="MacOsAppPayloadMapper.ResolveTarget"/>) always passes <c>true</c>; <c>macOSLobApp</c>
+/// also always gets <c>true</c> now, because <c>roleScopeTagIds</c> only exists on the beta resource
+/// (doc/adr/publishing.md 2026-09-10 entry) - but this client itself can still build a <c>/v1.0/</c>
+/// path if a caller passes <c>false</c>, and some tests exercise that path directly. Issue #164 will
+/// remove the <c>useBeta</c> parameter once every caller in the codebase is guaranteed to
+/// pass <c>true</c>. Payloads are serialized against their concrete runtime type
+/// (<c>payload.GetType()</c>) so the derived pkg/lob-only properties are included - serializing
+/// against the <see cref="MacOsAppPayloadBase"/> static type would silently drop them.
 /// </summary>
 public sealed class GraphMacOsAppClient : IMacOsAppClient
 {
