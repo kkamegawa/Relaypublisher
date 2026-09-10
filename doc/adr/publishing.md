@@ -41,8 +41,10 @@ Intune / Microsoft Graph への publish、content upload、payload mapping に�
   - **影響範囲**: `tools/yamlcreate.ps1` の `$MacOsVersions` から beta 専用フラグと `AppType: lob` での
     除外処理を削除し、対話式スクリプトでも `lob` から macOS 14 以降を選べるようにした。既存の macOS 13
     以前を指定した `lob` manifest の挙動(YAML・publish の入出力)は変わらない。
-  - **今後の注意**: これで Intune app 関連の Graph 呼び出し(win32LobApp・macOSPkgApp・macOSLobApp)は
-    すべて beta に揃った。Issue #164 で `useBeta` 引数と `/v1.0/` ⇔ `/beta/` の per-call 切り替え機構
+  - **今後の注意**: これでアプリ本体・content upload・category の Graph 呼び出し(win32LobApp・
+    macOSPkgApp・macOSLobApp・`CategoryApiVersion`)はすべて beta に揃った。filter なしの
+    assignment create/update/delete(`AssignmentGraphClient`)は本 Issue の対象外のためまだ v1.0 の
+    ままで、Issue #164 でこれも含めて `useBeta` 引数と `/v1.0/` ⇔ `/beta/` の per-call 切り替え機構
     (`GraphMacOsAppClient` / `GraphWin32LobAppClient` / `GraphMobileAppContentClient` /
     `CategoryGraphClient` / `AssignmentGraphClient` / `GraphIntuneAppDirectory` の `VersionSegment` 等)
     自体を削除し、`GraphClientOptions.BaseAddress` を beta 既定にする。

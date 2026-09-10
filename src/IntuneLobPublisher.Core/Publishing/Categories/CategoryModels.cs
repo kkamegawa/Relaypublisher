@@ -56,8 +56,10 @@ public sealed record CategoryPlan(
 /// <c>displayVersion</c>/<c>roleScopeTagIds</c> are beta-only, macOS because <c>macOSPkgApp</c>
 /// doesn't exist in v1.0 and <c>macOSLobApp</c> shares the same <c>roleScopeTagIds</c> gap
 /// (doc/adr/publishing.md 2026-09-10 entry). Category relationships exist on <c>mobileApp</c> in
-/// both API versions, so this only has to stay consistent with the version the rest of the app's
-/// calls use - which, for every platform this tool supports, is now always beta.
+/// both API versions, so this only has to stay consistent with the version the app/content calls
+/// for that platform use - which, for every platform this tool supports, is now always beta. Filter-less
+/// <see cref="Assignments.AssignmentGraphClient"/> calls are a separate, still-v1.0 exception
+/// unrelated to category routing; unifying them too is Issue #164's job.
 /// </summary>
 public static class CategoryApiVersion
 {
