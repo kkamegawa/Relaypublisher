@@ -32,7 +32,14 @@ The workflow must not replace assets on an existing draft release. Before retain
 expected package asset, download and expand both packages, then compare normalized package contents
 and metadata with the newly produced package. NuGet ZIP entry timestamps can differ between builds
 and are excluded from that comparison. If any actual package content or metadata differs, create a
-new version tag.
+new version tag. When the normalized contents match, the draft workflow uploads a short-lived
+`release-package` workflow artifact containing the selected bytes: the freshly attached package for
+a new draft, or the existing draft asset bytes for an existing draft.
+
+The Azure Artifacts job must download that `release-package` workflow artifact by exact package
+name and push it without rebuilding. It keeps only `contents: read` plus `id-token: write`; it must
+not download the draft release with its read-only token and must not receive repository write
+permission alongside Azure credentials.
 
 Never upload replacement assets to a published release. The `release: [published]` event does not
 fire again when assets are replaced, which could otherwise leave the release asset inconsistent with
