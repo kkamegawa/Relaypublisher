@@ -59,7 +59,13 @@ Intune / Microsoft Graph への publish、content upload、payload mapping に�
     このリポジトリは初期開発段階でありデータ移行や後方互換を考慮する必要がないため、死んだコードとして
     残さず削除した。
   - **影響範囲**: `ICategoryService.ApplyAsync` から使われなくなった `AppManifest app` 引数も削除した
-    (category の API バージョンはもう app 種別に依存しないため)。挙動の変更はなく、内部実装の整理のみ。
+    (category の API バージョンはもう app 種別に依存しないため)。`AssignmentGraphClient` は
+    filter を伴わない assignment の create/update/delete も、これまでの v1.0 から beta 経由に変わる
+    (filter 付き assignment は既に beta だった)。Graph の `mobileAppAssignment` は v1.0/beta で
+    互換な形なので追加のマッピング変更は不要だが、実際に送信される request の endpoint が変わる点は
+    「内部実装の整理のみ」ではない意図的な仕様変更として明記する。それ以外(win32LobApp・macOSPkgApp・
+    macOSLobApp 本体・category・content upload・app 一覧)は #162/#163 で既に beta 化済みのため、
+    このエントリでの実質的な挙動変更はない。
   - **今後の注意**: 今後 Intune アプリ関連で v1.0 専用の呼び出しが必要になった場合(新しい resource
     type の追加など)、この決定を単純に巻き戻すのではなく、その時点で必要なスコープに絞った
     per-call バージョン判定を再設計すること。

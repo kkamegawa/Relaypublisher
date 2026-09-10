@@ -562,7 +562,7 @@ content は input hash 一致で skip され、失敗していたメタデータ
 
 **ブランチ**: `fix/164-remove-graph-version-switch`(`fix/163-macos-lob-graph-beta` 上に stack)
 
-**対応 Issue / PR**: [#164](https://github.com/kkamegawa/Relaypublisher/issues/164)(親: [#161](https://github.com/kkamegawa/Relaypublisher/issues/161)) / PR は #166 に stack して作成予定
+**対応 Issue / PR**: [#164](https://github.com/kkamegawa/Relaypublisher/issues/164)(親: [#161](https://github.com/kkamegawa/Relaypublisher/issues/161)) / [PR #168](https://github.com/kkamegawa/Relaypublisher/pull/168)(`fix/163-macos-lob-graph-beta`(PR #166)上に stack)
 
 ### 実施内容
 
@@ -589,7 +589,10 @@ content は input hash 一致で skip され、失敗していたメタデータ
 
 `dotnet build` + `dotnet test` は 721 件成功・0 件失敗(既存の skip 38 件は無関係)。
 
-挙動の変更はなく、#162・#163 で既にリリース済みの動作を実装内部で整理しただけ。
+app 本体・category・content upload・app 一覧の挙動は #162・#163 で既にリリース済みの動作のまま変わらないが、
+`AssignmentGraphClient` の filter なし assignment (create/update/delete) は v1.0 から beta 経由に変わる
+(filter 付き assignment は既に beta だった)。`mobileAppAssignment` は v1.0/beta で互換な形のため
+マッピングの変更は不要(詳細は `doc/adr/publishing.md` 2026-09-10 エントリの #164 決定を参照)。
 
 これで親 Issue #161(Intune app 関連の Graph 呼び出しを beta に統一する)の子 Issue はすべて完了。
 

@@ -82,14 +82,14 @@ publish / dry-run の preflight では、tenant のカテゴリ一覧をペー�
 
 ```json
 {
-  "@odata.id": "<scheme>://<authority>/<version>/deviceAppManagement/mobileAppCategories/{categoryId}"
+  "@odata.id": "<GraphClientOptions.BaseAddress>deviceAppManagement/mobileAppCategories/{categoryId}"
 }
 ```
 
-`@odata.id` は `GraphClientOptions.BaseAddress` の **scheme + authority のみ**と、その request と同じ version
-segment から組み立てる。`BaseAddress` は `/v1.0/` で終わり request path は `/v1.0/…` または `/beta/…` の絶対
-パスなので、`BaseAddress` に相対結合すると beta request に v1.0 の参照を載せてしまう。host も version も
-ハードコードしない。path に埋め込む ID は必ずエスケープする。
+`@odata.id` は `GraphClientOptions.BaseAddress`(既定 `https://graph.microsoft.com/beta/`)にカテゴリ ID を
+相対結合して組み立てる。すべての Intune アプリ関連 Graph 呼び出しが beta に統一された(2026-09-10 追記参照)ため
+per-call の version segment 切り替えは行わない。host をハードコードしない点は変わらない。path に埋め込む ID は
+必ずエスケープする。
 
 API version は既存 publisher と同じルールにする。
 
@@ -194,7 +194,7 @@ dry-run は Graph **read**(tenant / app の一覧取得)を行い、plan を表�
 - `Categories` を宣言した manifest の `inputHash` が変わる。
 - tenant / app 両方の一覧で `@odata.nextLink` に従う。
 - 名前解決の 0 件 / 1 件 / 複数件を検証する。
-- v1.0 / beta の list、`$ref` add、`$ref` remove の URI と `@odata.id` の authority / version を検証する。
+- beta の list、`$ref` add、`$ref` remove の URI と `@odata.id` の authority を検証する。
 - 重複 add と不在 delete が冪等に成功として扱われ、判定できない 4xx は失敗のままになる。
 - 429 の `Retry-After` で `$ref` body が verbatim に再送される。
 - `Categories` 省略時は category Graph call がなく、空配列時は全 relationship が remove plan になる。
