@@ -28,8 +28,9 @@ internal interface IPublishSession : IDisposable
 /// <see cref="GraphIntuneAppDirectory"/>, <see cref="GraphMacOsAppClient"/>,
 /// <see cref="GraphMobileAppContentClient"/>, <see cref="CategoryGraphClient"/>) builds request paths
 /// relative to that one base address instead of switching between <c>/v1.0/</c> and <c>/beta/</c>
-/// per call. <see cref="CategoryGraphClient"/> additionally reads the base address to build the
-/// <c>@odata.id</c> of a category reference from its scheme and authority.
+/// per call. <see cref="CategoryGraphClient"/> additionally resolves a category reference's
+/// <c>@odata.id</c> against the full configured base address (including any path prefix), not just
+/// its scheme and authority.
 /// </summary>
 internal sealed class PublishComposition : IPublishSession
 {
