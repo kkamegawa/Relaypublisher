@@ -308,7 +308,7 @@ jobs:
 
 | workflow | trigger | 役割 |
 |---|---|---|
-| `.github/workflows/release-draft.yml` | `push` tags `v*` | build / test / pack / single-file publish → **draft** GitHub release を作成し資産を添付して、同一 `.nupkg` を Azure Artifacts へ内部テスト用に push する |
+| `.github/workflows/release-draft.yml` | `push` tags `v*` | build / test / pack / single-file publish → **draft** GitHub release を作成し資産を添付して、選択済み `.nupkg` から per-build preview version の package を再構成して Azure Artifacts へ内部テスト用に push する |
 | `.github/workflows/release-publish.yml` | `release: [published]` | draft release を人が publish した時点で、その資産を GitHub Packages と nuget.org へ push する |
 
 ### なぜ 2 本に分けるか
@@ -316,11 +316,12 @@ jobs:
 nuget.org は一度 push した version を削除できない(unlist しかできない)。したがって
 「tag を打った瞬間に public feed へ公開が確定する」構成は取らず、**draft release を人がレビューして
 publish する操作を public 配布の最後の関門にする**。ただし Azure Artifacts は内部テスト用 feed であるため、
-tag の検証後に draft workflow から先行 push する。draft workflow が Azure Artifacts への push に到達した
-可能性がある場合は、draft release を削除しても同じ version tag を再利用せず、新しい version tag を切る。
-Azure Artifacts の package は recycle bin へ削除できるが、version identifier は永久に予約され、
-同じ version を再 publish できない。`--skip-duplicate` は既存の package bytes を保持するため、
-draft workflow の rerun では同じ version tag を再利用する。
+tag の検証後に draft workflow から先行 push する。ここで push するのは official version の package そのものではなく、
+選択済み `.nupkg` の `.nuspec` にある package 自身の `<version>` だけを
+`{X.Y.Z}-preview.{yyyyMMddHHmm}.{run_number}.{run_attempt}` へ差し替えて再 zip した per-build preview package である。
+`<dependency version="...">` などの属性値は変更しない。そのため Azure Artifacts 側は rerun ごとに常に一意な version を受け取り、
+同じ tag の再実行でも version collision を起こさない。
+一方で draft release asset と `release-publish.yml` が public feed へ push する package は、tag の official version のまま維持する。
 
 ### 配布先 feed
 
@@ -367,8 +368,8 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
 - `dotnet build` / `dotnet test` を ubuntu / windows の matrix で先に通してから pack する。
 - 添付する資産: `.nupkg`、3 RID の single-file app zip、`SHA256SUMS.txt`。
 - `gh release view` で存在確認してから create / 検証を出し分け、同一 tag での再実行を冪等にする。
-- **既存 draft の asset は更新しない**。Azure Artifacts に先行 push 済みの同じ version と asset が
-  食い違うことを防ぐため、既存 draft に expected package があることを確認し、ZIP の展開後に package
+- **既存 draft の asset は更新しない**。Azure Artifacts に先行 push 済みの preview package と draft asset の
+  対応関係が後から食い違うことを防ぐため、既存 draft に expected package があることを確認し、ZIP の展開後に package
   contents と metadata が今回生成した package と一致する場合だけ保持する。NuGet ZIP の entry timestamp
   は build ごとに変わり得るため比較対象にせず、実際の差分がある場合は新しい version tag を切る。
   一致した場合は、新規 draft では今回 attach した package、既存 draft では既存 draft asset の bytes を
@@ -380,14 +381,18 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
 - prerelease version (`-` を含む) の場合は `--prerelease` を付ける。
 - `contents: write` は draft release 作成に必要。
 - `push-azure-artifacts` は `draft-release` 完了後に、短期保持の `release-package` workflow artifact から
-  `relaypublisher.<version>.nupkg` を exact name で download して Azure Artifacts へ push する。draft release
-  を read-only token で download せず、package を再ビルドせず、内部テスト対象を release asset と一致させるためである。
+  `relaypublisher.<version>.nupkg` を exact name で download し、package を再ビルドせずに
+  `.nuspec` の package version だけを(`dependency` の version 属性は変更せずに)
+  `{X.Y.Z}-preview.{yyyyMMddHHmm}.{run_number}.{run_attempt}` へ差し替えた preview-version package を Azure Artifacts へ push する。
+  draft release を read-only token で download せず、internal test 向けの payload を release asset と揃えたまま、
+  Azure Artifacts だけ一意な version contract にするためである。
 - Azure Artifacts job は既存の `release` environment を使用し、`contents: read` と
   `id-token: write` だけを持つ。`draft-release` の pack/publish job と Azure OIDC credential を分離する。
 - Azure Artifacts の認証は `azure/login` → version 固定の credential provider install →
   `az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798` →
   `VSS_NUGET_ACCESSTOKEN` / `VSS_NUGET_URI_PREFIXES` → `dotnet nuget push --api-key AzureDevOps` の順とする。
-  feed URL と access token はマスクし、`--skip-duplicate` で再実行を冪等にする。
+  feed URL と access token はマスクする。preview version は run ごとに一意に採番されるため、Azure Artifacts の
+  duplicate-version collision は rerun では発生しない。
 
 ### release-publish.yml の設計上のポイント
 

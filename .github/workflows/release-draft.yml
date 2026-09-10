@@ -1,9 +1,11 @@
 # Build a release candidate from a `v*` tag and attach it to a DRAFT GitHub release.
 #
-# The internal Azure Artifacts feed receives a bit-identical repack of the package attached to
-# the draft release: only the version in its .nuspec is rewritten to a per-build "preview"
-# version, so every build (including re-runs of the same tag) is always a new version and never
-# collides with a previous push. Publishing the draft release by hand remains the review gate
+# The internal Azure Artifacts feed receives a repack of the package attached to the draft
+# release: only the version in its .nuspec is rewritten to a per-build "preview" version, so
+# every build (including re-runs of the same tag) is always a new version and never collides
+# with a previous push. The extracted payload files remain byte-identical to the reviewed draft
+# asset, but the outer .nupkg archive is intentionally different because its .nuspec content is
+# changed and the zip is rebuilt. Publishing the draft release by hand remains the review gate
 # for GitHub Packages and nuget.org, which keep the tag's official version untouched.
 name: Release (draft)
 
@@ -250,8 +252,9 @@ jobs:
           echo "computed preview version: $PREVIEW_VERSION"
 
       # Rewrite only the .nuspec <version> element of the already-reviewed package rather than
-      # rebuilding it, so the binary Azure Artifacts receives is bit-for-bit identical to the one
-      # attached to the draft release; only the version metadata differs.
+      # rebuilding from source, so the payload files Azure Artifacts receives remain byte-
+      # identical to the ones attached to the draft release. The outer .nupkg archive differs
+      # because the version metadata changes and the zip is rebuilt.
       - name: Repackage for Azure Artifacts preview version
         run: |
           set -euo pipefail

@@ -8,7 +8,8 @@
 
 ## 0. ツールのインストールとバージョン運用
 
-Relaypublisher は NuGet global tool として配布します。同じ version を 3 つの feed に publish するため、
+Relaypublisher は NuGet global tool として配布します。nuget.org と GitHub Packages は official な tag version を、
+Azure Artifacts は内部テスト用の per-build preview version を publish するため、
 環境から到達できる feed を選んでください。
 
 | Feed | 想定利用者 |
@@ -93,12 +94,16 @@ dotnet tool list --global | grep relaypublisher
 - Package version source: Git tag `vX.Y.Z` を CI が `-p:Version=X.Y.Z` で注入する
 - リリースの流れ: main に `v*` tag を push すると、`.nupkg`、self-contained single-file app
   (`win-x64` / `win-arm64` / `osx-arm64`)、`SHA256SUMS.txt` を添付した **draft** GitHub release が作られます。
-  draft workflow は exact な `.nupkg` を内部テスト用に Azure Artifacts へ push します。その draft release を
-  手動で publish すると、同じ package が GitHub Packages と nuget.org へ push されます。
+  draft workflow はそのレビュー済み `.nupkg` を Azure Artifacts 向けに再構成し、`.nuspec` にある
+  package 自身の `<version>` だけを
+  `{X.Y.Z}-preview.{yyyyMMddHHmm}.{run_number}.{run_attempt}` へ差し替えた preview-version package を
+  内部テスト用に push します。`<dependency version="...">` などの属性値は変更しません。その draft release を手動で publish すると、original の official-version
+  package が GitHub Packages と nuget.org へそのまま push されます。
   詳細は [03-ci-github-actions.md](03-ci-github-actions.md) §12a を参照してください。
-- Azure Artifacts の package lifecycle: package は recycle bin へ削除できますが、version identifier は
-  永久に予約され、同じ version を再 publish できません。同じ draft workflow を再実行できるのは、
-  正規化した package contents と metadata が変わらない場合だけです。
+- Azure Artifacts の package lifecycle: draft workflow を実行するたびに新しい preview version を採番するため、
+  rerun は以前の Azure Artifacts version と collision せず、新しい internal-test package として publish されます。
+  Azure Artifacts では preview version を、draft release / GitHub Packages / nuget.org では official な tag version を
+  検証・install 対象にしてください。
 - single-file app には署名・notarization を行っていません。macOS では Gatekeeper の警告が出ます。
 
 ## 1. Microsoft Entra app registration
@@ -620,8 +625,9 @@ GitHub numeric ID は NuGet policy の受入情報です。workflow や GitHub s
 
 workflow と policy の設定を repository の default branch に反映した後、次を確認します:
 
-1. 新しい version tag を push し、`release-draft.yml` が draft release を作成し、添付された exact な package を
-   内部テスト用に Azure Artifacts へ push することを確認します。
+1. 新しい version tag を push し、`release-draft.yml` が draft release を作成し、選択済み `.nupkg` から作った
+   preview-version package を内部テスト用に Azure Artifacts へ push しつつ、draft asset 自体は official な tag
+   version のまま維持されることを確認します。
 2. draft release を publish して `release-publish.yml` を起動し、`NuGet/login` が fresh OIDC token と temporary
    API key を取得することを確認します。保存された `NUGET_API_KEY` secret なしで nuget.org が package を受け付ける
    ことを確認します。
