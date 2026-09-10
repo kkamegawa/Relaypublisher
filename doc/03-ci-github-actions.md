@@ -312,7 +312,7 @@ jobs:
 
 ### なぜ 2 本に分けるか
 
-public NuGet feed は一度 push した version を削除できない(unlist しかできない)。したがって
+nuget.org は一度 push した version を削除できない(unlist しかできない)。したがって
 「tag を打った瞬間に public feed へ公開が確定する」構成は取らず、**draft release を人がレビューして
 publish する操作を public 配布の最後の関門にする**。ただし Azure Artifacts は内部テスト用 feed であるため、
 tag の検証後に draft workflow から先行 push する。draft workflow が Azure Artifacts への push に到達した
