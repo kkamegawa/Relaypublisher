@@ -121,7 +121,7 @@ public sealed class CategoryServiceTests
         var plan = await service.CreatePlanAsync(AppId, WindowsApp(["Business Apps"]), CancellationToken.None);
 
         CollectionAssert.AreEqual(
-            new[] { "list tenant beta=False", $"list app {AppId} beta=False" }, client.Calls);
+            new[] { "list tenant beta=True", $"list app {AppId} beta=True" }, client.Calls);
         CollectionAssert.AreEqual(
             new[] { CategoryPlanAction.Add, CategoryPlanAction.Remove },
             plan.Entries.Select(e => e.Action).ToList());
@@ -134,7 +134,7 @@ public sealed class CategoryServiceTests
 
         var plan = await service.CreatePlanAsync(null, WindowsApp(["Business Apps"]), CancellationToken.None);
 
-        CollectionAssert.AreEqual(new[] { "list tenant beta=False" }, client.Calls);
+        CollectionAssert.AreEqual(new[] { "list tenant beta=True" }, client.Calls);
         Assert.AreEqual(PublishOrchestrator.NewAppPlaceholderId, plan.AppId);
         Assert.AreEqual(CategoryPlanAction.Add, plan.Entries.Single().Action);
     }
@@ -171,7 +171,7 @@ public sealed class CategoryServiceTests
         await Assert.ThrowsExactlyAsync<CategorySyncException>(
             () => service.CreatePlanAsync(AppId, WindowsApp(["Missing"]), CancellationToken.None));
 
-        CollectionAssert.AreEqual(new[] { "list tenant beta=False" }, client.Calls);
+        CollectionAssert.AreEqual(new[] { "list tenant beta=True" }, client.Calls);
     }
 
     [TestMethod]
@@ -208,7 +208,7 @@ public sealed class CategoryServiceTests
         await service.ApplyAsync(plan, app, CancellationToken.None);
 
         CollectionAssert.AreEqual(
-            new[] { $"add {AppId} cat-business beta=False", $"remove {AppId} cat-legacy beta=False" }, client.Calls);
+            new[] { $"add {AppId} cat-business beta=True", $"remove {AppId} cat-legacy beta=True" }, client.Calls);
     }
 
     [TestMethod]
@@ -261,7 +261,7 @@ public sealed class CategoryServiceTests
         CollectionAssert.AreEqual(
             new[] { CategoryPlanAction.Keep, CategoryPlanAction.Remove },
             secondPlan.Entries.Select(e => e.Action).ToList());
-        Assert.IsTrue(client.Calls.Contains($"remove {AppId} cat-legacy beta=False"));
+        Assert.IsTrue(client.Calls.Contains($"remove {AppId} cat-legacy beta=True"));
         Assert.IsFalse(client.Calls.Any(c => c.StartsWith("add ")));
     }
 }

@@ -23,9 +23,10 @@ internal interface IPublishSession : IDisposable
 /// <see cref="GraphClientOptions"/> depends on <c>--expected-tenant</c>, so this cannot live in the
 /// root service provider. One <see cref="HttpClient"/> serves every Graph client for this entry. Its
 /// <c>/v1.0/</c> base address only matters for calls that build a relative request path; every client
-/// that needs to reach <c>/beta/</c> (app resolution, macOS <c>AppType: pkg</c>, filter-bearing
-/// assignments) builds an absolute path instead, replacing the base path segment correctly
-/// (<see cref="AssignmentGraphClient"/>, <see cref="GraphIntuneAppDirectory"/>,
+/// that needs to reach <c>/beta/</c> (app resolution, Windows <c>win32LobApp</c>, macOS
+/// <c>AppType: pkg</c>, filter-bearing assignments) builds an absolute path instead, replacing the
+/// base path segment correctly (<see cref="GraphWin32LobAppClient"/>,
+/// <see cref="AssignmentGraphClient"/>, <see cref="GraphIntuneAppDirectory"/>,
 /// <see cref="GraphMacOsAppClient"/>, <see cref="GraphMobileAppContentClient"/>,
 /// <see cref="CategoryGraphClient"/>). <see cref="CategoryGraphClient"/> additionally reads the base
 /// address to build the <c>@odata.id</c> of a category reference from its scheme and authority.

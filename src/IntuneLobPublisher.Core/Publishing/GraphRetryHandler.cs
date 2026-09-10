@@ -36,13 +36,13 @@ public sealed class GraphRetryHandler : DelegatingHandler
             }
             catch (HttpRequestException ex) when (attempt < _options.MaxRetryAttempts)
             {
-                _logger.LogWarning(ex, "Graph request to {Uri} failed transiently (attempt {Attempt}); retrying.", request.RequestUri, attempt + 1);
+                _logger.LogWarning(ex, "Graph {Method} request to {Uri} failed transiently (attempt {Attempt}); retrying.", request.Method, request.RequestUri, attempt + 1);
                 await Task.Delay(ComputeBackoffDelay(attempt), cancellationToken).ConfigureAwait(false);
                 continue;
             }
             catch (HttpRequestException ex)
             {
-                throw new GraphRequestException($"Graph request to '{request.RequestUri}' failed after {attempt} retries.", ex);
+                throw new GraphRequestException($"Graph {request.Method} request to '{request.RequestUri}' failed after {attempt} retries.", ex);
             }
 
             var isThrottled = response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.ServiceUnavailable;
@@ -50,8 +50,8 @@ public sealed class GraphRetryHandler : DelegatingHandler
             {
                 var delay = GetRetryAfterDelay(response) ?? ComputeBackoffDelay(attempt);
                 _logger.LogWarning(
-                    "Graph request to {Uri} was throttled with {StatusCode} (attempt {Attempt}); retrying after {Delay}.",
-                    request.RequestUri, (int)response.StatusCode, attempt + 1, delay);
+                    "Graph {Method} request to {Uri} was throttled with {StatusCode} (attempt {Attempt}); retrying after {Delay}.",
+                    request.Method, request.RequestUri, (int)response.StatusCode, attempt + 1, delay);
                 response.Dispose();
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
                 continue;
@@ -62,17 +62,18 @@ public sealed class GraphRetryHandler : DelegatingHandler
                 var clientRequestId = GetHeader(response, "client-request-id");
                 var requestId = GetHeader(response, "request-id");
                 _logger.LogError(
-                    "Graph request to {Uri} failed with {StatusCode}. client-request-id={ClientRequestId} request-id={RequestId}",
-                    request.RequestUri, (int)response.StatusCode, clientRequestId, requestId);
+                    "Graph {Method} request to {Uri} failed with {StatusCode}. client-request-id={ClientRequestId} request-id={RequestId}",
+                    request.Method, request.RequestUri, (int)response.StatusCode, clientRequestId, requestId);
 
                 if (isThrottled)
                 {
                     // Retries exhausted: a raw 429/503 is never a meaningful result for a caller to branch on.
                     var statusCode = (int)response.StatusCode;
+                    var method = request.Method;
                     var uri = request.RequestUri;
                     response.Dispose();
                     throw new GraphRequestException(
-                        $"Graph request to '{uri}' was still throttled with {statusCode} after {attempt} retries.",
+                        $"Graph {method} request to '{uri}' was still throttled with {statusCode} after {attempt} retries.",
                         statusCode, clientRequestId, requestId);
                 }
             }

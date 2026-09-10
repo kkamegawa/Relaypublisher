@@ -6,6 +6,29 @@ Intune / Microsoft Graph への publish、content upload、payload mapping に�
 仕様を変更する必要がある場合は、必ず該当領域のファイルを確認し、変更理由が以前の修正と矛盾しないか確認してください。
 矛盾する可能性がある場合はユーザーに承認を求めます。
 
+## 2026-09-10: Intune app 関連の Graph 呼び出しを beta に統一する (Issue #161)
+
+- **決定**: Windows `win32LobApp` の Graph 呼び出し(create/update/content upload/notes・
+  committedContentVersion patch)を、macOS `AppType: pkg`(`macOSPkgApp`)と同じく Graph **beta**
+  経由にする。`CategoryApiVersion.UseBeta` も Windows で `true` を返すようにする。
+  - **理由**: 既存の Windows app 2 件(x64/arm64)への再 publish が、content upload 成功後の
+    `win32LobApp` 全体 PATCH で `400 NoPropertyForSelectedVersion` により失敗した。Microsoft Learn で
+    v1.0 / beta の `win32LobApp` resource type を照合した結果、`Win32LobAppPayloadMapper` が常に送る
+    `displayVersion`、および manifest 指定時に送る `roleScopeTagIds` は **どちらも v1.0 の win32LobApp
+    には存在せず、beta のみに存在する**ことを確認した。つまり `RoleScopeTagIds` 無しの manifest でも
+    `displayVersion` により、既存 Windows app の更新は v1.0 のままでは常に失敗する構造的なバグだった。
+  - **影響範囲**: content upload・notes / committedContentVersion patch・publishingState 待機も、
+    アプリ本体と同じ API バージョンで呼ぶ必要があるため、`WindowsAppPublisher` の `useBeta` 引数も
+    合わせて `true` にした。失敗した既存 app は content が既に commit 済みのため、削除・再作成は不要
+    (doc/06-troubleshooting.md 6e 節)。
+  - **今後の注意**: macOS `AppType: lob`(`macOSLobApp`)にも同種の `roleScopeTagIds` 未対応、および
+    v1.0 の `macOSMinimumOperatingSystem` が macOS 14 以降のフラグを持たないという既知の制限があり、
+    別 Issue (#163) で同様に beta へ統一する予定。将来的に Intune app 関連の Graph 呼び出しがすべて
+    beta に揃った時点で、`useBeta` 引数と `/v1.0/` ⇔ `/beta/` の per-call 切り替え機構自体を削除する
+    (Issue #164)。この決定は 2026-08-21 の「v1.0 では v14_0/v15_0 を省略する」エントリ、および
+    2026-08-25 の win32LobApp v1.0 Learn リンクを置き換えるものであり、「対象 API に存在しない
+    プロパティを送らない」という同じ原則に基づくため矛盾しない。
+
 ## 2026-09-06: publish の SAS 認証 403 回復・result file 一本化・manifest エントリ単位の Graph セッション (Issue #150)
 
 - **決定**: `AzureStorageBlockBlobUploader` の `StageBlockAsync` / `CommitBlockListAsync` が Azure Storage

@@ -37,7 +37,7 @@ public sealed class GraphWin32LobAppClientTests
         return (new GraphWin32LobAppClient(httpClient), handler);
     }
 
-    private static Win32LobAppPayload CreatePayload(string? notes = null) => new()
+    private static Win32LobAppPayload CreatePayload(string? notes = null, string? displayVersion = null, List<string>? roleScopeTagIds = null) => new()
     {
         DisplayName = "Contoso Tool",
         Description = "Contoso command line tool.",
@@ -64,6 +64,8 @@ public sealed class GraphWin32LobAppClientTests
             },
         ],
         Notes = notes,
+        DisplayVersion = displayVersion,
+        RoleScopeTagIds = roleScopeTagIds,
     };
 
     [TestMethod]
@@ -76,7 +78,7 @@ public sealed class GraphWin32LobAppClientTests
 
         Assert.AreEqual("app-1", id);
         Assert.AreEqual("POST", handler.Requests[0].Method);
-        Assert.AreEqual("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps", handler.Requests[0].Uri);
+        Assert.AreEqual("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps", handler.Requests[0].Uri);
         var body = handler.Requests[0].Body!;
         StringAssert.Contains(body, "\"@odata.type\":\"#microsoft.graph.win32LobApp\"");
         StringAssert.Contains(body, "\"displayName\":\"Contoso Tool\"");
@@ -122,12 +124,31 @@ public sealed class GraphWin32LobAppClientTests
         await client.UpdateAppAsync("app 1", CreatePayload(), CancellationToken.None);
 
         Assert.AreEqual("PATCH", handler.Requests[0].Method);
-        Assert.AreEqual("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app%201", handler.Requests[0].Uri);
+        Assert.AreEqual("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app%201", handler.Requests[0].Uri);
         var body = handler.Requests[0].Body!;
         StringAssert.Contains(body, "\"displayName\":\"Contoso Tool\"");
         StringAssert.Contains(body, "\"setupFilePath\":\"contoso-tool.exe\"");
         StringAssert.Contains(body, "\"fileName\":\"contoso-tool.intunewin\"");
         Assert.IsFalse(body.Contains("\"notes\""), "Update must omit notes so the content upload flow owns that field.");
+    }
+
+    [TestMethod]
+    public async Task UpdateAppAsync_DisplayVersionAndRoleScopeTagIds_AreSerializedIntoTheBetaPatchBody()
+    {
+        // Regression test: displayVersion and roleScopeTagIds only exist on the beta win32LobApp
+        // resource (doc/adr/publishing.md 2026-09-10 entry). Sending them to v1.0 fails every
+        // existing app's update with 400 NoPropertyForSelectedVersion.
+        var (client, handler) = CreateClient(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
+
+        await client.UpdateAppAsync(
+            "app-1",
+            CreatePayload(displayVersion: "1.2.3", roleScopeTagIds: ["0", "1"]),
+            CancellationToken.None);
+
+        Assert.AreEqual("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1", handler.Requests[0].Uri);
+        var body = handler.Requests[0].Body!;
+        StringAssert.Contains(body, "\"displayVersion\":\"1.2.3\"");
+        StringAssert.Contains(body, "\"roleScopeTagIds\":[\"0\",\"1\"]");
     }
 
     [TestMethod]

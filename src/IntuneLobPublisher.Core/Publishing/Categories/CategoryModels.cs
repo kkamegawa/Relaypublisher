@@ -51,13 +51,15 @@ public sealed record CategoryPlan(
 
 /// <summary>
 /// Picks the Graph API version for category calls the same way the app and content clients do
-/// (doc/00-overview.md §6.13): <c>macOSPkgApp</c> is beta-only, everything else uses v1.0. The
-/// macOS default app type is <see cref="ManifestValues.DefaultMacOsAppType"/>, and category
-/// relationships exist on <c>mobileApp</c> in both versions, so this only has to stay consistent
-/// with the version the rest of the app's calls use.
+/// (doc/00-overview.md §6.13): Windows (<c>win32LobApp</c>) and macOS <c>AppType: pkg</c>
+/// (<c>macOSPkgApp</c>) both stay on beta (the former because <c>displayVersion</c> /
+/// <c>roleScopeTagIds</c> are beta-only; doc/adr/publishing.md 2026-09-10 entry). Category
+/// relationships exist on <c>mobileApp</c> in both API versions, so this only has to stay
+/// consistent with the version the rest of the app's calls use.
 /// </summary>
 public static class CategoryApiVersion
 {
     public static bool UseBeta(AppManifest app)
-        => app.Platform == "macos" && (app.AppType ?? ManifestValues.DefaultMacOsAppType) == ManifestValues.DefaultMacOsAppType;
+        => app.Platform == "windows"
+            || (app.Platform == "macos" && (app.AppType ?? ManifestValues.DefaultMacOsAppType) == ManifestValues.DefaultMacOsAppType);
 }

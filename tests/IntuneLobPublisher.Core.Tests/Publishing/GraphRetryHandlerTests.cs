@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using IntuneLobPublisher.Core.Exceptions;
 using IntuneLobPublisher.Core.Publishing;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IntuneLobPublisher.Core.Tests.Publishing;
@@ -9,6 +10,24 @@ namespace IntuneLobPublisher.Core.Tests.Publishing;
 [TestClass]
 public sealed class GraphRetryHandlerTests
 {
+    /// <summary>Captures formatted log messages so tests can assert the HTTP method is included.</summary>
+    private sealed class CapturingLogger : ILogger<GraphRetryHandler>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Messages.Add(formatter(state, exception));
+    }
+
     private sealed class QueueHandler : HttpMessageHandler
     {
         private readonly Queue<Func<HttpRequestMessage, HttpResponseMessage>> _responses;
@@ -55,8 +74,11 @@ public sealed class GraphRetryHandlerTests
     }
 
     private static (HttpClient Client, QueueHandler Inner) CreateClient(GraphClientOptions options, QueueHandler inner)
+        => CreateClient(options, inner, NullLogger<GraphRetryHandler>.Instance);
+
+    private static (HttpClient Client, QueueHandler Inner) CreateClient(GraphClientOptions options, QueueHandler inner, ILogger<GraphRetryHandler> logger)
     {
-        var handler = new GraphRetryHandler(options, NullLogger<GraphRetryHandler>.Instance) { InnerHandler = inner };
+        var handler = new GraphRetryHandler(options, logger) { InnerHandler = inner };
         return (new HttpClient(handler), inner);
     }
 
@@ -106,6 +128,7 @@ public sealed class GraphRetryHandlerTests
         Assert.AreEqual("client-id-1", ex.ClientRequestId);
         Assert.AreEqual("request-id-1", ex.RequestId);
         Assert.AreEqual(4, inner.RequestCount);
+        StringAssert.Contains(ex.Message, "Graph GET request to");
     }
 
     [TestMethod]
@@ -156,5 +179,51 @@ public sealed class GraphRetryHandlerTests
         {
             Assert.AreEqual(payload, Encoding.UTF8.GetString(body!));
         }
+    }
+
+    [TestMethod]
+    public async Task SendAsync_ThrottledThenSuccess_LogsTheHttpMethod()
+    {
+        var inner = new QueueHandler(
+            _ => ThrottledResponse(HttpStatusCode.TooManyRequests, TimeSpan.FromMilliseconds(1)),
+            _ => new HttpResponseMessage(HttpStatusCode.OK));
+        var logger = new CapturingLogger();
+        var (client, _) = CreateClient(FastOptions(), inner, logger);
+
+        await client.PatchAsync("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1", content: null);
+
+        Assert.IsTrue(logger.Messages.Any(m => m.Contains("PATCH", StringComparison.Ordinal)),
+            "The throttled-retry warning should name the HTTP method.");
+    }
+
+    [TestMethod]
+    public async Task SendAsync_TransientHttpRequestException_LogsTheHttpMethod()
+    {
+        var inner = new QueueHandler(
+            _ => throw new HttpRequestException("connection reset"),
+            _ => new HttpResponseMessage(HttpStatusCode.OK));
+        var logger = new CapturingLogger();
+        var (client, _) = CreateClient(FastOptions(), inner, logger);
+
+        await client.PostAsync("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps", content: null);
+
+        Assert.IsTrue(logger.Messages.Any(m => m.Contains("POST", StringComparison.Ordinal)),
+            "The transient-failure warning should name the HTTP method.");
+    }
+
+    [TestMethod]
+    public async Task SendAsync_ThrottledBeyondMaxRetries_LogsTheHttpMethodInTheErrorLog()
+    {
+        var inner = new QueueHandler(
+            _ => ThrottledResponse(HttpStatusCode.TooManyRequests, TimeSpan.Zero),
+            _ => ThrottledResponse(HttpStatusCode.TooManyRequests, TimeSpan.Zero));
+        var logger = new CapturingLogger();
+        var (client, _) = CreateClient(FastOptions(maxRetryAttempts: 1), inner, logger);
+
+        await Assert.ThrowsExactlyAsync<GraphRequestException>(
+            () => client.DeleteAsync("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1"));
+
+        Assert.IsTrue(logger.Messages.Any(m => m.Contains("DELETE", StringComparison.Ordinal)),
+            "The terminal error log should name the HTTP method.");
     }
 }
