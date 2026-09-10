@@ -96,6 +96,9 @@ dotnet tool list --global | grep relaypublisher
   draft workflow は exact な `.nupkg` を内部テスト用に Azure Artifacts へ push します。その draft release を
   手動で publish すると、同じ package が GitHub Packages と nuget.org へ push されます。
   詳細は [03-ci-github-actions.md](03-ci-github-actions.md) §12a を参照してください。
+- Azure Artifacts の package lifecycle: package は recycle bin へ削除できますが、version identifier は
+  永久に予約され、同じ version を再 publish できません。同じ draft workflow を再実行できるのは、
+  正規化した package contents と metadata が変わらない場合だけです。
 - single-file app には署名・notarization を行っていません。macOS では Gatekeeper の警告が出ます。
 
 ## 1. Microsoft Entra app registration

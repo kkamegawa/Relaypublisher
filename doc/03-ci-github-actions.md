@@ -312,12 +312,14 @@ jobs:
 
 ### なぜ 2 本に分けるか
 
-NuGet feed は一度 push した version を削除できない(unlist しかできない)。したがって
+nuget.org は一度 push した version を削除できない(unlist しかできない)。したがって
 「tag を打った瞬間に public feed へ公開が確定する」構成は取らず、**draft release を人がレビューして
 publish する操作を public 配布の最後の関門にする**。ただし Azure Artifacts は内部テスト用 feed であるため、
 tag の検証後に draft workflow から先行 push する。draft workflow が Azure Artifacts への push に到達した
 可能性がある場合は、draft release を削除しても同じ version tag を再利用せず、新しい version tag を切る。
-Azure Artifacts の同じ version は削除できず、`--skip-duplicate` は既存の package bytes を保持するためである。
+Azure Artifacts の package は recycle bin へ削除できるが、version identifier は永久に予約され、
+同じ version を再 publish できない。`--skip-duplicate` は既存の package bytes を保持するため、
+draft workflow の rerun では同じ version tag を再利用する。
 
 ### 配布先 feed
 
@@ -365,8 +367,9 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
 - 添付する資産: `.nupkg`、3 RID の single-file app zip、`SHA256SUMS.txt`。
 - `gh release view` で存在確認してから create / 検証を出し分け、同一 tag での再実行を冪等にする。
 - **既存 draft の asset は更新しない**。Azure Artifacts に先行 push 済みの同じ version と asset が
-  食い違うことを防ぐため、既存 draft に expected package があることを確認し、その bytes が今回生成した
-  package と一致する場合だけ保持する。一致しなければ新しい version tag を切る。
+  食い違うことを防ぐため、既存 draft に expected package があることを確認し、ZIP の展開後に package
+  contents と metadata が今回生成した package と一致する場合だけ保持する。NuGet ZIP の entry timestamp
+  は build ごとに変わり得るため比較対象にせず、実際の差分がある場合は新しい version tag を切る。
 - **ただし既に publish 済みの release には絶対に upload しない**(`isDraft` を確認して fail させる)。
   publish 済み release に tag を打ち直して資産だけ差し替えると、`release: published` は再発火しないため、
   release に添付された資産と feed に push 済みの package が食い違ったまま公開され続ける。

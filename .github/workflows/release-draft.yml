@@ -167,7 +167,12 @@ jobs:
             gh release download "$GITHUB_REF_NAME" \
               --pattern "$PACKAGE" \
               --dir "$EXISTING_DIR"
-            if ! cmp -s "./artifacts/release/${PACKAGE}" "$EXISTING_DIR/${PACKAGE}"; then
+            CURRENT_CONTENTS="$(mktemp -d)"
+            EXISTING_CONTENTS="$(mktemp -d)"
+            trap 'rm -rf "$EXISTING_DIR" "$CURRENT_CONTENTS" "$EXISTING_CONTENTS"' EXIT
+            if ! unzip -qq "./artifacts/release/${PACKAGE}" -d "$CURRENT_CONTENTS" >/dev/null 2>&1 ||
+              ! unzip -qq "$EXISTING_DIR/${PACKAGE}" -d "$EXISTING_CONTENTS" >/dev/null 2>&1 ||
+              ! diff -qr "$CURRENT_CONTENTS" "$EXISTING_CONTENTS" >/dev/null 2>&1; then
               echo "::error::draft release ${GITHUB_REF_NAME} contains a different ${PACKAGE}; cut a new version tag instead."
               exit 1
             fi
