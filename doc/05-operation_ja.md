@@ -407,9 +407,11 @@ macOS 対応(doc/00-overview.md §6.13)には `AppType` によって Graph・運
   両方。次の項目参照)が影響を受ける点に注意する。
 - `AppType: lob`(`macOSLobApp`): Developer ID Installer 署名必須、2 GB 上限、top-level `Icon` 必須で、こちらも
   Graph **beta** を使用する(doc/adr/publishing.md 2026-09-10 エントリ)。`macOSLobApp` 自体は v1.0 にも存在
-  するが `roleScopeTagIds` が存在しないため、`pkg` と同様にすべての呼び出しが beta になる。これも operator の
-  作業は不要で、副次的に `Requirements.MinimumOSVersion` に macOS 14 以降を指定しても `pkg` と同様に動作する
-  ようになった。
+  するが `roleScopeTagIds` が存在しないため、作成・更新・content・category の呼び出しは `pkg` と同様に beta
+  になる。これも operator の作業は不要で、副次的に `Requirements.MinimumOSVersion` に macOS 14 以降を指定
+  しても `pkg` と同様に動作するようになった。(assignment 同期は別の例外: filter なしの assignment
+  create/update と assignment delete は、platform に関係なくこのブランチではまだ v1.0 を使用しており、
+  #164 まで持ち越す。)
 - `.pkg` の content は publish 時にその場で暗号化される(macOS には IntuneWinAppUtil に相当する packaging 時
   ツールが無い)。そのため Windows のように「暗号化済み package を再生成する」個別の手順は無く、`publish` を
   再実行すればその時点で staging されている `.pkg` が再暗号化される。
