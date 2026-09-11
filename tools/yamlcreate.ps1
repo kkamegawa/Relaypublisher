@@ -145,19 +145,10 @@ $WindowsReleases = [ordered]@{
     '10.0.26100' = 'Windows11_24H2'
 }
 
-# Keys of src/IntuneLobPublisher.Core/Publishing/MacOsMinimumOperatingSystemTable.cs. The beta-only
-# flags (macOS 14+) exist only on macOSPkgApp, so AppType: lob cannot target them.
-$MacOsVersions = [ordered]@{
-    '10.13' = $false
-    '10.14' = $false
-    '10.15' = $false
-    '11.0'  = $false
-    '12.0'  = $false
-    '13.0'  = $false
-    '14.0'  = $true
-    '15.0'  = $true
-    '26.0'  = $true
-}
+# Keys of src/IntuneLobPublisher.Core/Publishing/MacOsMinimumOperatingSystemTable.cs. Both
+# macOSPkgApp and macOSLobApp are Graph beta resources (doc/adr/publishing.md 2026-09-10 entry),
+# so every version here is available to both AppType: pkg and AppType: lob.
+$MacOsVersions = @('10.13', '10.14', '10.15', '11.0', '12.0', '13.0', '14.0', '15.0', '26.0')
 
 # Manifest keys whose value carries the package version and is rewritten by a version bump.
 # ComparisonValue is included because a Windows 'OperationType: version' rule left at the old
@@ -1304,8 +1295,8 @@ function Read-ManifestContent {
     $appType = $null
     if ($platformValue -eq 'macos') {
         $appType = Read-Choice -Prompt 'AppType' -Options $MacOsAppTypes -Default 'pkg' -Annotations @{
-            'pkg' = 'macOSPkgApp, unsigned allowed, up to 8 GB, macOS 14+ possible'
-            'lob' = 'macOSLobApp, Developer ID signature and Icon required, macOS 13 max'
+            'pkg' = 'macOSPkgApp, unsigned allowed, up to 8 GB'
+            'lob' = 'macOSLobApp, Developer ID signature and Icon required'
         }
     }
 
@@ -1561,12 +1552,7 @@ function Read-ManifestContent {
         Add-SourceYaml -Lines $lines -Source $source -Indent 6
 
         Write-Heading 'Requirements (macOS)'
-        $versionOptions = @($MacOsVersions.Keys | Where-Object { $appType -eq 'pkg' -or -not $MacOsVersions[$_] })
-        if ($appType -eq 'lob') {
-            Write-Note 'macOS 14 and later use beta-only flags, so AppType: lob cannot target them.'
-        }
-
-        $minimumOsVersion = Read-Choice -Prompt 'MinimumOSVersion' -Options $versionOptions -Default $versionOptions[-1]
+        $minimumOsVersion = Read-Choice -Prompt 'MinimumOSVersion' -Options $MacOsVersions -Default $MacOsVersions[-1]
 
         Add-YamlLine -Lines $lines -Text ''
         Add-YamlLine -Lines $lines -Indent 4 -Text 'Requirements:'

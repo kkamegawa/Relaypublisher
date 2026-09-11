@@ -409,13 +409,15 @@ characteristics:
   Every Graph call for this app - create/update, content upload, notes/committedContentVersion patches,
   and its appearance in app resolution - goes through Graph **beta**, because `macOSPkgApp` does not
   exist in v1.0. There is no operator action needed for this; it is handled internally, but it means a
-  tenant-side beta API outage affects `pkg` publishes specifically.
+  tenant-side beta API outage affects macOS publishes generally (both `pkg` and `lob`; see the next
+  bullet).
 - `AppType: lob` (`macOSLobApp`): requires Developer ID Installer signing, capped at 2 GB, requires a
-  top-level `Icon`, and stays on Graph **v1.0**. Because v1.0's `minimumSupportedOperatingSystem` has no
-  flag past macOS 13, a `lob` manifest entry with `Requirements.MinimumOSVersion` set to macOS 14 or
-  later fails at `publish` (and in `--dry-run`) with `UnsupportedMacOsVersionException` pointing at
-  `AppType: pkg` as the fix - it is not caught by `validate`, since the constraint is a Graph API-version
-  limitation rather than a manifest schema rule.
+  top-level `Icon`, and also uses Graph **beta** (doc/adr/publishing.md 2026-09-10 entry) - `macOSLobApp`
+  exists in v1.0 too, but `roleScopeTagIds` does not, so its create/update/content/category calls stay on
+  beta the same as `pkg`. There is no operator action needed for this either; it means
+  `Requirements.MinimumOSVersion` set to macOS 14 or later now works for `lob` the same as for `pkg`.
+  (Assignment sync is a separate exception: filter-less assignment create/update and every assignment
+  delete still use v1.0 on this branch, regardless of platform - deferred to #164.)
 - `.pkg` content is encrypted in-process at publish time (no packaging-time tool like IntuneWinAppUtil
   exists for macOS), so unlike Windows there is no separate "regenerate the encrypted package" step to
   re-run after a content change; re-running `publish` re-encrypts the currently staged `.pkg`.
