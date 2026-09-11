@@ -15,6 +15,7 @@ public sealed class MacOsMinimumOperatingSystemTableTests
     [DataRow("12")]
     [DataRow("12.0")]
     [DataRow("13")]
+    [DataRow("13.0")]
     [DataRow("14")]
     [DataRow("14.0")]
     [DataRow("15")]
