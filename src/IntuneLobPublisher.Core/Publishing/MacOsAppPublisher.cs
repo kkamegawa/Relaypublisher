@@ -5,9 +5,11 @@ namespace IntuneLobPublisher.Core.Publishing;
 
 /// <summary>
 /// The <see cref="IPlatformAppPublisher"/> for <c>Platform: macos</c>: <c>macOSPkgApp</c>
-/// (<c>AppType: pkg</c>, the default, beta-only) or <c>macOSLobApp</c> (<c>AppType: lob</c>, v1.0),
-/// per app (doc/00-overview.md §6.13). One instance handles both AppTypes; the same content-upload
-/// mechanics apply to either, so only one <see cref="PkgContentPreparer"/> is needed.
+/// (<c>AppType: pkg</c>, the default) or <c>macOSLobApp</c> (<c>AppType: lob</c>), per app
+/// (doc/00-overview.md §6.13). Both resource types are Graph beta-only or beta-preferred
+/// (doc/adr/publishing.md 2026-09-10 entry), so both always use beta. One instance handles both
+/// AppTypes; the same content-upload mechanics apply to either, so only one
+/// <see cref="PkgContentPreparer"/> is needed.
 /// </summary>
 public sealed class MacOsAppPublisher : IPlatformAppPublisher
 {

@@ -522,3 +522,40 @@ content は input hash 一致で skip され、失敗していたメタデータ
 完了する見込み。
 
 残タスクは親 Issue #161 の子 Issue として継続: macOS lob の beta 化 (#163)、v1.0/beta 切り替え機構の削除 (#164)。
+
+## 2026-09-10: macOS lob (macOSLobApp) を Graph beta に統一、macOS 14+ 制限を撤廃
+
+**ブランチ**: `fix/163-macos-lob-graph-beta`(`fix/162-win32-graph-beta` 上に stack)
+
+**対応 Issue / PR**: [#163](https://github.com/kkamegawa/Relaypublisher/issues/163)(親: [#161](https://github.com/kkamegawa/Relaypublisher/issues/161)) / PR は #165 に stack して作成予定
+
+### 実施内容
+
+#162(Windows win32LobApp の beta 化)と同じ調査から、`macOSLobApp`(`AppType: lob`)にも同種の
+`roleScopeTagIds` 未対応(v1.0 に存在しない)というバグがあることを確認した。あわせて v1.0 の
+`macOSMinimumOperatingSystem` が macOS 14 以降のフラグを持たないため、`AppType: lob` は
+`Requirements.MinimumOSVersion` に macOS 14 以降を指定できないという既知の制限があった。
+
+1. `MacOsAppPayloadMapper.ResolveTarget` で lob も `UseBeta: true` を返すよう変更。
+2. `MacOsMinimumOperatingSystemTable` から `IsBetaOnly` 判定と `useBeta` 引数を削除し、全バージョンを
+   `AppType` に関わらず使用可能にした。
+3. `UnsupportedMacOsVersionException` から `requiresBetaOnlyFlag` 分岐を削除。
+4. `tools/yamlcreate.ps1` の `$MacOsVersions` から beta 専用フラグと lob での除外処理を削除。
+5. `doc/00-overview.md`、`doc/01-manifest-schema.md`、`doc/05-operation.md` / `_ja`、
+   `doc/06-troubleshooting.md` / `_ja`(6f 節を新設)、`doc/08-yamlcreate.md` / `_ja`、
+   `doc/adr/publishing.md`(2026-09-10 エントリに追記)を更新。
+6. 回帰テストを追加・更新(`MacOsMinimumOperatingSystemTableTests` を beta 前提に書き換え、
+   `MacOsAppPayloadMapperTests` に macOS 14 lob の positive テストを追加、`MacOsAppPublisherTests` に
+   pkg/lob 両方が beta を使うことを確認するテストを追加)。`tests/Tools/YamlCreate.Tests.ps1` は Pester ではなく
+   `Invoke-Case`/`Assert-*` による独立した PowerShell harness で、`pwsh -NoProfile -File
+   tests/Tools/YamlCreate.Tests.ps1` で直接実行し 19/19 成功を確認した(新設した `AppType: lob` macOS
+   14/15/26 提示ケースを含む)。
+
+`dotnet build` + `dotnet test` は 741 件成功・0 件失敗(既存の skip 38 件は無関係。レビュー対応で追加した
+`MacOsMinimumOperatingSystemTableTests` の "12.0"/"15.0"/"26" ケース分、735 から増加)。
+
+既存の macOS 13 以前を指定した lob manifest の挙動は変わらない。macOS 14 以降を指定した既存アプリで
+`RoleScopeTagIds` が原因の障害が発生していた場合も、#162 と同じ復旧手順(削除・再作成不要で再実行)が
+適用できる。
+
+残タスクは親 Issue #161 の子 Issue として継続: v1.0/beta 切り替え機構の削除 (#164)。

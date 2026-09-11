@@ -93,9 +93,14 @@ segment から組み立てる。`BaseAddress` は `/v1.0/` で終わり request 
 
 API version は既存 publisher と同じルールにする。
 
-- Windows `win32LobApp`: v1.0
-- macOS `macOSLobApp`: v1.0
+- Windows `win32LobApp`: beta
+- macOS `macOSLobApp`: beta
 - macOS `macOSPkgApp`: beta
+
+(2026-09-10 追記: `displayVersion` / `roleScopeTagIds` が v1.0 の `win32LobApp`/`macOSLobApp` に存在しないため、
+アプリ本体・content upload・一覧取得・カテゴリ操作の Graph 呼び出しは beta に統一した。filter なしの
+assignment create/update と assignment delete は本 Issue の対象外のためこのブランチではまだ v1.0 のままで、
+統一は #164 で行う。`doc/adr/publishing.md` 参照。)
 
 既存の `GraphRetryHandler`、ページング、tenant guard、request-id logging、secret masking を共用する。
 アプリカテゴリ操作に必要な application permission は既存の `DeviceManagementApps.ReadWrite.All` のままとする

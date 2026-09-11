@@ -28,13 +28,15 @@ public sealed class MacOsAppPayloadMapperTests
     }
 
     [TestMethod]
-    public void ResolveTarget_Lob_UsesV1AndLobODataType()
+    public void ResolveTarget_Lob_UsesBetaAndLobODataType()
     {
+        // macOSLobApp moved to Graph beta (doc/adr/publishing.md 2026-09-10 entry): roleScopeTagIds
+        // only exists there, and v1.0's macOSMinimumOperatingSystem has no macOS 14+ flags.
         var app = TestManifests.CreateValidMacOsApp(appType: "lob");
 
         var target = MacOsAppPayloadMapper.ResolveTarget(app);
 
-        Assert.IsFalse(target.UseBeta);
+        Assert.IsTrue(target.UseBeta);
         Assert.AreEqual("#microsoft.graph.macOSLobApp", target.ODataType);
     }
 
@@ -65,9 +67,8 @@ public sealed class MacOsAppPayloadMapperTests
     {
         var manifest = CreateManifest(appType: "lob");
         var app = manifest.Apps[0];
-        // AppType: lob stays on Graph v1.0, which has no macOS 14+ flag (see MacOsMinimumOperatingSystemTable);
-        // the default fixture's "14.0" is only valid for AppType: pkg (beta).
-        app.Requirements!.MinimumOSVersion = "13.0";
+        // The fixture default MinimumOSVersion is "14.0", which now works for AppType: lob too - it
+        // moved to Graph beta alongside pkg (doc/adr/publishing.md 2026-09-10 entry).
 
         var payload = (MacOsLobAppPayload)MacOsAppPayloadMapper.Map(manifest, app, iconBytes: null);
 
@@ -78,6 +79,7 @@ public sealed class MacOsAppPayloadMapperTests
         Assert.AreEqual("1.2.3", payload.ChildApps[0].BuildNumber);
         Assert.AreEqual("1.2.3", payload.ChildApps[0].VersionNumber);
         Assert.AreEqual("#microsoft.graph.macOSLobApp", payload.ODataType);
+        Assert.AreEqual(true, payload.MinimumSupportedOperatingSystem.V14_0);
     }
 
     [TestMethod]
@@ -169,7 +171,6 @@ public sealed class MacOsAppPayloadMapperTests
         // Scripts there in the first place - the mapper simply has nowhere to put them on MacOsLobAppPayload.
         var manifest = CreateManifest(appType: "lob");
         var app = manifest.Apps[0];
-        app.Requirements!.MinimumOSVersion = "13.0";
 
         var payload = MacOsAppPayloadMapper.Map(manifest, app, iconBytes: null);
 
@@ -177,11 +178,11 @@ public sealed class MacOsAppPayloadMapperTests
     }
 
     [TestMethod]
-    public void Map_Lob_SerializedJsonOmitsBetaOnlyMinimumOsFlags()
+    public void Map_Lob_SerializedJsonOmitsUnmatchedBetaOnlyMinimumOsFlags()
     {
-        // Regression test: v1.0's macOSMinimumOperatingSystem has no v14_0/v15_0/v26_0 property, so
-        // serializing them as a literal "false" on a macOSLobApp (v1.0) request makes Graph reject the
-        // whole call with 400 "The property 'v14_0' does not exist on type ...".
+        // Only the matched version's flag is ever set to true (MacOsMinimumOperatingSystemTable), so
+        // the unmatched v14_0/v15_0/v26_0 flags stay omitted from the JSON for a pre-14 version, keeping
+        // the payload minimal even though macOSLobApp now always targets Graph beta.
         var manifest = CreateManifest(appType: "lob");
         var app = manifest.Apps[0];
         app.Requirements!.MinimumOSVersion = "13.0";
@@ -193,5 +194,20 @@ public sealed class MacOsAppPayloadMapperTests
         StringAssert.DoesNotMatch(json, new System.Text.RegularExpressions.Regex("\"v15_0\""));
         StringAssert.DoesNotMatch(json, new System.Text.RegularExpressions.Regex("\"v26_0\""));
         StringAssert.Contains(json, "\"v13_0\":true");
+    }
+
+    [TestMethod]
+    public void Map_Lob_MacOs14_SerializesV14Flag()
+    {
+        // Regression test for the lifted restriction: AppType: lob can now target macOS 14+ because it
+        // moved to Graph beta alongside pkg (doc/adr/publishing.md 2026-09-10 entry).
+        var manifest = CreateManifest(appType: "lob");
+        var app = manifest.Apps[0];
+        app.Requirements!.MinimumOSVersion = "14.0";
+
+        var payload = MacOsAppPayloadMapper.Map(manifest, app, iconBytes: null);
+        var json = JsonSerializer.Serialize(payload, payload.GetType());
+
+        StringAssert.Contains(json, "\"v14_0\":true");
     }
 }

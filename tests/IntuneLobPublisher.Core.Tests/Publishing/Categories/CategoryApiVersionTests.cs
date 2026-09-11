@@ -25,10 +25,12 @@ public sealed class CategoryApiVersionTests
     }
 
     [TestMethod]
-    public void UseBeta_MacOsLob_IsFalse()
+    public void UseBeta_MacOsLob_IsTrue()
     {
+        // macOSLobApp category calls also stay on beta: roleScopeTagIds is beta-only there too
+        // (doc/adr/publishing.md 2026-09-10 entry), matching the app/content calls for the same app.
         var app = TestManifests.CreateValidMacOsApp(appType: "lob");
 
-        Assert.IsFalse(CategoryApiVersion.UseBeta(app));
+        Assert.IsTrue(CategoryApiVersion.UseBeta(app));
     }
 }

@@ -151,8 +151,10 @@ public sealed class CategoryServiceTests
     }
 
     [TestMethod]
-    public async Task CreatePlanAsync_MacOsLobApp_UsesV1()
+    public async Task CreatePlanAsync_MacOsLobApp_UsesBeta()
     {
+        // macOSLobApp category calls also stay on beta: roleScopeTagIds is beta-only there too,
+        // the same as the app/content calls (doc/adr/publishing.md 2026-09-10 entry).
         var (service, client) = CreateService();
         var app = TestManifests.CreateValidMacOsApp(appType: "lob");
         app.Categories = ["Business Apps"];
@@ -160,7 +162,7 @@ public sealed class CategoryServiceTests
         await service.CreatePlanAsync(AppId, app, CancellationToken.None);
 
         CollectionAssert.AreEqual(
-            new[] { "list tenant beta=False", $"list app {AppId} beta=False" }, client.Calls);
+            new[] { "list tenant beta=True", $"list app {AppId} beta=True" }, client.Calls);
     }
 
     [TestMethod]
