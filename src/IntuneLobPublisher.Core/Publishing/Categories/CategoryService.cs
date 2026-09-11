@@ -14,7 +14,7 @@ public interface ICategoryService
     Task<CategoryPlan> CreatePlanAsync(string? existingAppId, AppManifest app, CancellationToken cancellationToken);
 
     /// <summary>Applies the non-keep entries of a plan. A not-requested plan writes nothing.</summary>
-    Task ApplyAsync(CategoryPlan plan, AppManifest app, CancellationToken cancellationToken);
+    Task ApplyAsync(CategoryPlan plan, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -46,9 +46,8 @@ public sealed class CategoryService : ICategoryService
             return CategoryPlan.NotRequested(appId);
         }
 
-        var useBeta = CategoryApiVersion.UseBeta(app);
         var tenantCategories = await GuardAsync(
-            () => _graphClient.ListTenantCategoriesAsync(useBeta, cancellationToken),
+            () => _graphClient.ListTenantCategoriesAsync(cancellationToken),
             "Failed to read the tenant app category catalog.").ConfigureAwait(false);
         var desired = CategoryNameResolver.Resolve(app.Categories, tenantCategories);
 
@@ -56,13 +55,13 @@ public sealed class CategoryService : ICategoryService
         var current = existingAppId is null
             ? []
             : await GuardAsync(
-                () => _graphClient.ListAppCategoriesAsync(existingAppId, useBeta, cancellationToken),
+                () => _graphClient.ListAppCategoriesAsync(existingAppId, cancellationToken),
                 $"Failed to read the current categories of Intune app '{existingAppId}'.").ConfigureAwait(false);
 
         return CategoryPlanner.CreatePlan(appId, desired, current);
     }
 
-    public async Task ApplyAsync(CategoryPlan plan, AppManifest app, CancellationToken cancellationToken)
+    public async Task ApplyAsync(CategoryPlan plan, CancellationToken cancellationToken)
     {
         if (!plan.Requested)
         {
@@ -75,14 +74,12 @@ public sealed class CategoryService : ICategoryService
                 "Cannot apply a category plan before the Intune app has been created.");
         }
 
-        var useBeta = CategoryApiVersion.UseBeta(app);
-
         // Adds first, removes second: the app keeps at least its intended categories throughout, and
         // the ordering is stable for the console/log output.
         foreach (var entry in plan.Entries.Where(e => e.Action == CategoryPlanAction.Add))
         {
             var added = await GuardAsync(
-                () => _graphClient.AddCategoryAsync(plan.AppId, entry.CategoryId, useBeta, cancellationToken),
+                () => _graphClient.AddCategoryAsync(plan.AppId, entry.CategoryId, cancellationToken),
                 $"Category sync failed for '{entry.DisplayName}'.").ConfigureAwait(false);
             LogApplied(plan.AppId, CategoryPlanAction.Add, entry, changed: added);
         }
@@ -90,7 +87,7 @@ public sealed class CategoryService : ICategoryService
         foreach (var entry in plan.Entries.Where(e => e.Action == CategoryPlanAction.Remove))
         {
             var removed = await GuardAsync(
-                () => _graphClient.RemoveCategoryAsync(plan.AppId, entry.CategoryId, useBeta, cancellationToken),
+                () => _graphClient.RemoveCategoryAsync(plan.AppId, entry.CategoryId, cancellationToken),
                 $"Category sync failed for '{entry.DisplayName}'.").ConfigureAwait(false);
             LogApplied(plan.AppId, CategoryPlanAction.Remove, entry, changed: removed);
         }

@@ -21,15 +21,16 @@ internal interface IPublishSession : IDisposable
 /// <summary>
 /// Builds the Graph pipeline and publish services for one manifest entry (issue #150):
 /// <see cref="GraphClientOptions"/> depends on <c>--expected-tenant</c>, so this cannot live in the
-/// root service provider. One <see cref="HttpClient"/> serves every Graph client for this entry. Its
-/// <c>/v1.0/</c> base address only matters for calls that build a relative request path; every client
-/// that needs to reach <c>/beta/</c> (app resolution, Windows <c>win32LobApp</c>, macOS
-/// <c>AppType: pkg</c>, filter-bearing assignments) builds an absolute path instead, replacing the
-/// base path segment correctly (<see cref="GraphWin32LobAppClient"/>,
-/// <see cref="AssignmentGraphClient"/>, <see cref="GraphIntuneAppDirectory"/>,
-/// <see cref="GraphMacOsAppClient"/>, <see cref="GraphMobileAppContentClient"/>,
-/// <see cref="CategoryGraphClient"/>). <see cref="CategoryGraphClient"/> additionally reads the base
-/// address to build the <c>@odata.id</c> of a category reference from its scheme and authority.
+/// root service provider. One <see cref="HttpClient"/> serves every Graph client for this entry, with
+/// a single Graph beta base address (doc/adr/publishing.md 2026-09-10 entry): every Graph resource this
+/// tool writes (win32LobApp, macOSPkgApp, macOSLobApp, categories, assignments, app resolution) is on
+/// beta, so every client (<see cref="GraphWin32LobAppClient"/>, <see cref="AssignmentGraphClient"/>,
+/// <see cref="GraphIntuneAppDirectory"/>, <see cref="GraphMacOsAppClient"/>,
+/// <see cref="GraphMobileAppContentClient"/>, <see cref="CategoryGraphClient"/>) builds request paths
+/// relative to that one base address instead of switching between <c>/v1.0/</c> and <c>/beta/</c>
+/// per call. <see cref="CategoryGraphClient"/> additionally resolves a category reference's
+/// <c>@odata.id</c> against the full configured base address (including any path prefix), not just
+/// its scheme and authority.
 /// </summary>
 internal sealed class PublishComposition : IPublishSession
 {

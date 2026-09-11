@@ -90,7 +90,7 @@ public sealed class GraphRetryHandlerTests
             _ => new HttpResponseMessage(HttpStatusCode.OK));
         var (client, _) = CreateClient(FastOptions(), inner);
 
-        var response = await client.GetAsync("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps");
+        var response = await client.GetAsync("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual(2, inner.RequestCount);
@@ -105,7 +105,7 @@ public sealed class GraphRetryHandlerTests
             _ => new HttpResponseMessage(HttpStatusCode.OK));
         var (client, _) = CreateClient(FastOptions(), inner);
 
-        var response = await client.GetAsync("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps");
+        var response = await client.GetAsync("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual(3, inner.RequestCount);
@@ -122,7 +122,7 @@ public sealed class GraphRetryHandlerTests
         var (client, _) = CreateClient(FastOptions(maxRetryAttempts: 3), inner);
 
         var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(
-            () => client.GetAsync("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps"));
+            () => client.GetAsync("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps"));
 
         Assert.AreEqual(429, ex.StatusCode);
         Assert.AreEqual("client-id-1", ex.ClientRequestId);
@@ -137,7 +137,7 @@ public sealed class GraphRetryHandlerTests
         var inner = new QueueHandler(_ => ThrottledResponse(HttpStatusCode.NotFound));
         var (client, _) = CreateClient(FastOptions(), inner);
 
-        var response = await client.GetAsync("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/does-not-exist");
+        var response = await client.GetAsync("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/does-not-exist");
 
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
         Assert.AreEqual(1, inner.RequestCount);
@@ -151,7 +151,7 @@ public sealed class GraphRetryHandlerTests
             _ => new HttpResponseMessage(HttpStatusCode.OK));
         var (client, _) = CreateClient(FastOptions(), inner);
 
-        var response = await client.GetAsync("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps");
+        var response = await client.GetAsync("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual(2, inner.RequestCount);
@@ -166,7 +166,7 @@ public sealed class GraphRetryHandlerTests
         var (client, queue) = CreateClient(FastOptions(), inner);
 
         var payload = """{"displayName":"contoso-tool"}""";
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps")
         {
             Content = new StringContent(payload, Encoding.UTF8, "application/json"),
         };
@@ -190,7 +190,7 @@ public sealed class GraphRetryHandlerTests
         var logger = new CapturingLogger();
         var (client, _) = CreateClient(FastOptions(), inner, logger);
 
-        await client.PatchAsync("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1", content: null);
+        await client.PatchAsync("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1", content: null);
 
         Assert.IsTrue(logger.Messages.Any(m => m.Contains("PATCH", StringComparison.Ordinal)),
             "The throttled-retry warning should name the HTTP method.");
@@ -205,7 +205,7 @@ public sealed class GraphRetryHandlerTests
         var logger = new CapturingLogger();
         var (client, _) = CreateClient(FastOptions(), inner, logger);
 
-        await client.PostAsync("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps", content: null);
+        await client.PostAsync("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps", content: null);
 
         Assert.IsTrue(logger.Messages.Any(m => m.Contains("POST", StringComparison.Ordinal)),
             "The transient-failure warning should name the HTTP method.");
@@ -221,7 +221,7 @@ public sealed class GraphRetryHandlerTests
         var (client, _) = CreateClient(FastOptions(maxRetryAttempts: 1), inner, logger);
 
         await Assert.ThrowsExactlyAsync<GraphRequestException>(
-            () => client.DeleteAsync("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1"));
+            () => client.DeleteAsync("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1"));
 
         Assert.IsTrue(logger.Messages.Any(m => m.Contains("DELETE", StringComparison.Ordinal)),
             "The terminal error log should name the HTTP method.");

@@ -522,19 +522,16 @@ Intune の app category は tenant 共有の `mobileAppCategory` リソースで
 
   | 操作 | 呼び出し |
   |---|---|
-  | tenant catalog 取得 | `GET /{version}/deviceAppManagement/mobileAppCategories` |
-  | app の現在値取得 | `GET /{version}/deviceAppManagement/mobileApps/{appId}/categories` |
-  | 関連付け | `POST /{version}/deviceAppManagement/mobileApps/{appId}/categories/$ref` |
-  | 関連解除 | `DELETE /{version}/deviceAppManagement/mobileApps/{appId}/categories/{categoryId}/$ref` |
+  | tenant catalog 取得 | `GET /beta/deviceAppManagement/mobileAppCategories` |
+  | app の現在値取得 | `GET /beta/deviceAppManagement/mobileApps/{appId}/categories` |
+  | 関連付け | `POST /beta/deviceAppManagement/mobileApps/{appId}/categories/$ref` |
+  | 関連解除 | `DELETE /beta/deviceAppManagement/mobileApps/{appId}/categories/{categoryId}/$ref` |
 
-- API version は既存 client と同じ規則で、Windows `win32LobApp` と macOS `macOSPkgApp` / `macOSLobApp` の
-  いずれも beta を使う(`CategoryApiVersion.UseBeta`)。`win32LobApp` と `macOSLobApp` が beta なのは
-  `displayVersion` / `roleScopeTagIds` が beta にしか存在しないためであり(doc/adr/publishing.md
-  2026-09-10 エントリ)、`macOSPkgApp` が beta なのはリソース自体が v1.0 に存在しないためで、理由は
-  異なるが結果はすべて beta で揃う。`$ref` body の `@odata.id` は `GraphClientOptions.BaseAddress` の
-  scheme + authority と、**その request と同じ version segment** から組み立てる。host も version も
-  ハードコードしない(`BaseAddress` は `/v1.0/` で終わるため、そこに相対結合すると beta request に
-  v1.0 の参照を載せてしまう)。
+- API version は他の client と同じく beta 固定(`GraphClientOptions.BaseAddress` が beta。doc/adr/publishing.md
+  2026-09-10 エントリ)。`win32LobApp` / `macOSPkgApp` / `macOSLobApp` の 3 リソースがすべて beta に統一された
+  ため、呼び出しごとのバージョン切り替えは行わない。`$ref` body の `@odata.id` は `GraphClientOptions.BaseAddress`
+  の scheme + authority + path をそのまま使って組み立てる(host をハードコードしないのは変わらないが、
+  version segment を個別に付け替える処理はもう存在しない)。
 - **処理順序**は次で固定する(6.10 のトランザクション境界に従う)。
 
   1. app resolution と downgrade guard

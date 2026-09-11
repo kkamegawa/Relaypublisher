@@ -3,16 +3,9 @@ using IntuneLobPublisher.Core.Validation;
 
 namespace IntuneLobPublisher.Core.Publishing;
 
-/// <summary>Which Graph resource type an app maps to, and which API version its calls must use.</summary>
-/// <param name="UseBeta">
-/// Always true: <c>macOSPkgApp</c> is beta-only, and <c>macOSLobApp</c> also moved to beta
-/// (doc/adr/publishing.md 2026-09-10 entry) because <c>roleScopeTagIds</c> only exists there. Kept as
-/// an explicit field (rather than dropped outright) so callers built against
-/// <see cref="MacOsAppTarget"/> do not need to change again once the wider v1.0/beta switching
-/// mechanism is removed.
-/// </param>
+/// <summary>Which Graph resource type an app maps to.</summary>
 /// <param name="ODataType">The `@odata.type` value used for create and for the notes/committedContentVersion PATCH calls.</param>
-public sealed record MacOsAppTarget(bool UseBeta, string ODataType);
+public sealed record MacOsAppTarget(string ODataType);
 
 /// <summary>
 /// Maps a validated macOS manifest entry to a Graph <see cref="MacOsPkgAppPayload"/> or
@@ -27,9 +20,7 @@ public static class MacOsAppPayloadMapper
 
     /// <summary>Resolves the target Graph resource type from <see cref="AppManifest.AppType"/> without building a payload.</summary>
     public static MacOsAppTarget ResolveTarget(AppManifest app)
-        => IsPkg(app)
-            ? new MacOsAppTarget(UseBeta: true, PkgODataType)
-            : new MacOsAppTarget(UseBeta: true, LobODataType);
+        => IsPkg(app) ? new MacOsAppTarget(PkgODataType) : new MacOsAppTarget(LobODataType);
 
     /// <param name="manifest">The root manifest, for top-level app info (description/publisher/owner/etc).</param>
     /// <param name="app">The platform/architecture-specific entry being published.</param>

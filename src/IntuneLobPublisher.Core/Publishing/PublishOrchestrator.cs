@@ -162,7 +162,7 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         // The plan was computed against the placeholder id when the app did not exist yet; the
         // resolved category ids stay valid, and a just-created app has no relationship to remove.
         categoryPlan = categoryPlan with { AppId = appId };
-        await _categoryService.ApplyAsync(categoryPlan, app, cancellationToken).ConfigureAwait(false);
+        await _categoryService.ApplyAsync(categoryPlan, cancellationToken).ConfigureAwait(false);
 
         var plan = await _assignmentService.CreatePlanAsync(appId, app, syncMode, cancellationToken).ConfigureAwait(false);
         report?.ReportAssignmentPlan?.Invoke(plan);

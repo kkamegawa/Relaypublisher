@@ -559,3 +559,62 @@ content は input hash 一致で skip され、失敗していたメタデータ
 適用できる。
 
 残タスクは親 Issue #161 の子 Issue として継続: v1.0/beta 切り替え機構の削除 (#164)。
+
+## 2026-09-10: v1.0/beta 切り替え機構を削除し、beta を唯一の Graph API バージョンにする
+
+**ブランチ**: `fix/164-remove-graph-version-switch`(`fix/163-macos-lob-graph-beta` 上に stack)
+
+**対応 Issue / PR**: [#164](https://github.com/kkamegawa/Relaypublisher/issues/164)(親: [#161](https://github.com/kkamegawa/Relaypublisher/issues/161)) / [PR #168](https://github.com/kkamegawa/Relaypublisher/pull/168)(`fix/163-macos-lob-graph-beta`(PR #166)上に stack)
+
+### 実施内容
+
+#162・#163 の完了により win32LobApp・macOSPkgApp・macOSLobApp のすべてが常に Graph beta を使うことに
+なったため、呼び出しごとに v1.0/beta を判定していた `useBeta` 引数と `VersionSegment` / `WithGraphVersion`
+ヘルパーが到達不能なコードになっていた。初期開発段階でデータ移行や後方互換を考慮する必要がないため、
+死んだコードとして残さず削除した。
+
+1. `GraphClientOptions.BaseAddress` の既定値を `https://graph.microsoft.com/beta/` に変更。
+2. `GraphWin32LobAppClient` / `GraphMacOsAppClient` / `GraphMobileAppContentClient`
+   (+ `IMobileAppContentUploadOrchestrator` / `MobileAppContentUploadOrchestrator`) /
+   `CategoryGraphClient`(+ `CategoryService`。`CategoryApiVersion` は削除) /
+   `AssignmentGraphClient`(`WithGraphVersion` 拡張メソッドを削除) / `GraphIntuneAppDirectory` から
+   `useBeta` 引数と絶対パス組み立てを削除し、すべて `HttpClient.BaseAddress` からの相対パスに統一。
+3. `MacOsAppTarget` から `UseBeta` を削除し `ODataType` のみに。
+4. `CategoryGraphClient.BuildCategoryODataId` を `HttpClient.BaseAddress` からそのまま組み立てるよう簡略化。
+5. `ICategoryService.ApplyAsync` から使われなくなった `AppManifest app` 引数を削除。
+6. `doc/00-overview.md`(§6.13 の category 呼び出し表・`@odata.id` の説明)、`doc/02-dotnet-architecture.md`
+   (`ICategoryGraphClient` / `ICategoryService` のシグネチャ例)、`doc/adr/publishing.md`
+   (2026-09-10 エントリに追記)を更新。
+7. 影響を受けた 12 個のテストファイルを更新(`useBeta` 引数の削除、期待 URI を beta に統一、
+   v1.0/beta 切り替えをテストしていた `[DataRow]` パラメータ化テストや専用テストの削除・簡略化)。
+   `CategoryApiVersionTests.cs` は対象の型が削除されたため削除。
+
+`dotnet build` + `dotnet test` は 721 件成功・0 件失敗(既存の skip 38 件は無関係)。
+
+app 本体・category・content upload・app 一覧の挙動は #162・#163 で既にリリース済みの動作のまま変わらないが、
+`AssignmentGraphClient` の filter なし assignment (create/update/delete) は v1.0 から beta 経由に変わる
+(filter 付き assignment は既に beta だった)。`mobileAppAssignment` は v1.0/beta で互換な形のため
+マッピングの変更は不要(詳細は `doc/adr/publishing.md` 2026-09-10 エントリの #164 決定を参照)。
+
+これで親 Issue #161(Intune app 関連の Graph 呼び出しを beta に統一する)の子 Issue はすべて完了。
+
+## 2026-09-10: PR レビュー指摘対応(#165 / #166)
+
+CI Autofix 経由で Copilot のレビューを受け、以下を各 PR に反映した。
+
+- **PR #165(fix/162)**: `GraphRetryHandlerTests` に capturing `ILogger` を追加し、transient retry・
+  throttled retry・terminal error の各ログに HTTP method が含まれることを検証する回帰テストを 3 件追加。
+  あわせて `README.md` / `README_ja.md` の対応プラットフォーム表(Graph API バージョン列)が
+  Windows を古い v1.0 のまま記載していたのを beta に修正。
+- **PR #166(fix/163)**: `CategoryApiVersion.UseBeta` が `AppType: lob` で `false`(v1.0)を返したままに
+  なっていたバグを修正(常に `true` を返すよう変更)。`CategoryServiceTests` / `CategoryApiVersionTests`
+  がこのバグを期待値として埋め込んでいたため修正し、`doc/00-overview.md` の該当段落も訂正。
+  `tools/yamlcreate.ps1` の `MinimumOSVersion` prompt が `AppType: lob` でも macOS 14/15/26 を提示する
+  ことを検証する回帰ケースを `tests/Tools/YamlCreate.Tests.ps1` に追加(19/19 pass、直接実行で確認)。
+- ドキュメントの日英併記(AGENTS.md の規約)を求める Copilot のコメント 5 件については、リポジトリの
+  CLAUDE.md が「ドキュメントは当面日本語のまま」と明記しており AGENTS.md の規約と矛盾するため、
+  翻訳は行わずスレッドで理由を説明し、ユーザーの判断を仰ぐ形でオープンのまま残した。
+
+`fix/163` に `fix/162` を、`fix/164` に `fix/163` をそれぞれ merge して 3 ブランチの整合を取った。
+`fix/164` では `CategoryApiVersion` を巡るマージコンフリクトを、PR #164(#168)側の削除を正として解決した。
+3 ブランチとも `dotnet build` + `dotnet test` が成功(0 failed)、`tools/yamlcreate.ps1` の回帰スイートも成功。

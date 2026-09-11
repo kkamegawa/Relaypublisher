@@ -48,6 +48,29 @@ Intune / Microsoft Graph への publish、content upload、payload mapping に�
     (`GraphMacOsAppClient` / `GraphWin32LobAppClient` / `GraphMobileAppContentClient` /
     `CategoryGraphClient` / `AssignmentGraphClient` / `GraphIntuneAppDirectory` の `VersionSegment` 等)
     自体を削除し、`GraphClientOptions.BaseAddress` を beta 既定にする。
+- **決定**(Issue #164): `GraphClientOptions.BaseAddress` の既定値を `https://graph.microsoft.com/beta/`
+  に変更し、`useBeta` 引数・`VersionSegment`/`WithGraphVersion` ヘルパー・`CategoryApiVersion`・
+  `MacOsAppTarget.UseBeta` を削除した。各 Graph client(`GraphWin32LobAppClient` /
+  `GraphMacOsAppClient` / `GraphMobileAppContentClient` / `CategoryGraphClient` /
+  `AssignmentGraphClient` / `GraphIntuneAppDirectory`)は絶対パスの組み立てをやめ、すべて
+  `HttpClient.BaseAddress`(beta)からの相対パスでリクエストする。`CategoryGraphClient` の
+  `@odata.id` 組み立ても、version segment の個別置き換えではなく `BaseAddress` をそのまま使うように
+  単純化した。
+  - **理由**: #162・#163 の完了により win32LobApp・macOSPkgApp・macOSLobApp のすべてが常に beta を
+    使うことになったため、呼び出しごとに v1.0/beta を判定する分岐は到達不能なコードになっていた。
+    このリポジトリは初期開発段階でありデータ移行や後方互換を考慮する必要がないため、死んだコードとして
+    残さず削除した。
+  - **影響範囲**: `ICategoryService.ApplyAsync` から使われなくなった `AppManifest app` 引数も削除した
+    (category の API バージョンはもう app 種別に依存しないため)。`AssignmentGraphClient` は
+    filter を伴わない assignment の create/update/delete も、これまでの v1.0 から beta 経由に変わる
+    (filter 付き assignment は既に beta だった)。Graph の `mobileAppAssignment` は v1.0/beta で
+    互換な形なので追加のマッピング変更は不要だが、実際に送信される request の endpoint が変わる点は
+    「内部実装の整理のみ」ではない意図的な仕様変更として明記する。それ以外(win32LobApp・macOSPkgApp・
+    macOSLobApp 本体・category・content upload・app 一覧)は #162/#163 で既に beta 化済みのため、
+    このエントリでの実質的な挙動変更はない。
+  - **今後の注意**: 今後 Intune アプリ関連で v1.0 専用の呼び出しが必要になった場合(新しい resource
+    type の追加など)、この決定を単純に巻き戻すのではなく、その時点で必要なスコープに絞った
+    per-call バージョン判定を再設計すること。
 
 ## 2026-09-06: publish の SAS 認証 403 回復・result file 一本化・manifest エントリ単位の Graph セッション (Issue #150)
 

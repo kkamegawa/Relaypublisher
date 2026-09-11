@@ -26,20 +26,15 @@ public sealed class MacOsAppPublisherTests
     {
         public MacOsAppPayloadBase? LastCreatePayload { get; private set; }
 
-        /// <summary>Records the `useBeta` passed to each call so tests can assert pkg and lob both stay on beta.</summary>
-        public List<bool> UseBetaCalls { get; } = [];
-
-        public Task<string> CreateAppAsync(MacOsAppPayloadBase payload, bool useBeta, CancellationToken cancellationToken)
+        public Task<string> CreateAppAsync(MacOsAppPayloadBase payload, CancellationToken cancellationToken)
         {
             LastCreatePayload = payload;
-            UseBetaCalls.Add(useBeta);
             return Task.FromResult("app-1");
         }
 
-        public Task UpdateAppAsync(string appId, MacOsAppPayloadBase payload, bool useBeta, CancellationToken cancellationToken)
+        public Task UpdateAppAsync(string appId, MacOsAppPayloadBase payload, CancellationToken cancellationToken)
         {
             LastCreatePayload = payload;
-            UseBetaCalls.Add(useBeta);
             return Task.CompletedTask;
         }
     }
@@ -54,14 +49,13 @@ public sealed class MacOsAppPublisherTests
             ContentUploadOptions options,
             IUploadableContentExtractor extractor,
             string oDataType,
-            bool useBeta,
             CancellationToken cancellationToken)
             => throw new NotSupportedException("Not exercised by these tests.");
 
         // Exercised by MacOsAppPublisher.UpdateAppAsync's pre-PATCH guard; a no-op is correct here since
         // these tests are about script mapping, not Graph publishing-state behavior.
         public Task WaitWhilePublishingStateProcessingAsync(
-            string appId, ContentUploadOptions options, bool useBeta, CancellationToken cancellationToken)
+            string appId, ContentUploadOptions options, CancellationToken cancellationToken)
             => Task.CompletedTask;
     }
 
@@ -229,23 +223,5 @@ public sealed class MacOsAppPublisherTests
         var payload = (MacOsPkgAppPayload)client.LastCreatePayload!;
         var decoded = Convert.FromBase64String(payload.PostInstallScript!.ScriptContent);
         Assert.AreEqual("#!/bin/bash\necho post\n", System.Text.Encoding.UTF8.GetString(decoded));
-    }
-
-    [TestMethod]
-    [DataRow(null)]
-    [DataRow("pkg")]
-    [DataRow("lob")]
-    public async Task CreateAppAsync_AllAppTypes_AlwaysUseGraphBeta(string? appType)
-    {
-        // macOSPkgApp is beta-only; macOSLobApp also moved to beta (doc/adr/publishing.md 2026-09-10
-        // entry) because roleScopeTagIds only exists there.
-        var manifest = TestManifests.CreateValid();
-        var app = TestManifests.CreateValidMacOsApp(appType: appType);
-        manifest.Apps = [app];
-        var publisher = CreatePublisher(out var client);
-
-        await publisher.CreateAppAsync(CreateRequest(app, manifest), notes: "{}", CancellationToken.None);
-
-        CollectionAssert.AreEqual(new[] { true }, client.UseBetaCalls);
     }
 }

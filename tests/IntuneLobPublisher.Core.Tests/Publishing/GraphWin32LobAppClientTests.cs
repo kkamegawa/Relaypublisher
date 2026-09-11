@@ -33,7 +33,7 @@ public sealed class GraphWin32LobAppClientTests
         params Func<HttpRequestMessage, HttpResponseMessage>[] responses)
     {
         var handler = new QueueHandler(responses);
-        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://graph.microsoft.com/v1.0/") };
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://graph.microsoft.com/beta/") };
         return (new GraphWin32LobAppClient(httpClient), handler);
     }
 
