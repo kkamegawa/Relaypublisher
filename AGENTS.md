@@ -57,7 +57,7 @@ Relaypublisher は、winget 風の YAML manifest を Git に commit すると、
 
 - `doc/` 配下のドキュメントおよび Wiki に登録する plan は、日本語版と英語版の両方を用意する(技術用語は英語のまま)。LICENSE / SECURITY.md は英語を維持する
 - 実在の URL・IP アドレス・テナント ID を書かない。`<tenant-id>` のようなプレースホルダを使う(例示用の `example.com` / `contoso` は可)。ただし Wiki、issue、PR では issue、公開 URL、PR へのリンクを許容する
-- Intune / Microsoft Graph の API 仕様(endpoint、enum 値、v1.0 と beta の差)に触れる変更は、Microsoft Learn で最新仕様を確認してから行う
+- Intune / Microsoft Graph の API 仕様(endpoint、enum 値、v1.0 と beta の差)に触れる変更は、Microsoft Learn で最新仕様を確認してから行う。このリポジトリが呼び出す Intune app 関連リソース(`win32LobApp` / `macOSPkgApp` / `macOSLobApp`、category、assignment を含む)は Graph **beta** に統一済み(`GraphClientOptions.BaseAddress` 既定・doc/adr/publishing.md 2026-09-10 エントリ)なので、Microsoft Learn を確認する際は beta 側のページを正とする
 
 ## Git 規約
 

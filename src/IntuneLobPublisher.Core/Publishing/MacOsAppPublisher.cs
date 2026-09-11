@@ -42,23 +42,20 @@ public sealed class MacOsAppPublisher : IPlatformAppPublisher
         var iconBytes = await ManifestAssetReader.ReadIconAsync(request, request.Manifest, cancellationToken).ConfigureAwait(false);
         var scripts = await ManifestAssetReader.ReadMacOsScriptsAsync(request, request.App, _logger, cancellationToken).ConfigureAwait(false);
         var payload = MacOsAppPayloadMapper.Map(request.Manifest, request.App, iconBytes, scripts, notes);
-        var target = MacOsAppPayloadMapper.ResolveTarget(request.App);
-        return await _appClient.CreateAppAsync(payload, target.UseBeta, cancellationToken).ConfigureAwait(false);
+        return await _appClient.CreateAppAsync(payload, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpdateAppAsync(string appId, PublishRequest request, ContentUploadOptions options, CancellationToken cancellationToken)
     {
-        var target = MacOsAppPayloadMapper.ResolveTarget(request.App);
-
         // Guards against an app left mid-"processing" by an interrupted previous run: this PATCH is the
         // first Graph write of the run, ahead of any content upload.
-        await _contentOrchestrator.WaitWhilePublishingStateProcessingAsync(appId, options, target.UseBeta, cancellationToken)
+        await _contentOrchestrator.WaitWhilePublishingStateProcessingAsync(appId, options, cancellationToken)
             .ConfigureAwait(false);
 
         var iconBytes = await ManifestAssetReader.ReadIconAsync(request, request.Manifest, cancellationToken).ConfigureAwait(false);
         var scripts = await ManifestAssetReader.ReadMacOsScriptsAsync(request, request.App, _logger, cancellationToken).ConfigureAwait(false);
         var payload = MacOsAppPayloadMapper.Map(request.Manifest, request.App, iconBytes, scripts);
-        await _appClient.UpdateAppAsync(appId, payload, target.UseBeta, cancellationToken).ConfigureAwait(false);
+        await _appClient.UpdateAppAsync(appId, payload, cancellationToken).ConfigureAwait(false);
     }
 
     public Task<ContentUploadResult> PublishContentAsync(
@@ -79,7 +76,6 @@ public sealed class MacOsAppPublisher : IPlatformAppPublisher
             options,
             _extractor,
             target.ODataType,
-            target.UseBeta,
             cancellationToken);
     }
 }

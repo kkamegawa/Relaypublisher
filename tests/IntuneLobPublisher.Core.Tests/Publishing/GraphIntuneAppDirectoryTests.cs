@@ -30,7 +30,7 @@ public sealed class GraphIntuneAppDirectoryTests
 
     private static HttpClient CreateClient(QueueHandler handler) => new(handler)
     {
-        BaseAddress = new Uri("https://graph.microsoft.com/v1.0/"),
+        BaseAddress = new Uri("https://graph.microsoft.com/beta/"),
     };
 
     [TestMethod]
@@ -68,7 +68,7 @@ public sealed class GraphIntuneAppDirectoryTests
     public async Task ListAppsAsync_FollowsNextLinkUntilExhausted()
     {
         var handler = new QueueHandler(
-            _ => JsonResponse("""{"value":[{"id":"app-1","displayName":"App 1","notes":null}],"@odata.nextLink":"https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps?$skiptoken=abc"}"""),
+            _ => JsonResponse("""{"value":[{"id":"app-1","displayName":"App 1","notes":null}],"@odata.nextLink":"https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?$skiptoken=abc"}"""),
             _ => JsonResponse("""{"value":[{"id":"app-2","displayName":"App 2","notes":null}]}"""));
         var directory = new GraphIntuneAppDirectory(CreateClient(handler));
 
@@ -78,7 +78,9 @@ public sealed class GraphIntuneAppDirectoryTests
         Assert.AreEqual("app-1", apps[0].Id);
         Assert.AreEqual("app-2", apps[1].Id);
         Assert.HasCount(2, handler.RequestedUris);
-        Assert.Contains("$skiptoken=abc", handler.RequestedUris[1]);
+        Assert.AreEqual(
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?$skiptoken=abc",
+            handler.RequestedUris[1]);
     }
 
     [TestMethod]

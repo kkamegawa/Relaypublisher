@@ -35,7 +35,7 @@ public sealed class AssignmentGraphClientTests
     private static HttpResponseMessage EmptyResponse(HttpStatusCode statusCode) => new(statusCode);
 
     private static (AssignmentGraphClient Client, QueueHandler Handler) CreateClient(params Func<HttpRequestMessage, HttpResponseMessage>[] responses)
-        => CreateClient(new Uri("https://graph.microsoft.com/v1.0/"), responses);
+        => CreateClient(new Uri("https://graph.microsoft.com/beta/"), responses);
 
     private static (AssignmentGraphClient Client, QueueHandler Handler) CreateClient(Uri baseAddress, params Func<HttpRequestMessage, HttpResponseMessage>[] responses)
     {
@@ -103,7 +103,7 @@ public sealed class AssignmentGraphClientTests
     }
 
     [TestMethod]
-    public async Task CreateAssignmentAsync_PostsV1ForAssignmentWithoutFilter()
+    public async Task CreateAssignmentAsync_PostsForAssignmentWithoutFilter()
     {
         var (client, handler) = CreateClient(_ => JsonResponse(HttpStatusCode.Created, """{"id":"assignment-1"}"""));
 
@@ -111,7 +111,7 @@ public sealed class AssignmentGraphClientTests
 
         Assert.AreEqual("assignment-1", id);
         Assert.AreEqual("POST", handler.Requests[0].Method);
-        Assert.AreEqual("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/assignments", handler.Requests[0].Uri);
+        Assert.AreEqual("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/assignments", handler.Requests[0].Uri);
         var body = handler.Requests[0].Body!;
         StringAssert.Contains(body, "\"@odata.type\":\"#microsoft.graph.mobileAppAssignment\"");
         StringAssert.Contains(body, "\"intent\":\"required\"");
@@ -121,7 +121,7 @@ public sealed class AssignmentGraphClientTests
     }
 
     [TestMethod]
-    public async Task CreateAssignmentAsync_PostsBetaPayloadForAssignmentWithFilterAndSettings()
+    public async Task CreateAssignmentAsync_PostsPayloadForAssignmentWithFilterAndSettings()
     {
         var desired = Desired(
             new AssignmentFilter(FilterA, AssignmentFilterMode.Exclude),
@@ -141,19 +141,21 @@ public sealed class AssignmentGraphClientTests
     }
 
     [TestMethod]
-    public async Task CreateAssignmentAsync_RoutesFromHostRootWhenBaseAddressDoesNotIncludeGraphVersion()
+    public async Task CreateAssignmentAsync_RoutesRelativeToTheConfiguredBaseAddress()
     {
+        // The host and path prefix must come from GraphClientOptions.BaseAddress, not a hardcoded
+        // graph.microsoft.com/beta, so stub servers and sovereign clouds work.
         var (client, handler) = CreateClient(
-            new Uri("https://stub.example.local/custom-prefix"),
+            new Uri("https://stub.example.local/custom-prefix/"),
             _ => JsonResponse(HttpStatusCode.Created, """{"id":"assignment-1"}"""));
 
         await client.CreateAssignmentAsync("app-1", Desired(), CancellationToken.None);
 
-        Assert.AreEqual("https://stub.example.local/v1.0/deviceAppManagement/mobileApps/app-1/assignments", handler.Requests[0].Uri);
+        Assert.AreEqual("https://stub.example.local/custom-prefix/deviceAppManagement/mobileApps/app-1/assignments", handler.Requests[0].Uri);
     }
 
     [TestMethod]
-    public async Task UpdateAssignmentAsync_UsesBetaWhenRemovingExistingFilter()
+    public async Task UpdateAssignmentAsync_RemovingExistingFilter_OmitsFilterFromThePayload()
     {
         var current = new CurrentAssignment(
             "assignment-1",
@@ -171,14 +173,14 @@ public sealed class AssignmentGraphClientTests
     }
 
     [TestMethod]
-    public async Task DeleteAssignmentAsync_DeletesV1Path()
+    public async Task DeleteAssignmentAsync_DeletesTheAssignment()
     {
         var (client, handler) = CreateClient(_ => EmptyResponse(HttpStatusCode.NoContent));
 
         await client.DeleteAssignmentAsync("app-1", "assignment-1", CancellationToken.None);
 
         Assert.AreEqual("DELETE", handler.Requests[0].Method);
-        Assert.AreEqual("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/assignments/assignment-1", handler.Requests[0].Uri);
+        Assert.AreEqual("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/assignments/assignment-1", handler.Requests[0].Uri);
         Assert.IsNull(handler.Requests[0].Body);
     }
 

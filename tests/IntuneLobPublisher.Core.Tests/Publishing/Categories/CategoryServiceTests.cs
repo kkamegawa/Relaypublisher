@@ -28,29 +28,29 @@ public sealed class CategoryServiceTests
 
         public Exception? AddException { get; set; }
 
-        public Task<IReadOnlyList<IntuneAppCategory>> ListTenantCategoriesAsync(bool useBeta, CancellationToken cancellationToken)
+        public Task<IReadOnlyList<IntuneAppCategory>> ListTenantCategoriesAsync(CancellationToken cancellationToken)
         {
-            Calls.Add($"list tenant beta={useBeta}");
+            Calls.Add("list tenant");
             return TenantListException is null
                 ? Task.FromResult<IReadOnlyList<IntuneAppCategory>>(TenantCategories)
                 : Task.FromException<IReadOnlyList<IntuneAppCategory>>(TenantListException);
         }
 
-        public Task<IReadOnlyList<IntuneAppCategory>> ListAppCategoriesAsync(string appId, bool useBeta, CancellationToken cancellationToken)
+        public Task<IReadOnlyList<IntuneAppCategory>> ListAppCategoriesAsync(string appId, CancellationToken cancellationToken)
         {
-            Calls.Add($"list app {appId} beta={useBeta}");
+            Calls.Add($"list app {appId}");
             return Task.FromResult<IReadOnlyList<IntuneAppCategory>>(AppCategories);
         }
 
-        public Task<bool> AddCategoryAsync(string appId, string categoryId, bool useBeta, CancellationToken cancellationToken)
+        public Task<bool> AddCategoryAsync(string appId, string categoryId, CancellationToken cancellationToken)
         {
-            Calls.Add($"add {appId} {categoryId} beta={useBeta}");
+            Calls.Add($"add {appId} {categoryId}");
             return AddException is null ? Task.FromResult(true) : Task.FromException<bool>(AddException);
         }
 
-        public Task<bool> RemoveCategoryAsync(string appId, string categoryId, bool useBeta, CancellationToken cancellationToken)
+        public Task<bool> RemoveCategoryAsync(string appId, string categoryId, CancellationToken cancellationToken)
         {
-            Calls.Add($"remove {appId} {categoryId} beta={useBeta}");
+            Calls.Add($"remove {appId} {categoryId}");
             return Task.FromResult(true);
         }
     }
@@ -64,13 +64,6 @@ public sealed class CategoryServiceTests
     private static AppManifest WindowsApp(List<string>? categories)
     {
         var app = TestManifests.CreateValidApp();
-        app.Categories = categories;
-        return app;
-    }
-
-    private static AppManifest MacOsPkgApp(List<string>? categories)
-    {
-        var app = TestManifests.CreateValidMacOsApp();
         app.Categories = categories;
         return app;
     }
@@ -91,7 +84,7 @@ public sealed class CategoryServiceTests
     {
         var (service, client) = CreateService();
 
-        await service.ApplyAsync(CategoryPlan.NotRequested(AppId), WindowsApp(null), CancellationToken.None);
+        await service.ApplyAsync(CategoryPlan.NotRequested(AppId), CancellationToken.None);
 
         Assert.IsEmpty(client.Calls);
     }
@@ -106,7 +99,7 @@ public sealed class CategoryServiceTests
             [new CategoryPlanEntry(CategoryPlanAction.Add, "cat-business", "Business Apps")]);
 
         var exception = await Assert.ThrowsExactlyAsync<CategorySyncException>(
-            () => service.ApplyAsync(plan, WindowsApp(["Business Apps"]), CancellationToken.None));
+            () => service.ApplyAsync(plan, CancellationToken.None));
 
         StringAssert.Contains(exception.Message, "before the Intune app has been created");
         Assert.IsEmpty(client.Calls);
@@ -120,8 +113,7 @@ public sealed class CategoryServiceTests
 
         var plan = await service.CreatePlanAsync(AppId, WindowsApp(["Business Apps"]), CancellationToken.None);
 
-        CollectionAssert.AreEqual(
-            new[] { "list tenant beta=True", $"list app {AppId} beta=True" }, client.Calls);
+        CollectionAssert.AreEqual(new[] { "list tenant", $"list app {AppId}" }, client.Calls);
         CollectionAssert.AreEqual(
             new[] { CategoryPlanAction.Add, CategoryPlanAction.Remove },
             plan.Entries.Select(e => e.Action).ToList());
@@ -134,35 +126,9 @@ public sealed class CategoryServiceTests
 
         var plan = await service.CreatePlanAsync(null, WindowsApp(["Business Apps"]), CancellationToken.None);
 
-        CollectionAssert.AreEqual(new[] { "list tenant beta=True" }, client.Calls);
+        CollectionAssert.AreEqual(new[] { "list tenant" }, client.Calls);
         Assert.AreEqual(PublishOrchestrator.NewAppPlaceholderId, plan.AppId);
         Assert.AreEqual(CategoryPlanAction.Add, plan.Entries.Single().Action);
-    }
-
-    [TestMethod]
-    public async Task CreatePlanAsync_MacOsPkgApp_UsesBeta()
-    {
-        var (service, client) = CreateService();
-
-        await service.CreatePlanAsync(AppId, MacOsPkgApp(["Business Apps"]), CancellationToken.None);
-
-        CollectionAssert.AreEqual(
-            new[] { "list tenant beta=True", $"list app {AppId} beta=True" }, client.Calls);
-    }
-
-    [TestMethod]
-    public async Task CreatePlanAsync_MacOsLobApp_UsesBeta()
-    {
-        // macOSLobApp category calls also stay on beta: roleScopeTagIds is beta-only there too,
-        // the same as the app/content calls (doc/adr/publishing.md 2026-09-10 entry).
-        var (service, client) = CreateService();
-        var app = TestManifests.CreateValidMacOsApp(appType: "lob");
-        app.Categories = ["Business Apps"];
-
-        await service.CreatePlanAsync(AppId, app, CancellationToken.None);
-
-        CollectionAssert.AreEqual(
-            new[] { "list tenant beta=True", $"list app {AppId} beta=True" }, client.Calls);
     }
 
     [TestMethod]
@@ -173,7 +139,7 @@ public sealed class CategoryServiceTests
         await Assert.ThrowsExactlyAsync<CategorySyncException>(
             () => service.CreatePlanAsync(AppId, WindowsApp(["Missing"]), CancellationToken.None));
 
-        CollectionAssert.AreEqual(new[] { "list tenant beta=True" }, client.Calls);
+        CollectionAssert.AreEqual(new[] { "list tenant" }, client.Calls);
     }
 
     [TestMethod]
@@ -207,10 +173,10 @@ public sealed class CategoryServiceTests
         var plan = await service.CreatePlanAsync(AppId, app, CancellationToken.None);
         client.Calls.Clear();
 
-        await service.ApplyAsync(plan, app, CancellationToken.None);
+        await service.ApplyAsync(plan, CancellationToken.None);
 
         CollectionAssert.AreEqual(
-            new[] { $"add {AppId} cat-business beta=True", $"remove {AppId} cat-legacy beta=True" }, client.Calls);
+            new[] { $"add {AppId} cat-business", $"remove {AppId} cat-legacy" }, client.Calls);
     }
 
     [TestMethod]
@@ -222,7 +188,7 @@ public sealed class CategoryServiceTests
         var plan = await service.CreatePlanAsync(AppId, app, CancellationToken.None);
         client.Calls.Clear();
 
-        await service.ApplyAsync(plan, app, CancellationToken.None);
+        await service.ApplyAsync(plan, CancellationToken.None);
 
         Assert.IsEmpty(client.Calls);
         Assert.IsFalse(plan.HasChanges);
@@ -237,7 +203,7 @@ public sealed class CategoryServiceTests
         var plan = await service.CreatePlanAsync(AppId, app, CancellationToken.None);
 
         var exception = await Assert.ThrowsExactlyAsync<CategorySyncException>(
-            () => service.ApplyAsync(plan, app, CancellationToken.None));
+            () => service.ApplyAsync(plan, CancellationToken.None));
 
         StringAssert.Contains(exception.Message, "Business Apps");
     }
@@ -258,12 +224,12 @@ public sealed class CategoryServiceTests
         client.Calls.Clear();
 
         var secondPlan = await service.CreatePlanAsync(AppId, app, CancellationToken.None);
-        await service.ApplyAsync(secondPlan, app, CancellationToken.None);
+        await service.ApplyAsync(secondPlan, CancellationToken.None);
 
         CollectionAssert.AreEqual(
             new[] { CategoryPlanAction.Keep, CategoryPlanAction.Remove },
             secondPlan.Entries.Select(e => e.Action).ToList());
-        Assert.IsTrue(client.Calls.Contains($"remove {AppId} cat-legacy beta=True"));
+        Assert.IsTrue(client.Calls.Contains($"remove {AppId} cat-legacy"));
         Assert.IsFalse(client.Calls.Any(c => c.StartsWith("add ")));
     }
 }

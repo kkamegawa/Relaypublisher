@@ -1,6 +1,3 @@
-using IntuneLobPublisher.Core.Manifests;
-using IntuneLobPublisher.Core.Validation;
-
 namespace IntuneLobPublisher.Core.Publishing.Categories;
 
 /// <summary>
@@ -47,21 +44,4 @@ public sealed record CategoryPlan(
 
     /// <summary>True when applying the plan would call Graph (any add or remove).</summary>
     public bool HasChanges => Entries.Any(e => e.Action != CategoryPlanAction.Keep);
-}
-
-/// <summary>
-/// Picks the Graph API version for category calls the same way the app and content clients do
-/// (doc/00-overview.md §6.13): Windows (<c>win32LobApp</c>) and macOS (<c>macOSPkgApp</c> /
-/// <c>macOSLobApp</c>, both <c>AppType</c> values) all stay on beta - Windows because
-/// <c>displayVersion</c>/<c>roleScopeTagIds</c> are beta-only, macOS because <c>macOSPkgApp</c>
-/// doesn't exist in v1.0 and <c>macOSLobApp</c> shares the same <c>roleScopeTagIds</c> gap
-/// (doc/adr/publishing.md 2026-09-10 entry). Category relationships exist on <c>mobileApp</c> in
-/// both API versions, so this only has to stay consistent with the version the app/content calls
-/// for that platform use - which, for every platform this tool supports, is now always beta. Filter-less
-/// <see cref="Assignments.AssignmentGraphClient"/> calls are a separate, still-v1.0 exception
-/// unrelated to category routing; unifying them too is Issue #164's job.
-/// </summary>
-public static class CategoryApiVersion
-{
-    public static bool UseBeta(AppManifest app) => true;
 }
