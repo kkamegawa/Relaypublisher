@@ -9,8 +9,9 @@ For a complete local terminal procedure, see [07-local-e2e.md](07-local-e2e.md).
 ## 0. Tool Installation and Version Control
 
 Relaypublisher is distributed as a NuGet global tool and, for macOS on Apple silicon, also through a
-Homebrew tap (see below). The same package version is published to three NuGet feeds, so pick the one
-your environment can reach:
+Homebrew tap (see below). nuget.org and GitHub Packages publish the official tag version, while Azure
+Artifacts carries per-build preview versions for internal testing, so pick the feed your environment
+can reach:
 
 | Feed | Intended consumer |
 | --- | --- |
@@ -119,8 +120,17 @@ Release version policy:
 - Package version source: Git tag `vX.Y.Z` injected by CI (`-p:Version=X.Y.Z`)
 - Release flow: pushing a `v*` tag onto main creates a **draft** GitHub release with the `.nupkg`,
   the self-contained single-file apps (`win-x64`, `win-arm64`, `osx-arm64`) and `SHA256SUMS.txt`.
-  Publishing that draft release by hand is what pushes the package to the three feeds.
-  See [03-ci-github-actions.md](03-ci-github-actions.md) section 12a.
+  The draft workflow then repackages that reviewed `.nupkg` for Azure Artifacts by rewriting only
+  the package `<version>` in the `.nuspec` to
+  `{X.Y.Z}-preview.{yyyyMMddHHmm}.{run_number}.{run_attempt}` and pushes that preview-version
+  package for internal testing; dependency version attributes are left unchanged. Publishing the
+  draft release by hand still pushes the original
+  official-version package to GitHub Packages and nuget.org unchanged. See
+  [03-ci-github-actions.md](03-ci-github-actions.md) section 12a.
+- Azure Artifacts package lifecycle: every draft-workflow run mints a fresh preview version, so a
+  rerun publishes a new internal-test package instead of colliding with an earlier Azure Artifacts
+  version. Operators should validate/install the preview version from Azure Artifacts and the
+  official tag version from the draft release, GitHub Packages, or nuget.org.
 - Stable releases also open a pull request against the Homebrew tap. The new version reaches
   `brew upgrade` once that pull request passes the tap's CI and is merged.
 - The single-file apps are neither code-signed nor notarized. A zip downloaded directly from the
@@ -429,13 +439,15 @@ characteristics:
   Every Graph call for this app - create/update, content upload, notes/committedContentVersion patches,
   and its appearance in app resolution - goes through Graph **beta**, because `macOSPkgApp` does not
   exist in v1.0. There is no operator action needed for this; it is handled internally, but it means a
-  tenant-side beta API outage affects `pkg` publishes specifically.
+  tenant-side beta API outage affects macOS publishes generally (both `pkg` and `lob`; see the next
+  bullet).
 - `AppType: lob` (`macOSLobApp`): requires Developer ID Installer signing, capped at 2 GB, requires a
-  top-level `Icon`, and stays on Graph **v1.0**. Because v1.0's `minimumSupportedOperatingSystem` has no
-  flag past macOS 13, a `lob` manifest entry with `Requirements.MinimumOSVersion` set to macOS 14 or
-  later fails at `publish` (and in `--dry-run`) with `UnsupportedMacOsVersionException` pointing at
-  `AppType: pkg` as the fix - it is not caught by `validate`, since the constraint is a Graph API-version
-  limitation rather than a manifest schema rule.
+  top-level `Icon`, and also uses Graph **beta** (doc/adr/publishing.md 2026-09-10 entry) - `macOSLobApp`
+  exists in v1.0 too, but `roleScopeTagIds` does not, so its create/update/content/category calls stay on
+  beta the same as `pkg`. There is no operator action needed for this either; it means
+  `Requirements.MinimumOSVersion` set to macOS 14 or later now works for `lob` the same as for `pkg`.
+  (Assignment sync is a separate exception: filter-less assignment create/update and every assignment
+  delete still use v1.0 on this branch, regardless of platform - deferred to #164.)
 - `.pkg` content is encrypted in-process at publish time (no packaging-time tool like IntuneWinAppUtil
   exists for macOS), so unlike Windows there is no separate "regenerate the encrypted package" step to
   re-run after a content change; re-running `publish` re-encrypts the currently staged `.pkg`.
@@ -627,7 +639,8 @@ This applies to the Relaypublisher repository itself, not to consumer repositori
   `release` environment, with audience `api://AzureADTokenExchange`.
 - [ ] In Azure DevOps, add the managed identity to the target project's **Contributors** group so it can
   push to the feed.
-- [ ] Confirm `release-publish.yml` is the only workflow with `packages: write` and `id-token: write`.
+- [ ] Confirm `release-draft.yml` grants `id-token: write` only to its Azure Artifacts internal-test job,
+  while `release-publish.yml` grants `packages: write` and `id-token: write` only to its public publishing job.
 - [ ] Confirm `ci.yml` references no secrets, so pull requests from forks still pass.
 
 #### NuGet Trusted Publishing values
@@ -660,12 +673,15 @@ GitHub secrets.
 
 Run these checks only after the workflow and policy configuration are present on the repository's default branch:
 
-1. Publish a new draft release and start `release-publish.yml` so `NuGet/login` obtains a fresh OIDC token and temporary
+1. Push a new version tag and confirm that `release-draft.yml` creates the draft release and pushes
+   a preview-version repack of its selected `.nupkg` to Azure Artifacts for internal testing,
+   while the draft asset itself keeps the official tag version.
+2. Publish the draft release and start `release-publish.yml` so `NuGet/login` obtains a fresh OIDC token and temporary
    API key. Confirm that the package is accepted by nuget.org without a stored `NUGET_API_KEY` secret.
-2. Confirm the Trusted Publishing policy shows numeric GitHub owner and repository IDs, if displayed, and that those IDs
+3. Confirm the Trusted Publishing policy shows numeric GitHub owner and repository IDs, if displayed, and that those IDs
    identify the intended repository. Confirm that the policy is active for the intended owner, repository, workflow file,
    and `release` environment.
-3. Re-run the same release workflow. It must obtain another fresh OIDC token and complete successfully with
+4. Re-run the same release workflow. It must obtain another fresh OIDC token and complete successfully with
    `--skip-duplicate` when the package already exists; a duplicate package must not be treated as a publish failure.
 
 ## 7. Production Checklist

@@ -20,7 +20,8 @@
   | `actions/checkout` | v7.0.1 | `3d3c42e5aac5ba805825da76410c181273ba90b1` |
   | `actions/setup-dotnet` | v6.0.0 | `a98b56852c35b8e3190ac28c8c2271da59106c68` |
   | `actions/upload-artifact` | v7.0.1 | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` |
-  | `azure/login` | v3.0.1 | `f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca` |
+  | `actions/download-artifact` | v7.0.0 | `37930b1c2abaa49bbe596cd826c3c89aef350131` |
+  | `azure/login` | v3.0.2 | `7ddb5af1ef8758cf1353cf3b42f940aee27ba21c` |
   | `NuGet/login` | v1.2.0 | `8d196754b4036150537f80ac539e15c2f1028841` |
 
 - **`actions/checkout` は必ず `persist-credentials: false` を指定する。** 既定の `true` は job token を
@@ -307,22 +308,28 @@ jobs:
 
 | workflow | trigger | 役割 |
 |---|---|---|
-| `.github/workflows/release-draft.yml` | `push` tags `v*` | build / test / pack / single-file publish → **draft** GitHub release を作成し資産を添付する |
-| `.github/workflows/release-publish.yml` | `release: [published]` | draft release を人が publish した時点で、その資産を NuGet feed へ push し、stable release では Homebrew tap に formula 更新の pull request を作る |
+| `.github/workflows/release-draft.yml` | `push` tags `v*` | build / test / pack / single-file publish → **draft** GitHub release を作成し資産を添付して、選択済み `.nupkg` から per-build preview version の package を再構成して Azure Artifacts へ内部テスト用に push する |
+| `.github/workflows/release-publish.yml` | `release: [published]` | draft release を人が publish した時点で、その資産を GitHub Packages と nuget.org へ push し、stable release では Homebrew tap に formula 更新の pull request を作る |
 
 ### なぜ 2 本に分けるか
 
-NuGet feed は一度 push した version を削除できない(unlist しかできない)。したがって
-「tag を打った瞬間に feed へ公開が確定する」構成は取らず、**draft release を人がレビューして
-publish する操作を最後の関門にする**。tag の打ち直しは draft release を消せばやり直せる。
+nuget.org は一度 push した version を削除できない(unlist しかできない)。したがって
+「tag を打った瞬間に public feed へ公開が確定する」構成は取らず、**draft release を人がレビューして
+publish する操作を public 配布の最後の関門にする**。ただし Azure Artifacts は内部テスト用 feed であるため、
+tag の検証後に draft workflow から先行 push する。ここで push するのは official version の package そのものではなく、
+選択済み `.nupkg` の `.nuspec` にある package 自身の `<version>` だけを
+`{X.Y.Z}-preview.{yyyyMMddHHmm}.{run_number}.{run_attempt}` へ差し替えて再 zip した per-build preview package である。
+`<dependency version="...">` などの属性値は変更しない。そのため Azure Artifacts 側は rerun ごとに常に一意な version を受け取り、
+同じ tag の再実行でも version collision を起こさない。
+一方で draft release asset と `release-publish.yml` が public feed へ push する package は、tag の official version のまま維持する。
 
 ### 配布先 feed
 
 | feed | 想定利用者 | 認証 |
 |---|---|---|
 | GitHub Packages (このリポジトリ) | リポジトリを直接見ている利用者 | `GITHUB_TOKEN` (`packages: write`) |
-| Azure Artifacts | 社内 CI / 閉じたネットワーク | OIDC (workload identity federation) + artifacts-credprovider |
-| nuget.org | 一般利用者 | NuGet Trusted Publishing (OIDC) + `NuGet/login` |
+| Azure Artifacts | 社内 CI / 閉じたネットワークでの内部テスト | `release-draft.yml` から OIDC (workload identity federation) + artifacts-credprovider |
+| nuget.org | 一般利用者 | `release-publish.yml` から NuGet Trusted Publishing (OIDC) + `NuGet/login` |
 
 ### nuget.org Trusted Publishing (OIDC)
 
@@ -346,7 +353,8 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
 
 ### release-draft.yml の設計上のポイント
 
-- trigger は `v*` tag push のみ。job は `verify`(build/test)/ `guard`(provenance)/ `draft-release` の 3 本。
+- trigger は `v*` tag push のみ。job は `verify`(build/test)/ `guard`(provenance)/ `draft-release` /
+  `push-azure-artifacts`(内部テスト用 package push) の 4 本。
 - **`guard` job は read-only で、ビルドコードを一切実行しない。** version 検証と main 到達性検証を
   ここで済ませてから、`contents: write` を持つ `draft-release` job を動かす。
 - version は tag から抽出し、`^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$` で検証してから
@@ -359,13 +367,32 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
 - pack 対象は `src/IntuneLobPublisher.Cli/IntuneLobPublisher.Cli.csproj` のみ。
 - `dotnet build` / `dotnet test` を ubuntu / windows の matrix で先に通してから pack する。
 - 添付する資産: `.nupkg`、3 RID の single-file app zip、`SHA256SUMS.txt`。
-- `gh release view` で存在確認してから create / upload を出し分け、同一 tag での再実行を冪等にする。
+- `gh release view` で存在確認してから create / 検証を出し分け、同一 tag での再実行を冪等にする。
+- **既存 draft の asset は更新しない**。Azure Artifacts に先行 push 済みの preview package と draft asset の
+  対応関係が後から食い違うことを防ぐため、既存 draft に expected package があることを確認し、ZIP の展開後に package
+  contents と metadata が今回生成した package と一致する場合だけ保持する。NuGet ZIP の entry timestamp
+  は build ごとに変わり得るため比較対象にせず、実際の差分がある場合は新しい version tag を切る。
+  一致した場合は、新規 draft では今回 attach した package、既存 draft では既存 draft asset の bytes を
+  `release-package` workflow artifact として upload する。
 - **ただし既に publish 済みの release には絶対に upload しない**(`isDraft` を確認して fail させる)。
   publish 済み release に tag を打ち直して資産だけ差し替えると、`release: published` は再発火しないため、
   release に添付された資産と feed に push 済みの package が食い違ったまま公開され続ける。
   その場合は新しい version tag を切る。
 - prerelease version (`-` を含む) の場合は `--prerelease` を付ける。
 - `contents: write` は draft release 作成に必要。
+- `push-azure-artifacts` は `draft-release` 完了後に、短期保持の `release-package` workflow artifact から
+  `relaypublisher.<version>.nupkg` を exact name で download し、package を再ビルドせずに
+  `.nuspec` の package version だけを(`dependency` の version 属性は変更せずに)
+  `{X.Y.Z}-preview.{yyyyMMddHHmm}.{run_number}.{run_attempt}` へ差し替えた preview-version package を Azure Artifacts へ push する。
+  draft release を read-only token で download せず、internal test 向けの payload を release asset と揃えたまま、
+  Azure Artifacts だけ一意な version contract にするためである。
+- Azure Artifacts job は既存の `release` environment を使用し、`contents: read` と
+  `id-token: write` だけを持つ。`draft-release` の pack/publish job と Azure OIDC credential を分離する。
+- Azure Artifacts の認証は `azure/login` → version 固定の credential provider install →
+  `az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798` →
+  `VSS_NUGET_ACCESSTOKEN` / `VSS_NUGET_URI_PREFIXES` → `dotnet nuget push --api-key AzureDevOps` の順とする。
+  feed URL と access token はマスクする。preview version は run ごとに一意に採番されるため、Azure Artifacts の
+  duplicate-version collision は rerun では発生しない。
 
 ### release-publish.yml の設計上のポイント
 
@@ -387,20 +414,8 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
 - nuget.org は `NuGet/login` による Trusted Publishing (OIDC) を使う。`id-token: write` を持つ job で
   `NUGET_USER` を渡し、返された一時 output を直後の `dotnet nuget push` にだけ渡す。長期有効な
   API key secret は使わない。
-- Azure Artifacts は Microsoft Learn の
-  [GitHub Actions → Azure Artifacts quickstart (managed identity)](https://learn.microsoft.com/azure/devops/artifacts/quickstarts/github-actions?view=azure-devops)
-  に準拠する。`azure/login` → credential provider install →
-  `az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798` →
-  `VSS_NUGET_ACCESSTOKEN` / `VSS_NUGET_URI_PREFIXES` を設定 → `dotnet nuget push --api-key AzureDevOps`。
-  `499b84ac-1321-427f-aa17-267ca6975798` は Azure DevOps の固定リソース ID。
-  ただし credential provider の install だけは Learn の例(`curl ... aka.ms/... | sh`)を採らず、
-  署名済み NuGet package `Microsoft.Artifacts.CredentialProvider.NuGet.Tool` を version 固定で
-  `dotnet tool install` する(§11a の共通方針)。
-- **feed URL は secret** (`AZURE_ARTIFACTS_FEED_URL`)。`VSS_NUGET_URI_PREFIXES` はその場で導出し、
-  `::add-mask::` でマスクしてからログに出さないようにする。取得した access token も同様にマスクする。
-- 3 feed とも `--skip-duplicate` を付け、release publish のやり直しを冪等にする。
-- 3 feed の push step は独立させる。どれか 1 つが失敗したら job は失敗する
-  (`continue-on-error` は使わない)。
+- GitHub Packages と nuget.org の 2 feed とも `--skip-duplicate` を付け、release publish のやり直しを
+  冪等にする。push step は独立させ、どちらかが失敗したら job は失敗する(`continue-on-error` は使わない)。
 
 ### Homebrew tap 更新 job (`update-homebrew-tap`)
 
@@ -443,7 +458,9 @@ stable release では、`release-publish.yml` の `update-homebrew-tap` job が 
 
 - Azure Artifacts 側の事前セットアップ(managed identity 作成、federated credential 設定、
   Azure DevOps プロジェクトの Contributors への追加)は `doc/05-operation.md` §6 を参照する。
-- `release` environment には `NUGET_USER`、Azure Artifacts 用の 4 secrets、Homebrew tap 用の 2 secrets だけを登録する。
+- `release` environment は `release-draft.yml` の Azure Artifacts job と `release-publish.yml` の
+  nuget.org job / Homebrew tap job で共用し、`NUGET_USER`、Azure Artifacts 用の 4 secrets、
+  Homebrew tap 用の 2 secrets を登録する。
   Environment protection rules はこの移行では変更しない。
 - Homebrew tap 用の GitHub App は次の設定で作る。webhook は無効、Repository permissions は Contents: Read and write /
   Pull requests: Read and write / Metadata: Read-only のみ。インストール先は `homebrew-tap` リポジトリだけに限定し、

@@ -38,7 +38,7 @@ public sealed class GraphMobileAppContentClientTests
     private static (GraphMobileAppContentClient Client, QueueHandler Handler) CreateClient(params Func<HttpRequestMessage, HttpResponseMessage>[] responses)
     {
         var handler = new QueueHandler(responses);
-        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://graph.microsoft.com/v1.0/") };
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://graph.microsoft.com/beta/") };
         return (new GraphMobileAppContentClient(httpClient), handler);
     }
 
@@ -48,23 +48,23 @@ public sealed class GraphMobileAppContentClientTests
         var (client, handler) = CreateClient(
             _ => JsonResponse(HttpStatusCode.Created, """{"@odata.type":"#microsoft.graph.mobileAppContent","id":"cv-1"}"""));
 
-        var id = await client.CreateContentVersionAsync("app-1", WindowsODataType, useBeta: false, CancellationToken.None);
+        var id = await client.CreateContentVersionAsync("app-1", WindowsODataType, CancellationToken.None);
 
         Assert.AreEqual("cv-1", id);
         Assert.AreEqual("POST", handler.Requests[0].Method);
         Assert.AreEqual(
-            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions",
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions",
             handler.Requests[0].Uri);
         StringAssert.Contains(handler.Requests[0].Body, "\"@odata.type\":\"#microsoft.graph.mobileAppContent\"");
     }
 
     [TestMethod]
-    public async Task CreateContentVersionAsync_UseBetaTrue_RoutesToBeta()
+    public async Task CreateContentVersionAsync_MacOsPkgODataType_UsesMacOsPkgAppCastSegment()
     {
         var (client, handler) = CreateClient(
             _ => JsonResponse(HttpStatusCode.Created, """{"id":"cv-1"}"""));
 
-        await client.CreateContentVersionAsync("app-1", MacPkgODataType, useBeta: true, CancellationToken.None);
+        await client.CreateContentVersionAsync("app-1", MacPkgODataType, CancellationToken.None);
 
         Assert.AreEqual(
             "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.macOSPkgApp/contentVersions",
@@ -74,26 +74,26 @@ public sealed class GraphMobileAppContentClientTests
     [TestMethod]
     public async Task ListContentVersionsAsync_FollowsNextLinkAndUsesTypedRoute()
     {
-        const string nextLink = "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions?$skiptoken=next";
+        const string nextLink = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions?$skiptoken=next";
         var (client, handler) = CreateClient(
             _ => JsonResponse(HttpStatusCode.OK, $$"""
                 {"value":[{"id":"cv-1"}],"@odata.nextLink":"{{nextLink}}"}
                 """),
             _ => JsonResponse(HttpStatusCode.OK, """{"value":[{"id":"cv-2"}]}"""));
 
-        var versions = await client.ListContentVersionsAsync("app-1", WindowsODataType, useBeta: false, CancellationToken.None);
+        var versions = await client.ListContentVersionsAsync("app-1", WindowsODataType, CancellationToken.None);
 
         Assert.HasCount(2, versions);
         Assert.AreEqual("cv-1", versions[0].Id);
         Assert.AreEqual("cv-2", versions[1].Id);
         Assert.AreEqual(
-            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions?$select=id",
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions?$select=id",
             handler.Requests[0].Uri);
         Assert.AreEqual(nextLink, handler.Requests[1].Uri);
     }
 
     [TestMethod]
-    public async Task ListContentFilesAsync_FollowsNextLinkUsesBetaTypedRouteAndParsesIsCommitted()
+    public async Task ListContentFilesAsync_FollowsNextLinkUsesTypedRouteAndParsesIsCommitted()
     {
         const string nextLink = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.macOSPkgApp/contentVersions/cv-1/files?$skiptoken=next";
         var (client, handler) = CreateClient(
@@ -102,7 +102,7 @@ public sealed class GraphMobileAppContentClientTests
                 """),
             _ => JsonResponse(HttpStatusCode.OK, """{"value":[{"id":"file-2","uploadState":"commitFileSuccess","isCommitted":true}]}"""));
 
-        var files = await client.ListContentFilesAsync("app-1", "cv-1", MacPkgODataType, useBeta: true, CancellationToken.None);
+        var files = await client.ListContentFilesAsync("app-1", "cv-1", MacPkgODataType, CancellationToken.None);
 
         Assert.HasCount(2, files);
         Assert.AreEqual("file-1", files[0].Id);
@@ -126,11 +126,11 @@ public sealed class GraphMobileAppContentClientTests
             _ => JsonResponse(HttpStatusCode.Created, """{"id":"file-1","uploadState":"azureStorageUriRequestPending"}"""));
 
         var id = await client.CreateContentFileAsync(
-            "app-1", "cv-1", "IntunePackage.intunewin", 100, 128, WindowsODataType, useBeta: false, CancellationToken.None);
+            "app-1", "cv-1", "IntunePackage.intunewin", 100, 128, WindowsODataType, CancellationToken.None);
 
         Assert.AreEqual("file-1", id);
         Assert.AreEqual(
-            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions/cv-1/files",
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions/cv-1/files",
             handler.Requests[0].Uri);
         var body = handler.Requests[0].Body!;
         StringAssert.Contains(body, "\"name\":\"IntunePackage.intunewin\"");
@@ -146,13 +146,13 @@ public sealed class GraphMobileAppContentClientTests
              "azureStorageUriExpirationDateTime":"2026-07-05T12:00:00Z"}
             """));
 
-        var file = await client.GetContentFileAsync("app-1", "cv-1", "file-1", WindowsODataType, useBeta: false, CancellationToken.None);
+        var file = await client.GetContentFileAsync("app-1", "cv-1", "file-1", WindowsODataType, CancellationToken.None);
 
         Assert.AreEqual("azureStorageUriRequestSuccess", file.UploadState);
         Assert.AreEqual("https://sas.example/blob", file.AzureStorageUri);
         Assert.AreEqual(DateTimeOffset.Parse("2026-07-05T12:00:00Z"), file.AzureStorageUriExpirationDateTime);
         Assert.AreEqual(
-            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions/cv-1/files/file-1",
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions/cv-1/files/file-1",
             handler.Requests[0].Uri);
     }
 
@@ -161,10 +161,10 @@ public sealed class GraphMobileAppContentClientTests
     {
         var (client, handler) = CreateClient(_ => EmptyResponse(HttpStatusCode.NoContent));
 
-        await client.RenewUploadAsync("app-1", "cv-1", "file-1", WindowsODataType, useBeta: false, CancellationToken.None);
+        await client.RenewUploadAsync("app-1", "cv-1", "file-1", WindowsODataType, CancellationToken.None);
 
         Assert.AreEqual(
-            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions/cv-1/files/file-1/renewUpload",
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions/cv-1/files/file-1/renewUpload",
             handler.Requests[0].Uri);
         Assert.IsNull(handler.Requests[0].Body);
     }
@@ -184,10 +184,10 @@ public sealed class GraphMobileAppContentClientTests
             FileDigestAlgorithm = "SHA256",
         };
 
-        await client.CommitFileAsync("app-1", "cv-1", "file-1", encryptionInfo, WindowsODataType, useBeta: false, CancellationToken.None);
+        await client.CommitFileAsync("app-1", "cv-1", "file-1", encryptionInfo, WindowsODataType, CancellationToken.None);
 
         Assert.AreEqual(
-            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions/cv-1/files/file-1/commit",
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.win32LobApp/contentVersions/cv-1/files/file-1/commit",
             handler.Requests[0].Uri);
         var body = handler.Requests[0].Body!;
         StringAssert.Contains(body, "\"fileEncryptionInfo\"");
@@ -200,10 +200,10 @@ public sealed class GraphMobileAppContentClientTests
     {
         var (client, handler) = CreateClient(_ => EmptyResponse(HttpStatusCode.OK));
 
-        await client.PatchCommittedContentVersionAsync("app-1", "cv-1", WindowsODataType, useBeta: false, CancellationToken.None);
+        await client.PatchCommittedContentVersionAsync("app-1", "cv-1", WindowsODataType, CancellationToken.None);
 
         Assert.AreEqual("PATCH", handler.Requests[0].Method);
-        Assert.AreEqual("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1", handler.Requests[0].Uri);
+        Assert.AreEqual("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1", handler.Requests[0].Uri);
         var body = handler.Requests[0].Body!;
         StringAssert.Contains(body, "\"committedContentVersion\":\"cv-1\"");
         StringAssert.Contains(body, $"\"@odata.type\":\"{WindowsODataType}\"");
@@ -211,22 +211,11 @@ public sealed class GraphMobileAppContentClientTests
     }
 
     [TestMethod]
-    public async Task PatchCommittedContentVersionAsync_UseBetaTrue_RoutesToBeta()
-    {
-        var (client, handler) = CreateClient(_ => EmptyResponse(HttpStatusCode.OK));
-
-        await client.PatchCommittedContentVersionAsync("app-1", "cv-1", "#microsoft.graph.macOSPkgApp", useBeta: true, CancellationToken.None);
-
-        Assert.AreEqual("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1", handler.Requests[0].Uri);
-        StringAssert.Contains(handler.Requests[0].Body, "\"@odata.type\":\"#microsoft.graph.macOSPkgApp\"");
-    }
-
-    [TestMethod]
     public async Task PatchNotesAsync_PatchesWithoutCommittedContentVersion()
     {
         var (client, handler) = CreateClient(_ => EmptyResponse(HttpStatusCode.OK));
 
-        await client.PatchNotesAsync("app-1", """{"managedBy":"intune-lob-manifest"}""", WindowsODataType, useBeta: false, CancellationToken.None);
+        await client.PatchNotesAsync("app-1", """{"managedBy":"intune-lob-manifest"}""", WindowsODataType, CancellationToken.None);
 
         var body = handler.Requests[0].Body!;
         StringAssert.Contains(body, "\"notes\":");
@@ -238,7 +227,7 @@ public sealed class GraphMobileAppContentClientTests
     {
         var (client, handler) = CreateClient(_ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"published"}"""));
 
-        var state = await client.GetPublishingStateAsync("app-1", useBeta: false, CancellationToken.None);
+        var state = await client.GetPublishingStateAsync("app-1", CancellationToken.None);
 
         Assert.AreEqual("published", state);
         StringAssert.Contains(handler.Requests[0].Uri, "$select=publishingState");
@@ -251,7 +240,7 @@ public sealed class GraphMobileAppContentClientTests
             _ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"notPublished"}"""),
             _ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"notPublished","committedContentVersion":"cv-1"}"""));
 
-        var state = await client.GetContentStateAsync("app-1", MacPkgODataType, useBeta: true, CancellationToken.None);
+        var state = await client.GetContentStateAsync("app-1", MacPkgODataType, CancellationToken.None);
 
         Assert.AreEqual("notPublished", state.PublishingState);
         Assert.AreEqual("cv-1", state.CommittedContentVersion);
@@ -269,7 +258,7 @@ public sealed class GraphMobileAppContentClientTests
         var (client, handler) = CreateClient(
             _ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"published"}"""));
 
-        var state = await client.GetContentStateAsync("app-1", MacPkgODataType, useBeta: true, CancellationToken.None);
+        var state = await client.GetContentStateAsync("app-1", MacPkgODataType, CancellationToken.None);
 
         Assert.AreEqual("published", state.PublishingState);
         Assert.IsNull(state.CommittedContentVersion);
@@ -287,7 +276,7 @@ public sealed class GraphMobileAppContentClientTests
             _ => JsonResponse(HttpStatusCode.BadRequest, """{"error":{"code":"BadRequest","message":"An error has occurred"}}"""),
             _ => JsonResponse(HttpStatusCode.OK, """{"publishingState":"notPublished","committedContentVersion":null}"""));
 
-        var state = await client.GetContentStateAsync("app-1", MacPkgODataType, useBeta: true, CancellationToken.None);
+        var state = await client.GetContentStateAsync("app-1", MacPkgODataType, CancellationToken.None);
 
         Assert.AreEqual("notPublished", state.PublishingState);
         Assert.IsNull(state.CommittedContentVersion);
@@ -307,7 +296,7 @@ public sealed class GraphMobileAppContentClientTests
         });
 
         var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(
-            () => client.CreateContentVersionAsync("app-1", WindowsODataType, useBeta: false, CancellationToken.None));
+            () => client.CreateContentVersionAsync("app-1", WindowsODataType, CancellationToken.None));
 
         Assert.AreEqual(403, ex.StatusCode);
         Assert.AreEqual("client-id-1", ex.ClientRequestId);
@@ -320,10 +309,10 @@ public sealed class GraphMobileAppContentClientTests
         var (client, handler) = CreateClient(
             _ => JsonResponse(HttpStatusCode.Created, """{"id":"cv-1"}"""));
 
-        await client.CreateContentVersionAsync("app-1", MacLobODataType, useBeta: false, CancellationToken.None);
+        await client.CreateContentVersionAsync("app-1", MacLobODataType, CancellationToken.None);
 
         Assert.AreEqual(
-            "https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-1/microsoft.graph.macOSLobApp/contentVersions",
+            "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1/microsoft.graph.macOSLobApp/contentVersions",
             handler.Requests[0].Uri);
     }
 
@@ -336,7 +325,7 @@ public sealed class GraphMobileAppContentClientTests
             _ => throw new InvalidOperationException("Should not reach the network for an unrecognized OData type."));
 
         var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(
-            () => client.CreateContentVersionAsync("app-1", "#microsoft.graph.unknownAppType", useBeta: false, CancellationToken.None));
+            () => client.CreateContentVersionAsync("app-1", "#microsoft.graph.unknownAppType", CancellationToken.None));
 
         StringAssert.Contains(ex.Message, "unknownAppType");
         Assert.IsEmpty(handler.Requests);

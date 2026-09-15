@@ -17,8 +17,11 @@ public interface IAssignmentGraphClient
 }
 
 /// <summary>
-/// Applies mobile app assignment CRUD calls through Microsoft Graph. Normal assignments use v1.0;
-/// filter-bearing assignments use beta because the assignment filter target fields are beta-only.
+/// Applies mobile app assignment CRUD calls through Microsoft Graph. Every call is relative to the
+/// client's base address (Graph beta): filter-bearing assignments always needed beta (the assignment
+/// filter target fields are beta-only), and non-filter assignments now do too, since every app this
+/// client serves (win32LobApp, macOSPkgApp, macOSLobApp) is on beta (doc/adr/publishing.md 2026-09-10
+/// entry).
 /// </summary>
 public sealed class AssignmentGraphClient : IAssignmentGraphClient
 {
@@ -32,7 +35,7 @@ public sealed class AssignmentGraphClient : IAssignmentGraphClient
     public async Task<IReadOnlyList<CurrentAssignment>> ListAssignmentsAsync(string appId, CancellationToken cancellationToken)
     {
         var results = new List<CurrentAssignment>();
-        string? requestUri = AssignmentCollectionPath(appId, useBeta: true);
+        string? requestUri = AssignmentCollectionPath(appId);
 
         while (requestUri is not null)
         {
@@ -52,7 +55,7 @@ public sealed class AssignmentGraphClient : IAssignmentGraphClient
 
     public async Task<string> CreateAssignmentAsync(string appId, DesiredAssignment assignment, CancellationToken cancellationToken)
     {
-        var requestUri = AssignmentCollectionPath(appId, useBeta: assignment.Filter is not null);
+        var requestUri = AssignmentCollectionPath(appId);
         var payload = ToPayload(assignment);
         using var response = await _httpClient.PostAsJsonAsync(requestUri, payload, cancellationToken).ConfigureAwait(false);
         var body = await GraphResponseReader.ReadJsonAsync<MobileAppAssignmentResponse>(response, requestUri, cancellationToken).ConfigureAwait(false);
@@ -63,15 +66,14 @@ public sealed class AssignmentGraphClient : IAssignmentGraphClient
     public async Task UpdateAssignmentAsync(string appId, CurrentAssignment current, DesiredAssignment desired, CancellationToken cancellationToken)
     {
         var assignmentId = RequireAssignmentId(current);
-        var useBeta = current.Filter is not null || desired.Filter is not null;
-        var requestUri = AssignmentItemPath(appId, assignmentId, useBeta);
+        var requestUri = AssignmentItemPath(appId, assignmentId);
         using var response = await _httpClient.PatchAsync(requestUri, JsonContent.Create(ToPayload(desired)), cancellationToken).ConfigureAwait(false);
         await GraphResponseReader.EnsureSuccessAsync(response, requestUri, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task DeleteAssignmentAsync(string appId, string assignmentId, CancellationToken cancellationToken)
     {
-        var requestUri = AssignmentItemPath(appId, assignmentId, useBeta: false);
+        var requestUri = AssignmentItemPath(appId, assignmentId);
         using var response = await _httpClient.DeleteAsync(requestUri, cancellationToken).ConfigureAwait(false);
         await GraphResponseReader.EnsureSuccessAsync(response, requestUri, cancellationToken).ConfigureAwait(false);
     }
@@ -202,11 +204,11 @@ public sealed class AssignmentGraphClient : IAssignmentGraphClient
     private static string NormalizeODataType(string? value)
         => value?.TrimStart('#') ?? string.Empty;
 
-    private static string AssignmentCollectionPath(string appId, bool useBeta)
-        => $"deviceAppManagement/mobileApps/{Uri.EscapeDataString(appId)}/assignments".WithGraphVersion(useBeta);
+    private static string AssignmentCollectionPath(string appId)
+        => $"deviceAppManagement/mobileApps/{Uri.EscapeDataString(appId)}/assignments";
 
-    private static string AssignmentItemPath(string appId, string assignmentId, bool useBeta)
-        => $"{AssignmentCollectionPath(appId, useBeta)}/{Uri.EscapeDataString(assignmentId)}";
+    private static string AssignmentItemPath(string appId, string assignmentId)
+        => $"{AssignmentCollectionPath(appId)}/{Uri.EscapeDataString(assignmentId)}";
 
     private sealed class MobileAppAssignmentListPage
     {
@@ -288,10 +290,4 @@ public sealed class Win32LobAppRestartSettingsPayload
 
     [JsonPropertyName("gracePeriodInMinutes")]
     public required int GracePeriodInMinutes { get; init; }
-}
-
-internal static class AssignmentGraphPathExtensions
-{
-    public static string WithGraphVersion(this string path, bool useBeta)
-        => useBeta ? $"/beta/{path}" : $"/v1.0/{path}";
 }

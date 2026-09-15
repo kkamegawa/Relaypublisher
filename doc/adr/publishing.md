@@ -6,6 +6,72 @@ Intune / Microsoft Graph への publish、content upload、payload mapping に�
 仕様を変更する必要がある場合は、必ず該当領域のファイルを確認し、変更理由が以前の修正と矛盾しないか確認してください。
 矛盾する可能性がある場合はユーザーに承認を求めます。
 
+## 2026-09-10: Intune app 関連の Graph 呼び出しを beta に統一する (Issue #161)
+
+- **決定**: Windows `win32LobApp` の Graph 呼び出し(create/update/content upload/notes・
+  committedContentVersion patch)を、macOS `AppType: pkg`(`macOSPkgApp`)と同じく Graph **beta**
+  経由にする。`CategoryApiVersion.UseBeta` も Windows で `true` を返すようにする。
+  - **理由**: 既存の Windows app 2 件(x64/arm64)への再 publish が、content upload 成功後の
+    `win32LobApp` 全体 PATCH で `400 NoPropertyForSelectedVersion` により失敗した。Microsoft Learn で
+    v1.0 / beta の `win32LobApp` resource type を照合した結果、`Win32LobAppPayloadMapper` が常に送る
+    `displayVersion`、および manifest 指定時に送る `roleScopeTagIds` は **どちらも v1.0 の win32LobApp
+    には存在せず、beta のみに存在する**ことを確認した。つまり `RoleScopeTagIds` 無しの manifest でも
+    `displayVersion` により、既存 Windows app の更新は v1.0 のままでは常に失敗する構造的なバグだった。
+  - **影響範囲**: content upload・notes / committedContentVersion patch・publishingState 待機も、
+    アプリ本体と同じ API バージョンで呼ぶ必要があるため、`WindowsAppPublisher` の `useBeta` 引数も
+    合わせて `true` にした。失敗した既存 app は content が既に commit 済みのため、削除・再作成は不要
+    (doc/06-troubleshooting.md 6e 節)。
+  - **今後の注意**: macOS `AppType: lob`(`macOSLobApp`)にも同種の `roleScopeTagIds` 未対応、および
+    v1.0 の `macOSMinimumOperatingSystem` が macOS 14 以降のフラグを持たないという既知の制限があり、
+    別 Issue (#163) で同様に beta へ統一する予定。将来的に Intune app 関連の Graph 呼び出しがすべて
+    beta に揃った時点で、`useBeta` 引数と `/v1.0/` ⇔ `/beta/` の per-call 切り替え機構自体を削除する
+    (Issue #164)。この決定は 2026-08-21 の「v1.0 では v14_0/v15_0 を省略する」エントリ、および
+    2026-08-25 の win32LobApp v1.0 Learn リンクを置き換えるものであり、「対象 API に存在しない
+    プロパティを送らない」という同じ原則に基づくため矛盾しない。
+- **決定**(Issue #163): `MacOsAppPayloadMapper.ResolveTarget` を変更し、`AppType: lob`
+  (`macOSLobApp`)も `AppType: pkg` と同じく Graph beta を使うようにする。`MacOsMinimumOperatingSystemTable`
+  からは `IsBetaOnly` 判定と `useBeta` 引数を削除し、`v14_0`/`v15_0`/`v26_0` を含む全バージョンを
+  `AppType` に関わらず使用できるようにする。`UnsupportedMacOsVersionException` から
+  `requiresBetaOnlyFlag` 分岐を削除する。
+  - **理由**: 上記 win32LobApp と同じ調査で、`macOSLobApp` にも `roleScopeTagIds` が v1.0 に存在しない
+    という同種のバグが確認できた。あわせて v1.0 の `macOSMinimumOperatingSystem` が macOS 14 以降の
+    フラグを持たないため、`AppType: lob` は `Requirements.MinimumOSVersion` に macOS 14 以降を指定
+    できないという既知の制限も、同じ「lob は beta を使わない」という前提から生じていた。lob を beta に
+    揃えることで両方を同時に解消する。
+  - **影響範囲**: `tools/yamlcreate.ps1` の `$MacOsVersions` から beta 専用フラグと `AppType: lob` での
+    除外処理を削除し、対話式スクリプトでも `lob` から macOS 14 以降を選べるようにした。既存の macOS 13
+    以前を指定した `lob` manifest の挙動(YAML・publish の入出力)は変わらない。
+  - **今後の注意**: これでアプリ本体・content upload・category の Graph 呼び出し(win32LobApp・
+    macOSPkgApp・macOSLobApp・`CategoryApiVersion`)はすべて beta に揃った。filter なしの
+    assignment create/update/delete(`AssignmentGraphClient`)は本 Issue の対象外のためまだ v1.0 の
+    ままで、Issue #164 でこれも含めて `useBeta` 引数と `/v1.0/` ⇔ `/beta/` の per-call 切り替え機構
+    (`GraphMacOsAppClient` / `GraphWin32LobAppClient` / `GraphMobileAppContentClient` /
+    `CategoryGraphClient` / `AssignmentGraphClient` / `GraphIntuneAppDirectory` の `VersionSegment` 等)
+    自体を削除し、`GraphClientOptions.BaseAddress` を beta 既定にする。
+- **決定**(Issue #164): `GraphClientOptions.BaseAddress` の既定値を `https://graph.microsoft.com/beta/`
+  に変更し、`useBeta` 引数・`VersionSegment`/`WithGraphVersion` ヘルパー・`CategoryApiVersion`・
+  `MacOsAppTarget.UseBeta` を削除した。各 Graph client(`GraphWin32LobAppClient` /
+  `GraphMacOsAppClient` / `GraphMobileAppContentClient` / `CategoryGraphClient` /
+  `AssignmentGraphClient` / `GraphIntuneAppDirectory`)は絶対パスの組み立てをやめ、すべて
+  `HttpClient.BaseAddress`(beta)からの相対パスでリクエストする。`CategoryGraphClient` の
+  `@odata.id` 組み立ても、version segment の個別置き換えではなく `BaseAddress` をそのまま使うように
+  単純化した。
+  - **理由**: #162・#163 の完了により win32LobApp・macOSPkgApp・macOSLobApp のすべてが常に beta を
+    使うことになったため、呼び出しごとに v1.0/beta を判定する分岐は到達不能なコードになっていた。
+    このリポジトリは初期開発段階でありデータ移行や後方互換を考慮する必要がないため、死んだコードとして
+    残さず削除した。
+  - **影響範囲**: `ICategoryService.ApplyAsync` から使われなくなった `AppManifest app` 引数も削除した
+    (category の API バージョンはもう app 種別に依存しないため)。`AssignmentGraphClient` は
+    filter を伴わない assignment の create/update/delete も、これまでの v1.0 から beta 経由に変わる
+    (filter 付き assignment は既に beta だった)。Graph の `mobileAppAssignment` は v1.0/beta で
+    互換な形なので追加のマッピング変更は不要だが、実際に送信される request の endpoint が変わる点は
+    「内部実装の整理のみ」ではない意図的な仕様変更として明記する。それ以外(win32LobApp・macOSPkgApp・
+    macOSLobApp 本体・category・content upload・app 一覧)は #162/#163 で既に beta 化済みのため、
+    このエントリでの実質的な挙動変更はない。
+  - **今後の注意**: 今後 Intune アプリ関連で v1.0 専用の呼び出しが必要になった場合(新しい resource
+    type の追加など)、この決定を単純に巻き戻すのではなく、その時点で必要なスコープに絞った
+    per-call バージョン判定を再設計すること。
+
 ## 2026-09-06: publish の SAS 認証 403 回復・result file 一本化・manifest エントリ単位の Graph セッション (Issue #150)
 
 - **決定**: `AzureStorageBlockBlobUploader` の `StageBlockAsync` / `CommitBlockListAsync` が Azure Storage

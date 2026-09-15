@@ -1,7 +1,12 @@
 # Build a release candidate from a `v*` tag and attach it to a DRAFT GitHub release.
 #
-# Nothing is pushed to any NuGet feed here. Publishing the draft release by hand is the
-# review gate; release-publish.yml reacts to that and pushes the reviewed artifacts.
+# The internal Azure Artifacts feed receives a repack of the package attached to the draft
+# release: only the version in its .nuspec is rewritten to a per-build "preview" version, so
+# every build (including re-runs of the same tag) is always a new version and never collides
+# with a previous push. The extracted payload files remain byte-identical to the reviewed draft
+# asset, but the outer .nupkg archive is intentionally different because its .nuspec content is
+# changed and the zip is rebuilt. Publishing the draft release by hand remains the review gate
+# for GitHub Packages and nuget.org, which keep the tag's official version untouched.
 name: Release (draft)
 
 on:
@@ -49,6 +54,7 @@ jobs:
       contents: read
     outputs:
       version: ${{ steps.resolve.outputs.version }}
+      package: ${{ steps.resolve.outputs.package }}
       prerelease: ${{ steps.resolve.outputs.prerelease }}
     steps:
       # The tag is the single source of truth for the package version. Validate it before
@@ -63,6 +69,7 @@ jobs:
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "package=relaypublisher.${VERSION}.nupkg" >> "$GITHUB_OUTPUT"
           case "$VERSION" in
             *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
             *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
@@ -93,6 +100,7 @@ jobs:
       contents: write # required to create the draft release and upload its assets
     env:
       VERSION: ${{ needs.guard.outputs.version }}
+      PACKAGE: ${{ needs.guard.outputs.package }}
       PRERELEASE: ${{ needs.guard.outputs.prerelease }}
     steps:
       # persist-credentials: false keeps the write-capable job token out of .git/config,
@@ -141,10 +149,9 @@ jobs:
           sha256sum ./*.nupkg ./*.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      # Re-running for the same tag refreshes a draft's assets, but never touches a release
-      # that was already published: `release: published` would not fire again, so the assets
-      # would silently diverge from the packages already pushed to the feeds.
-      - name: Create or update the draft release
+      # Never refresh an existing draft's assets. Once Azure Artifacts receives this version,
+      # replacing the draft package would make the internal-test and release bits diverge.
+      - name: Create or verify the draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -156,12 +163,147 @@ jobs:
               echo "::error::Cut a new version tag instead."
               exit 1
             fi
-            gh release upload "$GITHUB_REF_NAME" ./artifacts/release/* --clobber
+            if ! gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' | grep -Fxq "$PACKAGE"; then
+              echo "::error::draft release ${GITHUB_REF_NAME} does not contain ${PACKAGE}; refusing to replace its assets."
+              exit 1
+            fi
+            EXISTING_DIR="$(mktemp -d)"
+            trap 'rm -rf "$EXISTING_DIR"' EXIT
+            gh release download "$GITHUB_REF_NAME" \
+              --pattern "$PACKAGE" \
+              --dir "$EXISTING_DIR"
+            CURRENT_CONTENTS="$(mktemp -d)"
+            EXISTING_CONTENTS="$(mktemp -d)"
+            trap 'rm -rf "$EXISTING_DIR" "$CURRENT_CONTENTS" "$EXISTING_CONTENTS"' EXIT
+            if ! unzip -qq "./artifacts/release/${PACKAGE}" -d "$CURRENT_CONTENTS" >/dev/null 2>&1 ||
+              ! unzip -qq "$EXISTING_DIR/${PACKAGE}" -d "$EXISTING_CONTENTS" >/dev/null 2>&1 ||
+              ! diff -qr "$CURRENT_CONTENTS" "$EXISTING_CONTENTS" >/dev/null 2>&1; then
+              echo "::error::draft release ${GITHUB_REF_NAME} contains a different ${PACKAGE}; cut a new version tag instead."
+              exit 1
+            fi
+            mkdir -p ./artifacts/nuget-selected
+            cp "$EXISTING_DIR/${PACKAGE}" "./artifacts/nuget-selected/${PACKAGE}"
+            echo "Draft release already exists; retaining its assets."
           else
             ARGS=(--title "relaypublisher v${VERSION}" --draft --generate-notes)
             if [ "$PRERELEASE" = "true" ]; then
               ARGS+=(--prerelease)
             fi
             gh release create "$GITHUB_REF_NAME" "${ARGS[@]}" ./artifacts/release/*
+            mkdir -p ./artifacts/nuget-selected
+            cp "./artifacts/release/${PACKAGE}" "./artifacts/nuget-selected/${PACKAGE}"
           fi
-          echo "Draft release ready. Publish it manually to trigger the NuGet feed push."
+          test -f "./artifacts/nuget-selected/${PACKAGE}"
+          echo "Selected package staged for workflow artifact handoff."
+          echo "Draft release ready. Publish it manually to trigger public NuGet feed push."
+
+      - name: Upload selected package handoff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-package
+          path: ./artifacts/nuget-selected/${{ env.PACKAGE }}
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  # Keep Azure credentials out of the job that packs and publishes the application. The draft
+  # job hands off the exact selected package through a short-lived workflow artifact so this job
+  # does not need release write access or draft-release download access.
+  push-azure-artifacts:
+    name: push to Azure Artifacts for internal testing
+    runs-on: ubuntu-latest
+    needs: [guard, draft-release]
+    environment: release
+    permissions:
+      contents: read # checkout global.json without repository write access
+      id-token: write # Azure workload identity federation
+    env:
+      VERSION: ${{ needs.guard.outputs.version }}
+      PACKAGE: ${{ needs.guard.outputs.package }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Download selected package handoff
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-package
+          path: ./artifacts/nuget
+
+      - name: Verify selected package handoff
+        run: test -f "./artifacts/nuget/${PACKAGE}"
+
+      # Azure Artifacts must always see a new version, even when this job is re-run for the
+      # same tag. run_number and run_attempt guarantee uniqueness even if two runs land in the
+      # same UTC minute; the timestamp alone keeps the version human-readable and sortable.
+      - name: Compute preview version
+        run: |
+          set -euo pipefail
+          TIMESTAMP="$(date -u +%Y%m%d%H%M)"
+          # Use the SemVer core so prerelease tags still produce the documented X.Y.Z-preview form.
+          VERSION_CORE="${VERSION%%-*}"
+          PREVIEW_VERSION="${VERSION_CORE}-preview.${TIMESTAMP}.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          PREVIEW_PACKAGE="relaypublisher.${PREVIEW_VERSION}.nupkg"
+          echo "PREVIEW_VERSION=$PREVIEW_VERSION" >> "$GITHUB_ENV"
+          echo "PREVIEW_PACKAGE=$PREVIEW_PACKAGE" >> "$GITHUB_ENV"
+          echo "computed preview version: $PREVIEW_VERSION"
+
+      # Rewrite only the .nuspec <version> element of the already-reviewed package rather than
+      # rebuilding from source, so the payload files Azure Artifacts receives remain byte-
+      # identical to the ones attached to the draft release. The outer .nupkg archive differs
+      # because the version metadata changes and the zip is rebuilt.
+      - name: Repackage for Azure Artifacts preview version
+        run: |
+          set -euo pipefail
+          WORKDIR="$(mktemp -d)"
+          trap 'rm -rf "$WORKDIR"' EXIT
+          unzip -q "./artifacts/nuget/${PACKAGE}" -d "$WORKDIR"
+          NUSPEC="$(find "$WORKDIR" -maxdepth 1 -name '*.nuspec')"
+          test -n "$NUSPEC"
+          # Matches only the package's own <version>...</version> element, not the
+          # version="..." attributes used on <dependency>/<frameworkReference> entries.
+          sed -i -E "s#(<version>)[^<]+(</version>)#\1${PREVIEW_VERSION}\2#" "$NUSPEC"
+          grep -qF "<version>${PREVIEW_VERSION}</version>" "$NUSPEC"
+          mkdir -p ./artifacts/nuget-preview
+          (cd "$WORKDIR" && zip -qr "$GITHUB_WORKSPACE/artifacts/nuget-preview/${PREVIEW_PACKAGE}" .)
+          test -f "./artifacts/nuget-preview/${PREVIEW_PACKAGE}"
+
+      - name: Sign in to Azure with workload identity federation
+        uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
+        with:
+          client-id: ${{ secrets.AZURE_ARTIFACTS_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_ARTIFACTS_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_ARTIFACTS_SUBSCRIPTION_ID }}
+
+      - name: Install the Azure Artifacts credential provider
+        run: >
+          dotnet tool install --global Microsoft.Artifacts.CredentialProvider.NuGet.Tool
+          --version 2.0.4
+          --source https://api.nuget.org/v3/index.json
+
+      - name: Acquire an Azure DevOps token for the credential provider
+        run: |
+          set -euo pipefail
+          # 499b84ac-1321-427f-aa17-267ca6975798 is the fixed Azure DevOps resource id.
+          TOKEN="$(az account get-access-token \
+            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+            --query accessToken -o tsv)"
+          echo "::add-mask::$TOKEN"
+          echo "VSS_NUGET_ACCESSTOKEN=$TOKEN" >> "$GITHUB_ENV"
+          # The feed URL is a secret, so derive the organization prefix here and mask it too.
+          FEED='${{ secrets.AZURE_ARTIFACTS_FEED_URL }}'
+          PREFIX="$(printf '%s' "$FEED" | sed -E 's#^(https://[^/]+/[^/]+)/.*#\1/#')"
+          echo "::add-mask::$PREFIX"
+          echo "VSS_NUGET_URI_PREFIXES=$PREFIX" >> "$GITHUB_ENV"
+
+      - name: Push to Azure Artifacts
+        run: >
+          dotnet nuget push "./artifacts/nuget-preview/${{ env.PREVIEW_PACKAGE }}"
+          --api-key AzureDevOps
+          --source '${{ secrets.AZURE_ARTIFACTS_FEED_URL }}'
+          --skip-duplicate

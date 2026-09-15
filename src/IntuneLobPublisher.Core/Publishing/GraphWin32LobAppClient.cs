@@ -19,8 +19,10 @@ public interface IWin32LobAppClient
 
 /// <summary>
 /// Calls Microsoft Graph using the caller-supplied <see cref="HttpClient"/>, which is expected to be
-/// one built by <see cref="GraphClientFactory"/> (authentication + retry already wired). Follows the
-/// same structure as <see cref="GraphMobileAppContentClient"/>.
+/// one built by <see cref="GraphClientFactory"/> (authentication + retry already wired). Builds
+/// request paths relative to the client's base address (Graph beta): <c>win32LobApp</c>'s
+/// <c>displayVersion</c> and <c>roleScopeTagIds</c> properties only exist on the beta resource
+/// (doc/adr/publishing.md 2026-09-10 entry), so every call for this resource stays on beta.
 /// </summary>
 public sealed class GraphWin32LobAppClient : IWin32LobAppClient
 {

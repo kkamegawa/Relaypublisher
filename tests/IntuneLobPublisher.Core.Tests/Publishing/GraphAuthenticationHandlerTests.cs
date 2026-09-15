@@ -99,7 +99,7 @@ public sealed class GraphAuthenticationHandlerTests
             new GraphClientOptions(),
             () => new AccessToken(CreateFakeAccessToken(TenantA), DateTimeOffset.UtcNow.AddHours(1)));
 
-        var response = await client.GetAsync("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps");
+        var response = await client.GetAsync("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("Bearer", inner.Requests[0].Headers.Authorization!.Scheme);
@@ -113,7 +113,7 @@ public sealed class GraphAuthenticationHandlerTests
             new GraphClientOptions { ExpectedTenantId = TenantA },
             () => new AccessToken(CreateFakeAccessToken(TenantA), DateTimeOffset.UtcNow.AddHours(1)));
 
-        var response = await client.GetAsync("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps");
+        var response = await client.GetAsync("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.HasCount(1, inner.Requests);
@@ -127,7 +127,7 @@ public sealed class GraphAuthenticationHandlerTests
             () => new AccessToken(CreateFakeAccessToken(TenantB), DateTimeOffset.UtcNow.AddHours(1)));
 
         var ex = await Assert.ThrowsExactlyAsync<TenantMismatchException>(
-            () => client.GetAsync("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps"));
+            () => client.GetAsync("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps"));
 
         Assert.AreEqual(TenantA, ex.ExpectedTenantId);
         Assert.AreEqual(TenantB, ex.ActualTenantId);
@@ -141,8 +141,8 @@ public sealed class GraphAuthenticationHandlerTests
             new GraphClientOptions(),
             () => new AccessToken(CreateFakeAccessToken(TenantA), DateTimeOffset.UtcNow.AddHours(1)));
 
-        await client.GetAsync("https://graph.microsoft.com/v1.0/a");
-        await client.GetAsync("https://graph.microsoft.com/v1.0/b");
+        await client.GetAsync("https://graph.microsoft.com/beta/a");
+        await client.GetAsync("https://graph.microsoft.com/beta/b");
 
         Assert.AreEqual(1, credential.CallCount);
     }
@@ -168,8 +168,8 @@ public sealed class GraphAuthenticationHandlerTests
             new GraphClientOptions(),
             () => new AccessToken(CreateFakeAccessToken(TenantA), DateTimeOffset.UtcNow.AddMinutes(1)));
 
-        await client.GetAsync("https://graph.microsoft.com/v1.0/a");
-        await client.GetAsync("https://graph.microsoft.com/v1.0/b");
+        await client.GetAsync("https://graph.microsoft.com/beta/a");
+        await client.GetAsync("https://graph.microsoft.com/beta/b");
 
         Assert.AreEqual(2, credential.CallCount);
     }
@@ -185,7 +185,7 @@ public sealed class GraphAuthenticationHandlerTests
                 DateTimeOffset.UtcNow.AddHours(1)),
             logger);
 
-        await client.GetAsync("https://graph.microsoft.com/v1.0/a");
+        await client.GetAsync("https://graph.microsoft.com/beta/a");
 
         Assert.HasCount(1, logger.Messages);
         StringAssert.Contains(logger.Messages[0], AppId);
@@ -203,7 +203,7 @@ public sealed class GraphAuthenticationHandlerTests
             () => new AccessToken(accessToken, DateTimeOffset.UtcNow.AddHours(1)),
             logger);
 
-        await client.GetAsync("https://graph.microsoft.com/v1.0/a");
+        await client.GetAsync("https://graph.microsoft.com/beta/a");
 
         Assert.IsTrue(logger.Messages.TrueForAll(message => !message.Contains(accessToken, StringComparison.Ordinal)));
     }
@@ -219,7 +219,7 @@ public sealed class GraphAuthenticationHandlerTests
             () => new AccessToken(CreateFakeAccessToken(TenantA, AppId, "app"), DateTimeOffset.UtcNow.AddHours(1)),
             logger);
 
-        await client.GetAsync("https://graph.microsoft.com/v1.0/a");
+        await client.GetAsync("https://graph.microsoft.com/beta/a");
 
         Assert.HasCount(1, logger.Messages);
         StringAssert.Contains(logger.Messages[0], AppId);
@@ -234,8 +234,8 @@ public sealed class GraphAuthenticationHandlerTests
             () => new AccessToken(CreateFakeAccessToken(TenantA, AppId, "app"), DateTimeOffset.UtcNow.AddHours(1)),
             logger);
 
-        await client.GetAsync("https://graph.microsoft.com/v1.0/a");
-        await client.GetAsync("https://graph.microsoft.com/v1.0/b");
+        await client.GetAsync("https://graph.microsoft.com/beta/a");
+        await client.GetAsync("https://graph.microsoft.com/beta/b");
 
         Assert.HasCount(1, logger.Messages);
     }
@@ -249,8 +249,8 @@ public sealed class GraphAuthenticationHandlerTests
             () => new AccessToken(CreateFakeAccessToken(TenantA, AppId, "app"), DateTimeOffset.UtcNow.AddMinutes(1)),
             logger);
 
-        await client.GetAsync("https://graph.microsoft.com/v1.0/a");
-        await client.GetAsync("https://graph.microsoft.com/v1.0/b");
+        await client.GetAsync("https://graph.microsoft.com/beta/a");
+        await client.GetAsync("https://graph.microsoft.com/beta/b");
 
         Assert.HasCount(2, logger.Messages);
     }
@@ -264,7 +264,7 @@ public sealed class GraphAuthenticationHandlerTests
             () => new AccessToken(CreateFakeAccessToken(TenantA), DateTimeOffset.UtcNow.AddHours(1)),
             logger);
 
-        var response = await client.GetAsync("https://graph.microsoft.com/v1.0/a");
+        var response = await client.GetAsync("https://graph.microsoft.com/beta/a");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.HasCount(1, logger.Messages);
@@ -281,7 +281,7 @@ public sealed class GraphAuthenticationHandlerTests
             logger);
 
         await Assert.ThrowsExactlyAsync<TenantMismatchException>(
-            () => client.GetAsync("https://graph.microsoft.com/v1.0/a"));
+            () => client.GetAsync("https://graph.microsoft.com/beta/a"));
 
         Assert.HasCount(1, logger.Messages);
         StringAssert.Contains(logger.Messages[0], AppId);

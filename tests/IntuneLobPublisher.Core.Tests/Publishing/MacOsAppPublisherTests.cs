@@ -26,13 +26,13 @@ public sealed class MacOsAppPublisherTests
     {
         public MacOsAppPayloadBase? LastCreatePayload { get; private set; }
 
-        public Task<string> CreateAppAsync(MacOsAppPayloadBase payload, bool useBeta, CancellationToken cancellationToken)
+        public Task<string> CreateAppAsync(MacOsAppPayloadBase payload, CancellationToken cancellationToken)
         {
             LastCreatePayload = payload;
             return Task.FromResult("app-1");
         }
 
-        public Task UpdateAppAsync(string appId, MacOsAppPayloadBase payload, bool useBeta, CancellationToken cancellationToken)
+        public Task UpdateAppAsync(string appId, MacOsAppPayloadBase payload, CancellationToken cancellationToken)
         {
             LastCreatePayload = payload;
             return Task.CompletedTask;
@@ -49,14 +49,13 @@ public sealed class MacOsAppPublisherTests
             ContentUploadOptions options,
             IUploadableContentExtractor extractor,
             string oDataType,
-            bool useBeta,
             CancellationToken cancellationToken)
             => throw new NotSupportedException("Not exercised by these tests.");
 
         // Exercised by MacOsAppPublisher.UpdateAppAsync's pre-PATCH guard; a no-op is correct here since
         // these tests are about script mapping, not Graph publishing-state behavior.
         public Task WaitWhilePublishingStateProcessingAsync(
-            string appId, ContentUploadOptions options, bool useBeta, CancellationToken cancellationToken)
+            string appId, ContentUploadOptions options, CancellationToken cancellationToken)
             => Task.CompletedTask;
     }
 

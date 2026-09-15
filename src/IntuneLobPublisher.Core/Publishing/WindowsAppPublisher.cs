@@ -4,7 +4,7 @@ using IntuneLobPublisher.Core.Staging;
 
 namespace IntuneLobPublisher.Core.Publishing;
 
-/// <summary>The <see cref="IPlatformAppPublisher"/> for <c>Platform: windows</c> (<c>win32LobApp</c>), always on Graph v1.0.</summary>
+/// <summary>The <see cref="IPlatformAppPublisher"/> for <c>Platform: windows</c> (<c>win32LobApp</c>), always on Graph beta.</summary>
 public sealed class WindowsAppPublisher : IPlatformAppPublisher
 {
     private readonly IWin32LobAppClient _appClient;
@@ -37,8 +37,8 @@ public sealed class WindowsAppPublisher : IPlatformAppPublisher
     public async Task UpdateAppAsync(string appId, PublishRequest request, ContentUploadOptions options, CancellationToken cancellationToken)
     {
         // Guards against an app left mid-"processing" by an interrupted previous run: this PATCH is the
-        // first Graph write of the run, and win32LobApp always stays on v1.0 (useBeta: false).
-        await _contentOrchestrator.WaitWhilePublishingStateProcessingAsync(appId, options, useBeta: false, cancellationToken)
+        // first Graph write of the run.
+        await _contentOrchestrator.WaitWhilePublishingStateProcessingAsync(appId, options, cancellationToken)
             .ConfigureAwait(false);
 
         var (detectionScript, iconBytes) = await ReadAssetsAsync(request, cancellationToken).ConfigureAwait(false);
@@ -62,7 +62,6 @@ public sealed class WindowsAppPublisher : IPlatformAppPublisher
             options,
             _extractor,
             oDataType: "#microsoft.graph.win32LobApp",
-            useBeta: false,
             cancellationToken);
 
     private static async Task<(string? DetectionScript, byte[]? IconBytes)> ReadAssetsAsync(PublishRequest request, CancellationToken cancellationToken)

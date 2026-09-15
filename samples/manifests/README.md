@@ -49,7 +49,7 @@ defaults read /Applications/PowerShell.app/Contents/Info CFBundleIdentifier
 defaults read /Applications/PowerShell.app/Contents/Info CFBundleShortVersionString
 ```
 
-`Requirements.MinimumOSVersion: "14.0"` is deliberate: it is the lowest version PowerShell 7.6 (LTS) supports, and it is also the lowest version that requires the beta-only `v14_0` Graph flag — exercising the `AppType: pkg` / beta path in `MacOsMinimumOperatingSystemTable`. `AppType: lob` cannot use `14.0` or higher (v1.0 has no `v14_0`/`v15_0`/`v26_0` flag).
+`Requirements.MinimumOSVersion: "14.0"` is deliberate: it is the lowest version PowerShell 7.6 (LTS) supports, and it is also the lowest version that requires the beta-only `v14_0` Graph flag — exercising the beta path in `MacOsMinimumOperatingSystemTable`. `AppType: lob` can use `14.0` or higher too: `macOSLobApp` calls also moved to Graph beta (doc/adr/publishing.md 2026-09-10 entry), lifting the earlier v1.0-only restriction.
 
 `Assignments` is intentionally left as `[]` so the file applies unmodified in any tenant. Add your own group before a real (non-dry-run) `publish`:
 

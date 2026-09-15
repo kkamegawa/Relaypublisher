@@ -9,7 +9,8 @@
 ## 0. ツールのインストールとバージョン運用
 
 Relaypublisher は NuGet global tool として配布し、Apple silicon の macOS 向けには Homebrew tap でも配布します(後述)。
-同じ version を 3 つの NuGet feed に publish するため、環境から到達できる feed を選んでください。
+nuget.org と GitHub Packages は official な tag version を、Azure Artifacts は内部テスト用の per-build preview version を
+publish するため、環境から到達できる feed を選んでください。
 
 | Feed | 想定利用者 |
 | --- | --- |
@@ -117,8 +118,16 @@ dotnet tool list --global | grep relaypublisher
 - Package version source: Git tag `vX.Y.Z` を CI が `-p:Version=X.Y.Z` で注入する
 - リリースの流れ: main に `v*` tag を push すると、`.nupkg`、self-contained single-file app
   (`win-x64` / `win-arm64` / `osx-arm64`)、`SHA256SUMS.txt` を添付した **draft** GitHub release が作られます。
-  その draft release を手動で publish した時点で 3 つの feed への push が走ります。
+  draft workflow はそのレビュー済み `.nupkg` を Azure Artifacts 向けに再構成し、`.nuspec` にある
+  package 自身の `<version>` だけを
+  `{X.Y.Z}-preview.{yyyyMMddHHmm}.{run_number}.{run_attempt}` へ差し替えた preview-version package を
+  内部テスト用に push します。`<dependency version="...">` などの属性値は変更しません。その draft release を手動で publish すると、original の official-version
+  package が GitHub Packages と nuget.org へそのまま push されます。
   詳細は [03-ci-github-actions.md](03-ci-github-actions.md) §12a を参照してください。
+- Azure Artifacts の package lifecycle: draft workflow を実行するたびに新しい preview version を採番するため、
+  rerun は以前の Azure Artifacts version と collision せず、新しい internal-test package として publish されます。
+  Azure Artifacts では preview version を、draft release / GitHub Packages / nuget.org では official な tag version を
+  検証・install 対象にしてください。
 - stable release では Homebrew tap にも pull request が作られます。その pull request が tap の CI を通って
   マージされた時点で、新しい version が `brew upgrade` に届きます。
 - single-file app には署名・notarization を行っていません。GitHub release から zip を直接取得すると macOS では
@@ -421,12 +430,15 @@ macOS 対応(doc/00-overview.md §6.13)には `AppType` によって Graph・運
 - `AppType: pkg`(既定、`macOSPkgApp`): 未署名可、8 GB まで、`Intent: uninstall` 非対応。この app 種別に関する
   すべての Graph 呼び出し(作成・更新、content upload、notes/committedContentVersion の patch、app resolution
   での一覧取得)は Graph **beta** を経由する。`macOSPkgApp` が v1.0 に存在しないためで、これは内部的に処理され
-  operator の作業は不要だが、テナント側で beta API に障害があると `pkg` の publish のみが影響を受ける点に注意する。
-- `AppType: lob`(`macOSLobApp`): Developer ID Installer 署名必須、2 GB 上限、top-level `Icon` 必須で、Graph
-  **v1.0** のまま。v1.0 の `minimumSupportedOperatingSystem` には macOS 13 より先のフラグが無いため、
-  `Requirements.MinimumOSVersion` に macOS 14 以降を指定した `lob` の manifest entry は `publish`(および
-  `--dry-run`)時に `UnsupportedMacOsVersionException` で fail し、`AppType: pkg` への変更を促すメッセージが出る。
-  これは Graph API バージョンの制約であり manifest schema のルールではないため、`validate` では検出されない。
+  operator の作業は不要だが、テナント側で beta API に障害があると macOS の publish 全般(`pkg` と `lob` の
+  両方。次の項目参照)が影響を受ける点に注意する。
+- `AppType: lob`(`macOSLobApp`): Developer ID Installer 署名必須、2 GB 上限、top-level `Icon` 必須で、こちらも
+  Graph **beta** を使用する(doc/adr/publishing.md 2026-09-10 エントリ)。`macOSLobApp` 自体は v1.0 にも存在
+  するが `roleScopeTagIds` が存在しないため、作成・更新・content・category の呼び出しは `pkg` と同様に beta
+  になる。これも operator の作業は不要で、副次的に `Requirements.MinimumOSVersion` に macOS 14 以降を指定
+  しても `pkg` と同様に動作するようになった。(assignment 同期は別の例外: filter なしの assignment
+  create/update と assignment delete は、platform に関係なくこのブランチではまだ v1.0 を使用しており、
+  #164 まで持ち越す。)
 - `.pkg` の content は publish 時にその場で暗号化される(macOS には IntuneWinAppUtil に相当する packaging 時
   ツールが無い)。そのため Windows のように「暗号化済み package を再生成する」個別の手順は無く、`publish` を
   再実行すればその時点で staging されている `.pkg` が再暗号化される。
@@ -610,7 +622,8 @@ Apps:
 - [ ] その managed identity に、この repository の `release` environment を信頼する federated identity
   credential を audience `api://AzureADTokenExchange` で設定する。
 - [ ] Azure DevOps 側で、その managed identity を対象プロジェクトの **Contributors** グループに追加する。
-- [ ] `packages: write` と `id-token: write` を持つ workflow が `release-publish.yml` だけであることを確認する。
+- [ ] `release-draft.yml` が Azure Artifacts の internal-test job にだけ `id-token: write` を付与し、
+  `release-publish.yml` が public publishing job にだけ `packages: write` と `id-token: write` を付与していることを確認する。
 - [ ] `ci.yml` が secrets を一切参照していないことを確認する（fork からの PR を通すため）。
 
 #### NuGet Trusted Publishing の値
@@ -642,13 +655,16 @@ GitHub numeric ID は NuGet policy の受入情報です。workflow や GitHub s
 
 workflow と policy の設定を repository の default branch に反映した後、次を確認します:
 
-1. 新しい draft release を publish し、`release-publish.yml` を起動して `NuGet/login` が fresh OIDC token と
-   temporary API key を取得することを確認します。保存された `NUGET_API_KEY` secret なしで nuget.org が package を
-   受け付けることを確認します。
-2. Trusted Publishing policy に GitHub owner と repository の numeric ID が表示される場合は、その ID が対象
+1. 新しい version tag を push し、`release-draft.yml` が draft release を作成し、選択済み `.nupkg` から作った
+   preview-version package を内部テスト用に Azure Artifacts へ push しつつ、draft asset 自体は official な tag
+   version のまま維持されることを確認します。
+2. draft release を publish して `release-publish.yml` を起動し、`NuGet/login` が fresh OIDC token と temporary
+   API key を取得することを確認します。保存された `NUGET_API_KEY` secret なしで nuget.org が package を受け付ける
+   ことを確認します。
+3. Trusted Publishing policy に GitHub owner と repository の numeric ID が表示される場合は、その ID が対象
    repository を示すことを確認し、owner、repository、workflow file、`release` environment に対して policy が
    active であることを確認します。
-3. 同じ release workflow を再実行します。別の fresh OIDC token を取得し、package が既に存在していても
+4. 同じ release workflow を再実行します。別の fresh OIDC token を取得し、package が既に存在していても
    `--skip-duplicate` により正常終了することを確認します。duplicate package を publish failure として扱わないことを確認します。
 
 ## 7. Production checklist

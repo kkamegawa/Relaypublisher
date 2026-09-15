@@ -37,6 +37,28 @@ public sealed class GraphErrorReaderTests
     }
 
     [TestMethod]
+    public async Task ReadFailureAsync_ResponseCarriesItsRequest_IncludesTheHttpMethod()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Patch, "https://graph.microsoft.com" + RequestUri);
+        using var response = Response(HttpStatusCode.BadRequest, """{"error":{"code":"NoPropertyForSelectedVersion"}}""");
+        response.RequestMessage = request;
+
+        var failure = await GraphErrorReader.ReadFailureAsync(response, RequestUri, CancellationToken.None);
+
+        StringAssert.Contains(failure.Summary, $"Graph PATCH request to '{RequestUri}' returned 400");
+    }
+
+    [TestMethod]
+    public async Task ReadFailureAsync_NoRequestMessage_OmitsTheMethodWithoutThrowing()
+    {
+        using var response = Response(HttpStatusCode.BadRequest);
+
+        var failure = await GraphErrorReader.ReadFailureAsync(response, RequestUri, CancellationToken.None);
+
+        StringAssert.Contains(failure.Summary, $"Graph request to '{RequestUri}' returned 400");
+    }
+
+    [TestMethod]
     public async Task ReadFailureAsync_CorrelationHeaders_AreIncludedInTheSummary()
     {
         using var response = Response(HttpStatusCode.Forbidden);

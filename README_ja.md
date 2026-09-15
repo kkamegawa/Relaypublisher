@@ -7,7 +7,7 @@ Relaypublisher は、winget 風の YAML manifest を CI から Microsoft Intune 
 - NuGet global tool package id: `relaypublisher`
 - Command name: `relaypublisher`
 - Package version: Git tag `vX.Y.Z` から CI が注入
-- 配布 feed: nuget.org / GitHub Packages（このリポジトリ）/ Azure Artifacts
+- 配布 feed: Azure Artifacts（内部テスト用）へ先に push し、release 承認後に GitHub Packages（このリポジトリ）と nuget.org へ push します。
 - Apple silicon の macOS 向け Homebrew tap: `kkamegawa/homebrew-tap`。formula は GitHub release の
   `osx-arm64` single-file app をインストールします(stable release のみ)。
 - `win-x64` / `win-arm64` / `osx-arm64` の self-contained single-file app を各 GitHub release に添付します。
@@ -47,9 +47,10 @@ GitHub Packages / Azure Artifacts からの install 手順は
 - `ci.yml` — main への pull request を Linux / Windows で build / test し、NuGet package と
   single-file app を artifact として生成します。secrets を使わないため fork からの PR も通ります。
 - `release-draft.yml` — main に `v*` tag を push すると、`.nupkg` / single-file app の zip /
-  `SHA256SUMS.txt` を添付した **draft** GitHub release を作成します。
+  `SHA256SUMS.txt` を添付した **draft** GitHub release を作成し、同じ `.nupkg` を内部テスト用に
+  Azure Artifacts へ push します。
 - `release-publish.yml` — その draft release を手動で publish した時点で、release に添付された `.nupkg` を
-  GitHub Packages / Azure Artifacts / nuget.org へ push します。stable release では Homebrew tap の formula を
+  GitHub Packages / nuget.org へ push します。stable release では Homebrew tap の formula を
   更新する pull request も作ります。
 
 設計は [doc/03-ci-github-actions.md](doc/03-ci-github-actions.md) を参照してください。
@@ -60,7 +61,7 @@ GitHub Packages / Azure Artifacts からの install 手順は
 
 | | Windows (`win32LobApp`) | macOS `AppType: pkg`(既定、`macOSPkgApp`) | macOS `AppType: lob`(`macOSLobApp`) |
 |---|---|---|---|
-| Graph API バージョン | v1.0 | beta | v1.0 |
+| Graph API バージョン | beta | beta | beta |
 | 署名 | 不要 | 不要 | Developer ID Installer 署名必須 |
 | package サイズ上限 | - | 8 GB | 2 GB |
 | Icon | 任意 | 任意 | 必須 |
@@ -69,7 +70,10 @@ GitHub Packages / Azure Artifacts からの install 手順は
 | pre/post install script | 対象外 | 対応(`Scripts`、任意) | 非対応 |
 
 macOS manifest の詳細な形式と validation ルールは [doc/01-manifest-schema.md](doc/01-manifest-schema.md) §5.3-5.4 を、
-設計の背景(`macOSPkgApp` が Graph beta を必要とする理由を含む)は [doc/00-overview.md](doc/00-overview.md) §6.13 を参照してください。
+設計の背景(`macOSPkgApp` が Graph beta を必要とする理由を含む)は [doc/00-overview.md](doc/00-overview.md) §6.13 を、
+`win32LobApp` と `macOSLobApp` も beta に統一した理由(`displayVersion`/`roleScopeTagIds` が beta にしか存在しないため)と
+Intune アプリ関連の Graph 呼び出しをすべて単一の beta base address に統一した経緯は
+[doc/adr/publishing.md](doc/adr/publishing.md)(2026-09-10 エントリ)を参照してください。
 
 ## このリポジトリでできること
 

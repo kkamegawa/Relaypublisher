@@ -42,12 +42,11 @@ public sealed class WindowsAppPublisherTests
             ContentUploadOptions options,
             IUploadableContentExtractor extractor,
             string oDataType,
-            bool useBeta,
             CancellationToken cancellationToken)
             => throw new NotSupportedException("Not exercised by these tests.");
 
         public Task WaitWhilePublishingStateProcessingAsync(
-            string appId, ContentUploadOptions options, bool useBeta, CancellationToken cancellationToken)
+            string appId, ContentUploadOptions options, CancellationToken cancellationToken)
             => Task.CompletedTask;
     }
 

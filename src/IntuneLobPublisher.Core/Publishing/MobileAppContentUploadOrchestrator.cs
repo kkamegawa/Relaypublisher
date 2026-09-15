@@ -28,8 +28,9 @@ public sealed record PublishableContent(string ContentPath, string InputHash);
 /// package. Incompatible or mixed file states fail without destructive cleanup because Intune exposes no
 /// working file-delete route for this app type. A sole committed file for the same input resumes at activation.
 /// Platform-neutral: the caller supplies the right <see cref="IUploadableContentExtractor"/>
-/// (<see cref="IntuneWinContentExtractor"/> for Windows, <see cref="PkgContentPreparer"/> for macOS) and
-/// whether this app's Graph calls must stay on <c>/beta/</c> (macOS <c>AppType: pkg</c>).
+/// (<see cref="IntuneWinContentExtractor"/> for Windows, <see cref="PkgContentPreparer"/> for macOS).
+/// Every call goes through Graph beta (doc/adr/publishing.md 2026-09-10 entry), so this type no longer
+/// needs to know which app type it is serving beyond the OData type-cast segment.
 /// </summary>
 public interface IMobileAppContentUploadOrchestrator
 {
@@ -48,7 +49,6 @@ public interface IMobileAppContentUploadOrchestrator
         ContentUploadOptions options,
         IUploadableContentExtractor extractor,
         string oDataType,
-        bool useBeta,
         CancellationToken cancellationToken);
 
     /// <summary>
@@ -62,7 +62,7 @@ public interface IMobileAppContentUploadOrchestrator
     /// "published" here would deadlock that case.
     /// </summary>
     Task WaitWhilePublishingStateProcessingAsync(
-        string appId, ContentUploadOptions options, bool useBeta, CancellationToken cancellationToken);
+        string appId, ContentUploadOptions options, CancellationToken cancellationToken);
 }
 
 public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUploadOrchestrator
@@ -96,11 +96,10 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         ContentUploadOptions options,
         IUploadableContentExtractor extractor,
         string oDataType,
-        bool useBeta,
         CancellationToken cancellationToken)
     {
         var appContentState = await _contentClient
-            .GetContentStateAsync(appId, oDataType, useBeta, cancellationToken)
+            .GetContentStateAsync(appId, oDataType, cancellationToken)
             .ConfigureAwait(false);
         var publishingState = appContentState.PublishingState;
 
@@ -110,7 +109,7 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
                 break;
             case "processing":
                 await PollPublishingStateAsync(
-                        appId, options.PublishingStatePollInterval, options.PublishingStateTimeout, useBeta, cancellationToken)
+                        appId, options.PublishingStatePollInterval, options.PublishingStateTimeout, cancellationToken)
                     .ConfigureAwait(false);
                 publishingState = "published";
                 break;
@@ -124,21 +123,21 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         if (publishingState == "published"
             && PublishGuard.EvaluateContentUpload(storedInputHash, content.InputHash) == ContentUploadDecision.Skip)
         {
-            await _contentClient.PatchNotesAsync(appId, metadata.Serialize(), oDataType, useBeta, cancellationToken).ConfigureAwait(false);
+            await _contentClient.PatchNotesAsync(appId, metadata.Serialize(), oDataType, cancellationToken).ConfigureAwait(false);
             return new ContentUploadResult(ContentUploadOutcome.SkippedUnchanged, null);
         }
 
         var recovery = publishingState == "notPublished"
             ? await ResolveNotPublishedContentAsync(
                     appId, storedInputHash, content.InputHash, appContentState.CommittedContentVersion,
-                    oDataType, useBeta, cancellationToken)
+                    oDataType, cancellationToken)
                 .ConfigureAwait(false)
             : ContentRecoveryPlan.CreateNew;
 
         if (recovery.ResumeActivation)
         {
             return await ActivateContentVersionAsync(
-                    appId, recovery.ContentVersionId!, metadata, options, oDataType, useBeta, cancellationToken)
+                    appId, recovery.ContentVersionId!, metadata, options, oDataType, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -147,7 +146,7 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         using var uploadable = extractor.Extract(content.ContentPath);
 
         var contentVersionId = recovery.ContentVersionId
-            ?? await _contentClient.CreateContentVersionAsync(appId, oDataType, useBeta, cancellationToken).ConfigureAwait(false);
+            ?? await _contentClient.CreateContentVersionAsync(appId, oDataType, cancellationToken).ConfigureAwait(false);
 
         if (recovery.UncommittedFiles.Count > 1)
         {
@@ -176,7 +175,7 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         {
             fileId = reusableFiles[0].Id!;
             var renewal = await RenewSasUriAsync(
-                    appId, contentVersionId, fileId, options, oDataType, useBeta, cancellationToken)
+                    appId, contentVersionId, fileId, options, oDataType, cancellationToken)
                 .ConfigureAwait(false);
             sasUri = renewal.Uri;
             expiresAt = renewal.ExpiresAt;
@@ -185,13 +184,13 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         {
             fileId = await _contentClient.CreateContentFileAsync(
                     appId, contentVersionId, uploadable.ContentFileName, uploadable.UnencryptedContentSize, uploadable.EncryptedContentSize,
-                    oDataType, useBeta, cancellationToken)
+                    oDataType, cancellationToken)
                 .ConfigureAwait(false);
 
             var readyFile = await PollFileStateAsync(
                     appId, contentVersionId, fileId, stage: "azureStorageUriRequest",
                     successState: "azureStorageUriRequestSuccess", failureStates: AzureStorageUriRequestFailureStates,
-                    options.AzureStorageUriPollInterval, options.AzureStorageUriTimeout, oDataType, useBeta, cancellationToken)
+                    options.AzureStorageUriPollInterval, options.AzureStorageUriTimeout, oDataType, cancellationToken)
                 .ConfigureAwait(false);
 
             sasUri = new Uri(RequireAzureStorageUri(readyFile, "azureStorageUriRequestSuccess"));
@@ -204,7 +203,7 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
                 sasUri,
                 expiresAt,
                 payloadStream,
-                ct => RenewSasUriAsync(appId, contentVersionId, fileId, options, oDataType, useBeta, ct),
+                ct => RenewSasUriAsync(appId, contentVersionId, fileId, options, oDataType, ct),
                 options,
                 cancellationToken).ConfigureAwait(false);
         }
@@ -223,17 +222,16 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
                 FileDigestAlgorithm = encryptionInfo.FileDigestAlgorithm,
             },
             oDataType,
-            useBeta,
             cancellationToken).ConfigureAwait(false);
 
         await PollFileStateAsync(
                 appId, contentVersionId, fileId, stage: "commit",
                 successState: "commitFileSuccess", failureStates: CommitFailureStates,
-                options.CommitPollInterval, options.CommitTimeout, oDataType, useBeta, cancellationToken)
+                options.CommitPollInterval, options.CommitTimeout, oDataType, cancellationToken)
             .ConfigureAwait(false);
 
         return await ActivateContentVersionAsync(
-                appId, contentVersionId, metadata, options, oDataType, useBeta, cancellationToken)
+                appId, contentVersionId, metadata, options, oDataType, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -243,11 +241,10 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         string currentInputHash,
         string? committedContentVersion,
         string oDataType,
-        bool useBeta,
         CancellationToken cancellationToken)
     {
         var contentVersions = await _contentClient
-            .ListContentVersionsAsync(appId, oDataType, useBeta, cancellationToken)
+            .ListContentVersionsAsync(appId, oDataType, cancellationToken)
             .ConfigureAwait(false);
 
         if (contentVersions.Count == 0)
@@ -279,7 +276,7 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         }
 
         var files = await _contentClient
-            .ListContentFilesAsync(appId, contentVersionId, oDataType, useBeta, cancellationToken)
+            .ListContentFilesAsync(appId, contentVersionId, oDataType, cancellationToken)
             .ConfigureAwait(false);
 
         if (files.Any(file => file.IsCommitted is null))
@@ -354,33 +351,32 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         ManagementMetadata metadata,
         ContentUploadOptions options,
         string oDataType,
-        bool useBeta,
         CancellationToken cancellationToken)
     {
         // Point of no return (doc/00-overview.md 6.10): existing clients are served this content from here on.
         // No pre-guard here: waiting for publishingState to leave "processing" before this call would
         // deadlock a brand-new app, which sits at "notPublished" until this very PATCH gives it a
         // committedContentVersion for the first time.
-        await _contentClient.PatchCommittedContentVersionAsync(appId, contentVersionId, oDataType, useBeta, cancellationToken)
+        await _contentClient.PatchCommittedContentVersionAsync(appId, contentVersionId, oDataType, cancellationToken)
             .ConfigureAwait(false);
 
-        await PollPublishingStateAsync(appId, options.PublishingStatePollInterval, options.PublishingStateTimeout, useBeta, cancellationToken)
+        await PollPublishingStateAsync(appId, options.PublishingStatePollInterval, options.PublishingStateTimeout, cancellationToken)
             .ConfigureAwait(false);
 
         // publishingState is already confirmed "published" by the poll above, so this PATCH needs no guard.
-        await _contentClient.PatchNotesAsync(appId, metadata.Serialize(), oDataType, useBeta, cancellationToken).ConfigureAwait(false);
+        await _contentClient.PatchNotesAsync(appId, metadata.Serialize(), oDataType, cancellationToken).ConfigureAwait(false);
 
         return new ContentUploadResult(ContentUploadOutcome.Uploaded, contentVersionId);
     }
 
     private async Task<SasUriRenewal> RenewSasUriAsync(
-        string appId, string contentVersionId, string fileId, ContentUploadOptions options, string oDataType, bool useBeta, CancellationToken cancellationToken)
+        string appId, string contentVersionId, string fileId, ContentUploadOptions options, string oDataType, CancellationToken cancellationToken)
     {
-        await _contentClient.RenewUploadAsync(appId, contentVersionId, fileId, oDataType, useBeta, cancellationToken).ConfigureAwait(false);
+        await _contentClient.RenewUploadAsync(appId, contentVersionId, fileId, oDataType, cancellationToken).ConfigureAwait(false);
         var renewed = await PollFileStateAsync(
                 appId, contentVersionId, fileId, stage: "azureStorageUriRenewal",
                 successState: "azureStorageUriRenewalSuccess", failureStates: AzureStorageUriRenewalFailureStates,
-                options.AzureStorageUriPollInterval, options.AzureStorageUriTimeout, oDataType, useBeta, cancellationToken)
+                options.AzureStorageUriPollInterval, options.AzureStorageUriTimeout, oDataType, cancellationToken)
             .ConfigureAwait(false);
 
         return new SasUriRenewal(
@@ -413,13 +409,14 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
             null,
             null,
             null);
+
     public async Task WaitWhilePublishingStateProcessingAsync(
-        string appId, ContentUploadOptions options, bool useBeta, CancellationToken cancellationToken)
+        string appId, ContentUploadOptions options, CancellationToken cancellationToken)
     {
         var deadline = _timeProvider.GetUtcNow() + options.PublishingStateTimeout;
         while (true)
         {
-            var state = await _contentClient.GetPublishingStateAsync(appId, useBeta, cancellationToken).ConfigureAwait(false);
+            var state = await _contentClient.GetPublishingStateAsync(appId, cancellationToken).ConfigureAwait(false);
             if (!string.Equals(state, "processing", StringComparison.Ordinal))
             {
                 return;
@@ -437,12 +434,12 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
     private async Task<MobileAppContentFileResponse> PollFileStateAsync(
         string appId, string contentVersionId, string fileId, string stage,
         string successState, IReadOnlySet<string> failureStates,
-        TimeSpan pollInterval, TimeSpan timeout, string oDataType, bool useBeta, CancellationToken cancellationToken)
+        TimeSpan pollInterval, TimeSpan timeout, string oDataType, CancellationToken cancellationToken)
     {
         var deadline = _timeProvider.GetUtcNow() + timeout;
         while (true)
         {
-            var file = await _contentClient.GetContentFileAsync(appId, contentVersionId, fileId, oDataType, useBeta, cancellationToken).ConfigureAwait(false);
+            var file = await _contentClient.GetContentFileAsync(appId, contentVersionId, fileId, oDataType, cancellationToken).ConfigureAwait(false);
             if (string.Equals(file.UploadState, successState, StringComparison.Ordinal))
             {
                 return file;
@@ -462,12 +459,12 @@ public sealed class MobileAppContentUploadOrchestrator : IMobileAppContentUpload
         }
     }
 
-    private async Task PollPublishingStateAsync(string appId, TimeSpan pollInterval, TimeSpan timeout, bool useBeta, CancellationToken cancellationToken)
+    private async Task PollPublishingStateAsync(string appId, TimeSpan pollInterval, TimeSpan timeout, CancellationToken cancellationToken)
     {
         var deadline = _timeProvider.GetUtcNow() + timeout;
         while (true)
         {
-            var state = await _contentClient.GetPublishingStateAsync(appId, useBeta, cancellationToken).ConfigureAwait(false);
+            var state = await _contentClient.GetPublishingStateAsync(appId, cancellationToken).ConfigureAwait(false);
             if (string.Equals(state, "published", StringComparison.Ordinal))
             {
                 return;

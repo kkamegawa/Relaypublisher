@@ -122,7 +122,8 @@ repo/
 
 `.github/workflows/` 配下は **この repository 自身の CI/CD** であり、実際に動作する。
 `ci.yml` が pull request の build / test / 成果物生成、`release-draft.yml` が `v*` tag からの draft release
-作成、`release-publish.yml` が draft release の手動 publish をトリガーとする NuGet feed への push を行う。
+作成と Azure Artifacts への内部テスト用 package push、`release-publish.yml` が draft release の手動 publish を
+トリガーとする GitHub Packages / nuget.org への push を行う。
 詳細は `doc/03-ci-github-actions.md` §11b / §12a を参照する。
 
 `workflows/` 配下は**利用者向けの参照用サンプル**であり、この repository では有効にならない。
@@ -298,8 +299,9 @@ manifest schema に optional field を追加するときの hash 互換性(#99):
 
 ### 6.7.1 Windows file-system detection (Issue #141)
 
-Windows の `Detection.Type` は既存の `script` に加えて `file` をサポートする。`file` は Graph v1.0 の
-`win32LobAppFileSystemRule` を使い、対象端末上の file / folder の存在または file version で検出する。
+Windows の `Detection.Type` は既存の `script` に加えて `file` をサポートする。`file` は Graph の
+`win32LobAppFileSystemRule`(v1.0 / beta で同じ形状。呼び出し自体は beta を経由する。doc/adr/publishing.md
+2026-09-10 エントリ)を使い、対象端末上の file / folder の存在または file version で検出する。
 
 - このリリースで許可する `OperationType` は `exists` と `version` だけとする。`modifiedDate`、`createdDate`、
   `sizeInMB` は comparison value の形式と十分な検証を定義してから追加する。
@@ -384,14 +386,15 @@ validation ルール:
 - `AppType: pkg` の app に `Intent: uninstall` の assignment があれば fail。
 - `AppType: lob` の場合は Icon(ロゴ)を必須とし、2 GB 超の PKG を fail とする。
 
-**Graph API バージョン**: `macOSPkgApp` は **beta 専用**(v1.0 に存在しない)。そのため `AppType: pkg` の app に
-関するすべての Graph 呼び出し ― 作成・更新、content upload(contentVersions/files/commit)、notes /
-committedContentVersion の patch、app resolution 用の一覧取得 ― は `/beta/` を経由する。`macOSLobApp` は
-v1.0 に存在するため `AppType: lob` は `/v1.0/` のまま。両者は同一の CLI 実行内で混在しうるため、Graph 呼び出し
-の実装(`GraphMacOsAppClient` / `GraphMobileAppContentClient` / `GraphIntuneAppDirectory`)は各呼び出しごとに
-使用する API バージョンを判定する。副作用として、v1.0 の `macOSMinimumOperatingSystem` には macOS 14 以降の
-フラグが無いため、`AppType: lob` で `Requirements.MinimumOSVersion` に macOS 14 以降を指定すると publish 時に
-fail する(`AppType: pkg` への切り替えが必要)。
+**Graph API バージョン**: `macOSPkgApp` は **beta 専用**(v1.0 に存在しない)。`macOSLobApp` は v1.0 にも
+存在するが、`roleScopeTagIds` が beta の `mobileApp` にしか存在しないため(doc/adr/publishing.md
+2026-09-10 エントリ)、`AppType: lob` の Graph 呼び出しも beta に統一している。結果として `AppType: pkg` /
+`lob` いずれの app についても ― 作成・更新、content upload(contentVersions/files/commit)、notes /
+committedContentVersion の patch、app resolution 用の一覧取得 ― すべて `/beta/` を経由する
+(`GraphMacOsAppClient` / `GraphMobileAppContentClient` / `GraphIntuneAppDirectory`)。副作用として、
+v1.0 専用だった時期に `AppType: lob` で `Requirements.MinimumOSVersion` に macOS 14 以降を指定すると
+publish 時に fail していた制限は撤廃されており、`AppType: pkg` / `lob` のどちらでも macOS 14 以降を
+指定できる。
 
 `contentVersions` は `mobileLobApp` から継承されるため、content upload の URL では app ID の直後に
 具体的な OData 型キャスト(`microsoft.graph.win32LobApp` / `microsoft.graph.macOSPkgApp` /
@@ -402,10 +405,11 @@ Graph が `Resource not found for the segment 'contentVersions'`(HTTP 400)を返
 `renewUpload` を使用する。不一致 file が残る場合、同じ version への file 追加では activation できないため安全に fail する。
 
 **サポートする `Requirements.MinimumOSVersion`**(`MacOsMinimumOperatingSystemTable` が保持するマッピング):
-`10.13` / `10.14` / `10.15` / `11`(`11.0`)/ `12`(`12.0`)/ `13`(`13.0`)は `AppType: pkg` / `lob` の両方で
-使用できる。`14`(`14.0`)/ `15`(`15.0`)/ `26`(`26.0`)は Graph beta 専用の `v14_0` / `v15_0` / `v26_0`
-フラグを使うため `AppType: pkg` でのみ使用でき、`AppType: lob` で指定すると `UnsupportedMacOsVersionException`
-で fail する。上記いずれのマッピングも持たないバージョン文字列も同様に fail する。
+`10.13` / `10.14` / `10.15` / `11`(`11.0`)/ `12`(`12.0`)/ `13`(`13.0`)/ `14`(`14.0`)/ `15`(`15.0`)/
+`26`(`26.0`)のいずれも `AppType: pkg` / `lob` の両方で使用できる。`14`/`15`/`26` は Graph beta 専用の
+`v14_0` / `v15_0` / `v26_0` フラグを使うが、`macOSPkgApp` / `macOSLobApp` の両方の Graph 呼び出しが
+すでに beta に統一されているため(前段落参照)、`AppType` による区別は無い。上記いずれのマッピングも
+持たないバージョン文字列は `UnsupportedMacOsVersionException` で fail する。
 
 **pre/post install script**(`AppType: pkg` 限定、issue #86): Graph `macOSPkgApp` は `preInstallScript` /
 `postInstallScript`(型 `macOSAppScript`、プロパティは base64 エンコードされた `scriptContent` のみ)を持つが、
@@ -530,15 +534,16 @@ Intune の app category は tenant 共有の `mobileAppCategory` リソースで
 
   | 操作 | 呼び出し |
   |---|---|
-  | tenant catalog 取得 | `GET /{version}/deviceAppManagement/mobileAppCategories` |
-  | app の現在値取得 | `GET /{version}/deviceAppManagement/mobileApps/{appId}/categories` |
-  | 関連付け | `POST /{version}/deviceAppManagement/mobileApps/{appId}/categories/$ref` |
-  | 関連解除 | `DELETE /{version}/deviceAppManagement/mobileApps/{appId}/categories/{categoryId}/$ref` |
+  | tenant catalog 取得 | `GET /beta/deviceAppManagement/mobileAppCategories` |
+  | app の現在値取得 | `GET /beta/deviceAppManagement/mobileApps/{appId}/categories` |
+  | 関連付け | `POST /beta/deviceAppManagement/mobileApps/{appId}/categories/$ref` |
+  | 関連解除 | `DELETE /beta/deviceAppManagement/mobileApps/{appId}/categories/{categoryId}/$ref` |
 
-- API version は既存 client と同じ規則(Windows `win32LobApp` と macOS `macOSLobApp` は v1.0、macOS `macOSPkgApp` は
-  beta)。`$ref` body の `@odata.id` は `GraphClientOptions.BaseAddress` の scheme + authority と、**その request と
-  同じ version segment** から組み立てる。host も version もハードコードしない(`BaseAddress` は `/v1.0/` で終わるため、
-  そこに相対結合すると beta request に v1.0 の参照を載せてしまう)。
+- API version は他の client と同じく beta 固定(`GraphClientOptions.BaseAddress` が beta。doc/adr/publishing.md
+  2026-09-10 エントリ)。`win32LobApp` / `macOSPkgApp` / `macOSLobApp` の 3 リソースがすべて beta に統一された
+  ため、呼び出しごとのバージョン切り替えは行わない。`$ref` body の `@odata.id` は `GraphClientOptions.BaseAddress`
+  の scheme + authority + path をそのまま使って組み立てる(host をハードコードしないのは変わらないが、
+  version segment を個別に付け替える処理はもう存在しない)。
 - **処理順序**は次で固定する(6.10 のトランザクション境界に従う)。
 
   1. app resolution と downgrade guard

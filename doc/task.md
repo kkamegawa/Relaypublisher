@@ -6,7 +6,7 @@
 
 **ブランチ**: `feature/173-homebrew-tap`
 
-**対応 Issue**: [#173](https://github.com/kkamegawa/Relaypublisher/issues/173)(Wiki: `plan/Relaypublisher/issue-173-homebrew-tap-distribution`)
+**対応 Issue / PR**: [#173](https://github.com/kkamegawa/Relaypublisher/issues/173) / [#174](https://github.com/kkamegawa/Relaypublisher/pull/174)(Wiki: `plan/Relaypublisher/issue-173-homebrew-tap-distribution`)
 
 ### 実施内容(承認済み plan に基づく)
 
@@ -22,23 +22,35 @@ Apple silicon の macOS 向けに、別リポジトリ `kkamegawa/homebrew-tap` 
    prerelease・不正な repository 名・checksum 行の欠落/重複/不正を拒否して、BOM なし LF の formula を生成する。
 3. `tests/Tools/HomebrewFormula.Tests.ps1` を追加した(6 ケース)。
 4. `release-publish.yml` の `guard` に `stable` / `mac-archive` output を足し、`push-packages` と独立した
-   `update-homebrew-tap` job を追加する。あわせて `ci.yml` に上記テストの実行 step を追加する。
+   `update-homebrew-tap` job を追加した。あわせて `ci.yml` に上記テストの実行 step を追加した。`.github/workflows/` は
+   エージェントの書き込みが権限設定で拒否されるため、完成版ファイルを渡してユーザーが反映した。
 5. [05-operation.md](05-operation.md) / [05-operation_ja.md](05-operation_ja.md) §0、`README.md` / `README_ja.md` に
    Homebrew での trust・install・upgrade・pin・uninstall と制約を追記した。
-6. tap リポジトリに push するファイル一式(formula v1.1.1、`brew test-bot` workflow、README 日英、LICENSE、SECURITY.md)を用意した。
+6. tap リポジトリ `kkamegawa/homebrew-tap` に初回 commit(formula v1.1.1、`brew test-bot` workflow、README 日英、LICENSE、
+   SECURITY.md)を push した。
+7. GitHub App(tap リポジトリのみにインストール、Contents / Pull requests の read and write)をユーザーが作成し、
+   `HOMEBREW_TAP_APP_CLIENT_ID` / `HOMEBREW_TAP_APP_PRIVATE_KEY` を `release` environment に登録した。
+8. PR 作成後に main が Azure Artifacts の draft 先行配布(Issue #153 / #157)と Graph beta 統一(Issue #161)で進み、
+   README / README_ja / 03 / 05 / 05_ja / adr.md が衝突したため、main を merge して解消した(rebase・force push はしない)。
+   Azure Artifacts は `release-draft.yml`、GitHub Packages / nuget.org と Homebrew tap は `release-publish.yml` という
+   main 側の分担をそのまま採り、Homebrew の記述だけを追加する形にした。`release` environment は 3 系統の job で共用する。
 
 ### 検証結果
 
-- `pwsh -NoProfile -File tests/Tools/HomebrewFormula.Tests.ps1`: 6 ケース成功。
-- `pwsh -NoProfile -File tests/Tools/YamlCreate.Tests.ps1`: 18 ケース成功。
-- `dotnet build` / `dotnet test`(Release): 763 件成功。
+- main merge 後のツリーで:
+  - `pwsh -NoProfile -File tests/Tools/HomebrewFormula.Tests.ps1`: 6 ケース成功。
+  - `pwsh -NoProfile -File tests/Tools/YamlCreate.Tests.ps1`: 19 ケース成功。
+  - `dotnet build` / `dotnet test`(Release): 769 件成功。
 - v1.1.1 の `SHA256SUMS.txt` から formula を生成し、sha256 が release の osx-arm64 zip の値と一致することを確認した。
-- `relaypublisher --version` が `<version>+<commit>` を出力することを確認した(formula の `assert_match version.to_s` が成立する)。
+- tap CI(`brew test-bot`、`macos-26`)が成功した。インストールした `relaypublisher` は `Mach-O 64-bit executable arm64` で、
+  `codesign --verify --strict` が `valid on disk` / `satisfies its Designated Requirement` を返し、
+  `--version` は `1.1.1+<commit>` を出力した。ubuntu で publish した osx-arm64 single-file の ad-hoc 署名が
+  Apple silicon で有効であることを確認できた。
 
 ### 未完了事項
 
-- tap リポジトリ・GitHub App・`release` environment の secrets・tap の branch protection はリポジトリ所有者が作成する。
-- tap CI での `codesign --verify --strict` と、次の stable release での PR 自動作成は、上記の作成後に確認する。
+- tap の default branch に、`brew test-bot` の check を必須にする branch protection を設定する(リポジトリ所有者)。
+- `update-homebrew-tap` job による tap への PR 自動作成(GitHub App token の発行を含む)は、次の stable release で確認する。
 
 ## 2026-09-06: manifest 作成スクリプトを Windows file detection に追従させる
 
@@ -528,3 +540,131 @@ Codex によるレビューで、上記の実装変更(`MacOsMinimumOperatingSys
 - [06-troubleshooting.md](06-troubleshooting.md) / [06-troubleshooting_ja.md](06-troubleshooting_ja.md) —
   `UnsupportedMacOsVersionException` の説明にある既知バージョン列挙に `26`/`26.0` を追加。
 - `samples/manifests/README.md` / `README_ja.md` — 「v1.0 に無いフラグ」の列挙に `v26_0` を追加。
+
+## 2026-09-10: Windows win32LobApp を Graph beta に統一 (400 NoPropertyForSelectedVersion の修正)
+
+**ブランチ**: `fix/162-win32-graph-beta`
+
+**対応 Issue / PR**: [#162](https://github.com/kkamegawa/Relaypublisher/issues/162)(親: [#161](https://github.com/kkamegawa/Relaypublisher/issues/161)) / [#165](https://github.com/kkamegawa/Relaypublisher/pull/165)
+
+### 実施内容
+
+既存 Windows app 2 件(x64/arm64)への再 publish が、content upload 成功後の `win32LobApp` 全体 PATCH で
+`400 NoPropertyForSelectedVersion` により失敗した。Microsoft Learn で v1.0 / beta の `win32LobApp` resource
+type を照合し、`Win32LobAppPayloadMapper` が常に送る `displayVersion`(および manifest 指定時の
+`roleScopeTagIds`)が v1.0 の `win32LobApp` には存在せず beta のみに存在することを確認した。
+
+1. `GraphWin32LobAppClient` の create/update を絶対パス `/beta/deviceAppManagement/mobileApps[/{id}]` に変更。
+2. `WindowsAppPublisher` の `useBeta` 引数(processing-state 待機・content upload)を `true` に変更。
+3. `CategoryApiVersion.UseBeta` を windows でも `true` を返すよう変更。
+4. `GraphErrorReader` / `GraphRetryHandler` のエラーメッセージ・ログに HTTP メソッドを追加。
+5. `doc/00-overview.md`、`doc/06-troubleshooting.md` / `_ja`(6e 節を新設)、`doc/adr/publishing.md`
+   (2026-09-10 エントリ)、`doc/adr.md` を更新。
+6. 回帰テストを追加(`GraphWin32LobAppClientTests` の displayVersion/roleScopeTagIds シリアライズ確認、
+   `WindowsAppPublisherTests`・`CategoryServiceTests`・新規 `CategoryApiVersionTests` の beta=True 確認、
+   `GraphErrorReaderTests`・`GraphRetryHandlerTests` のメソッド表示確認)。既存の Windows/beta=False 前提
+   テストを beta=True に更新。
+
+`dotnet build` + `dotnet test` は 733 件成功・0 件失敗(既存の skip 38 件は無関係)。
+
+障害が発生した既存 2 app は content が commit 済みのため削除・再作成は不要。この修正版で再実行すれば
+content は input hash 一致で skip され、失敗していたメタデータ PATCH・category 同期・assignment 同期が
+完了する見込み。
+
+残タスクは親 Issue #161 の子 Issue として継続: macOS lob の beta 化 (#163)、v1.0/beta 切り替え機構の削除 (#164)。
+
+## 2026-09-10: macOS lob (macOSLobApp) を Graph beta に統一、macOS 14+ 制限を撤廃
+
+**ブランチ**: `fix/163-macos-lob-graph-beta`(`fix/162-win32-graph-beta` 上に stack)
+
+**対応 Issue / PR**: [#163](https://github.com/kkamegawa/Relaypublisher/issues/163)(親: [#161](https://github.com/kkamegawa/Relaypublisher/issues/161)) / PR は #165 に stack して作成予定
+
+### 実施内容
+
+#162(Windows win32LobApp の beta 化)と同じ調査から、`macOSLobApp`(`AppType: lob`)にも同種の
+`roleScopeTagIds` 未対応(v1.0 に存在しない)というバグがあることを確認した。あわせて v1.0 の
+`macOSMinimumOperatingSystem` が macOS 14 以降のフラグを持たないため、`AppType: lob` は
+`Requirements.MinimumOSVersion` に macOS 14 以降を指定できないという既知の制限があった。
+
+1. `MacOsAppPayloadMapper.ResolveTarget` で lob も `UseBeta: true` を返すよう変更。
+2. `MacOsMinimumOperatingSystemTable` から `IsBetaOnly` 判定と `useBeta` 引数を削除し、全バージョンを
+   `AppType` に関わらず使用可能にした。
+3. `UnsupportedMacOsVersionException` から `requiresBetaOnlyFlag` 分岐を削除。
+4. `tools/yamlcreate.ps1` の `$MacOsVersions` から beta 専用フラグと lob での除外処理を削除。
+5. `doc/00-overview.md`、`doc/01-manifest-schema.md`、`doc/05-operation.md` / `_ja`、
+   `doc/06-troubleshooting.md` / `_ja`(6f 節を新設)、`doc/08-yamlcreate.md` / `_ja`、
+   `doc/adr/publishing.md`(2026-09-10 エントリに追記)を更新。
+6. 回帰テストを追加・更新(`MacOsMinimumOperatingSystemTableTests` を beta 前提に書き換え、
+   `MacOsAppPayloadMapperTests` に macOS 14 lob の positive テストを追加、`MacOsAppPublisherTests` に
+   pkg/lob 両方が beta を使うことを確認するテストを追加)。`tests/Tools/YamlCreate.Tests.ps1` は Pester ではなく
+   `Invoke-Case`/`Assert-*` による独立した PowerShell harness で、`pwsh -NoProfile -File
+   tests/Tools/YamlCreate.Tests.ps1` で直接実行し 19/19 成功を確認した(新設した `AppType: lob` macOS
+   14/15/26 提示ケースを含む)。
+
+`dotnet build` + `dotnet test` は 741 件成功・0 件失敗(既存の skip 38 件は無関係。レビュー対応で追加した
+`MacOsMinimumOperatingSystemTableTests` の "12.0"/"15.0"/"26" ケース分、735 から増加)。
+
+既存の macOS 13 以前を指定した lob manifest の挙動は変わらない。macOS 14 以降を指定した既存アプリで
+`RoleScopeTagIds` が原因の障害が発生していた場合も、#162 と同じ復旧手順(削除・再作成不要で再実行)が
+適用できる。
+
+残タスクは親 Issue #161 の子 Issue として継続: v1.0/beta 切り替え機構の削除 (#164)。
+
+## 2026-09-10: v1.0/beta 切り替え機構を削除し、beta を唯一の Graph API バージョンにする
+
+**ブランチ**: `fix/164-remove-graph-version-switch`(`fix/163-macos-lob-graph-beta` 上に stack)
+
+**対応 Issue / PR**: [#164](https://github.com/kkamegawa/Relaypublisher/issues/164)(親: [#161](https://github.com/kkamegawa/Relaypublisher/issues/161)) / [PR #168](https://github.com/kkamegawa/Relaypublisher/pull/168)(`fix/163-macos-lob-graph-beta`(PR #166)上に stack)
+
+### 実施内容
+
+#162・#163 の完了により win32LobApp・macOSPkgApp・macOSLobApp のすべてが常に Graph beta を使うことに
+なったため、呼び出しごとに v1.0/beta を判定していた `useBeta` 引数と `VersionSegment` / `WithGraphVersion`
+ヘルパーが到達不能なコードになっていた。初期開発段階でデータ移行や後方互換を考慮する必要がないため、
+死んだコードとして残さず削除した。
+
+1. `GraphClientOptions.BaseAddress` の既定値を `https://graph.microsoft.com/beta/` に変更。
+2. `GraphWin32LobAppClient` / `GraphMacOsAppClient` / `GraphMobileAppContentClient`
+   (+ `IMobileAppContentUploadOrchestrator` / `MobileAppContentUploadOrchestrator`) /
+   `CategoryGraphClient`(+ `CategoryService`。`CategoryApiVersion` は削除) /
+   `AssignmentGraphClient`(`WithGraphVersion` 拡張メソッドを削除) / `GraphIntuneAppDirectory` から
+   `useBeta` 引数と絶対パス組み立てを削除し、すべて `HttpClient.BaseAddress` からの相対パスに統一。
+3. `MacOsAppTarget` から `UseBeta` を削除し `ODataType` のみに。
+4. `CategoryGraphClient.BuildCategoryODataId` を `HttpClient.BaseAddress` からそのまま組み立てるよう簡略化。
+5. `ICategoryService.ApplyAsync` から使われなくなった `AppManifest app` 引数を削除。
+6. `doc/00-overview.md`(§6.13 の category 呼び出し表・`@odata.id` の説明)、`doc/02-dotnet-architecture.md`
+   (`ICategoryGraphClient` / `ICategoryService` のシグネチャ例)、`doc/adr/publishing.md`
+   (2026-09-10 エントリに追記)を更新。
+7. 影響を受けた 12 個のテストファイルを更新(`useBeta` 引数の削除、期待 URI を beta に統一、
+   v1.0/beta 切り替えをテストしていた `[DataRow]` パラメータ化テストや専用テストの削除・簡略化)。
+   `CategoryApiVersionTests.cs` は対象の型が削除されたため削除。
+
+`dotnet build` + `dotnet test` は 721 件成功・0 件失敗(既存の skip 38 件は無関係)。
+
+app 本体・category・content upload・app 一覧の挙動は #162・#163 で既にリリース済みの動作のまま変わらないが、
+`AssignmentGraphClient` の filter なし assignment (create/update/delete) は v1.0 から beta 経由に変わる
+(filter 付き assignment は既に beta だった)。`mobileAppAssignment` は v1.0/beta で互換な形のため
+マッピングの変更は不要(詳細は `doc/adr/publishing.md` 2026-09-10 エントリの #164 決定を参照)。
+
+これで親 Issue #161(Intune app 関連の Graph 呼び出しを beta に統一する)の子 Issue はすべて完了。
+
+## 2026-09-10: PR レビュー指摘対応(#165 / #166)
+
+CI Autofix 経由で Copilot のレビューを受け、以下を各 PR に反映した。
+
+- **PR #165(fix/162)**: `GraphRetryHandlerTests` に capturing `ILogger` を追加し、transient retry・
+  throttled retry・terminal error の各ログに HTTP method が含まれることを検証する回帰テストを 3 件追加。
+  あわせて `README.md` / `README_ja.md` の対応プラットフォーム表(Graph API バージョン列)が
+  Windows を古い v1.0 のまま記載していたのを beta に修正。
+- **PR #166(fix/163)**: `CategoryApiVersion.UseBeta` が `AppType: lob` で `false`(v1.0)を返したままに
+  なっていたバグを修正(常に `true` を返すよう変更)。`CategoryServiceTests` / `CategoryApiVersionTests`
+  がこのバグを期待値として埋め込んでいたため修正し、`doc/00-overview.md` の該当段落も訂正。
+  `tools/yamlcreate.ps1` の `MinimumOSVersion` prompt が `AppType: lob` でも macOS 14/15/26 を提示する
+  ことを検証する回帰ケースを `tests/Tools/YamlCreate.Tests.ps1` に追加(19/19 pass、直接実行で確認)。
+- ドキュメントの日英併記(AGENTS.md の規約)を求める Copilot のコメント 5 件については、リポジトリの
+  CLAUDE.md が「ドキュメントは当面日本語のまま」と明記しており AGENTS.md の規約と矛盾するため、
+  翻訳は行わずスレッドで理由を説明し、ユーザーの判断を仰ぐ形でオープンのまま残した。
+
+`fix/163` に `fix/162` を、`fix/164` に `fix/163` をそれぞれ merge して 3 ブランチの整合を取った。
+`fix/164` では `CategoryApiVersion` を巡るマージコンフリクトを、PR #164(#168)側の削除を正として解決した。
+3 ブランチとも `dotnet build` + `dotnet test` が成功(0 failed)、`tools/yamlcreate.ps1` の回帰スイートも成功。

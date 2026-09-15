@@ -5,7 +5,10 @@ namespace IntuneLobPublisher.Core.Publishing;
 /// <summary>
 /// Write model for the Microsoft Graph <c>win32LobApp</c> resource, used for create/update requests.
 /// Built by <see cref="Win32LobAppPayloadMapper"/>. Field shapes and `@odata.type` casing follow the
-/// Microsoft Learn `win32LobApp` v1.0 documentation exactly (some nested types use a leading `#`, others don't).
+/// Microsoft Learn `win32LobApp` **beta** documentation exactly (some nested types use a leading
+/// `#`, others don't). <see cref="DisplayVersion"/> and <see cref="RoleScopeTagIds"/> only exist on
+/// the beta resource, which is why every Graph call for this resource stays on beta
+/// (<see cref="GraphWin32LobAppClient"/>, doc/adr/publishing.md 2026-09-10 entry).
 /// </summary>
 public sealed class Win32LobAppPayload
 {

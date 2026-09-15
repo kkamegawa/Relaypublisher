@@ -7,7 +7,8 @@ Distribution:
 - NuGet global tool package id: `relaypublisher`
 - Command name: `relaypublisher`
 - Package version: injected by CI from Git tag `vX.Y.Z`
-- Feeds: nuget.org, GitHub Packages (this repository), and Azure Artifacts
+- Feeds: Azure Artifacts for internal testing, then GitHub Packages (this repository) and nuget.org
+  after release approval
 - Homebrew tap for macOS on Apple silicon: `kkamegawa/homebrew-tap`. The formula installs the
   `osx-arm64` single-file app from the GitHub release; stable releases only.
 - Self-contained single-file apps for `win-x64`, `win-arm64`, and `osx-arm64` are attached to each
@@ -45,7 +46,7 @@ The Japanese translation is available in [README_ja.md](README_ja.md).
 
 | | Windows (`win32LobApp`) | macOS `AppType: pkg` (`macOSPkgApp`, default) | macOS `AppType: lob` (`macOSLobApp`) |
 |---|---|---|---|
-| Graph API version | v1.0 | beta | v1.0 |
+| Graph API version | beta | beta | beta |
 | Signing | Not required | Not required | Developer ID Installer required |
 | Max package size | - | 8 GB | 2 GB |
 | Icon | Optional | Optional | Required |
@@ -54,8 +55,11 @@ The Japanese translation is available in [README_ja.md](README_ja.md).
 | Pre/post install script | Not applicable | Supported (`Scripts`, optional) | Not supported |
 
 See [doc/01-manifest-schema.md](doc/01-manifest-schema.md) §5.3-5.4 for the full macOS manifest shape
-and validation rules, and [doc/00-overview.md](doc/00-overview.md) §6.13 for the design rationale
-(including why `macOSPkgApp` requires Graph beta).
+and validation rules, [doc/00-overview.md](doc/00-overview.md) §6.13 for the design rationale
+(including why `macOSPkgApp` requires Graph beta), and
+[doc/adr/publishing.md](doc/adr/publishing.md) (2026-09-10 entry) for why `win32LobApp` and
+`macOSLobApp` also moved to beta (`displayVersion`/`roleScopeTagIds` are beta-only there too) and why
+every Intune app Graph call is now unified on a single beta base address.
 
 ## What This Repository Provides
 
@@ -86,11 +90,11 @@ Japanese translations are provided with the `_ja` postfix, for example [doc/05-o
 - `ci.yml` - builds and tests every pull request targeting main on Linux and Windows, and produces the
   NuGet package and the self-contained single-file apps as artifacts. It uses no secrets, so pull
   requests from forks pass.
-- `release-draft.yml` - on a `v*` tag pushed onto main, packs the release and creates a **draft** GitHub
-  release with the `.nupkg`, the single-file app archives, and `SHA256SUMS.txt`.
+- `release-draft.yml` - on a `v*` tag pushed onto main, packs the release, creates a **draft** GitHub
+  release, and pushes its exact `.nupkg` to Azure Artifacts for internal testing.
 - `release-publish.yml` - when that draft release is published by hand, pushes the released `.nupkg` to
-  GitHub Packages, Azure Artifacts, and nuget.org, and for stable releases opens a pull request that
-  updates the Homebrew tap formula.
+  GitHub Packages and nuget.org, and for stable releases opens a pull request that updates the
+  Homebrew tap formula.
 
 See [doc/03-ci-github-actions.md](doc/03-ci-github-actions.md) for the design.
 

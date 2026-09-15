@@ -52,49 +52,43 @@ public sealed class MobileAppContentUploadOrchestratorTests
 
         public List<string> PatchedNotes { get; } = [];
 
-        public List<bool> UseBetaCalls { get; } = [];
 
         public List<string> ODataTypeCalls { get; } = [];
 
-        public Task<string> CreateContentVersionAsync(string appId, string oDataType, bool useBeta, CancellationToken cancellationToken)
+        public Task<string> CreateContentVersionAsync(string appId, string oDataType, CancellationToken cancellationToken)
         {
             CreateContentVersionCallCount++;
-            UseBetaCalls.Add(useBeta);
             ODataTypeCalls.Add(oDataType);
             return Task.FromResult("cv-1");
         }
 
         public Task<IReadOnlyList<MobileAppContentResponse>> ListContentVersionsAsync(
-            string appId, string oDataType, bool useBeta, CancellationToken cancellationToken)
+            string appId, string oDataType, CancellationToken cancellationToken)
         {
-            UseBetaCalls.Add(useBeta);
             ODataTypeCalls.Add(oDataType);
             return Task.FromResult<IReadOnlyList<MobileAppContentResponse>>(ContentVersions.ToArray());
         }
 
         public Task<IReadOnlyList<MobileAppContentFileResponse>> ListContentFilesAsync(
-            string appId, string contentVersionId, string oDataType, bool useBeta, CancellationToken cancellationToken)
+            string appId, string contentVersionId, string oDataType, CancellationToken cancellationToken)
         {
-            UseBetaCalls.Add(useBeta);
             ODataTypeCalls.Add(oDataType);
             return Task.FromResult<IReadOnlyList<MobileAppContentFileResponse>>(
                 ContentFiles.TryGetValue(contentVersionId, out var files) ? files.ToArray() : []);
         }
 
         public Task<string> CreateContentFileAsync(
-            string appId, string contentVersionId, string name, long size, long sizeEncrypted, string oDataType, bool useBeta, CancellationToken cancellationToken)
+            string appId, string contentVersionId, string name, long size, long sizeEncrypted, string oDataType, CancellationToken cancellationToken)
         {
             CreateContentFileCalls.Add((name, size, sizeEncrypted));
             CreateContentFileContentVersionIds.Add(contentVersionId);
-            UseBetaCalls.Add(useBeta);
             ODataTypeCalls.Add(oDataType);
             return Task.FromResult("file-1");
         }
 
         public Task<MobileAppContentFileResponse> GetContentFileAsync(
-            string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken)
+            string appId, string contentVersionId, string fileId, string oDataType, CancellationToken cancellationToken)
         {
-            UseBetaCalls.Add(useBeta);
             ODataTypeCalls.Add(oDataType);
             if (FileResponses.Count == 0)
             {
@@ -104,42 +98,37 @@ public sealed class MobileAppContentUploadOrchestratorTests
             return Task.FromResult(FileResponses.Dequeue());
         }
 
-        public Task RenewUploadAsync(string appId, string contentVersionId, string fileId, string oDataType, bool useBeta, CancellationToken cancellationToken)
+        public Task RenewUploadAsync(string appId, string contentVersionId, string fileId, string oDataType, CancellationToken cancellationToken)
         {
             RenewUploadCallCount++;
-            UseBetaCalls.Add(useBeta);
             ODataTypeCalls.Add(oDataType);
             return Task.CompletedTask;
         }
 
         public Task CommitFileAsync(
-            string appId, string contentVersionId, string fileId, FileEncryptionInfoPayload fileEncryptionInfo, string oDataType, bool useBeta, CancellationToken cancellationToken)
+            string appId, string contentVersionId, string fileId, FileEncryptionInfoPayload fileEncryptionInfo, string oDataType, CancellationToken cancellationToken)
         {
             CommitFileCalls.Add(fileEncryptionInfo);
-            UseBetaCalls.Add(useBeta);
             ODataTypeCalls.Add(oDataType);
             return Task.CompletedTask;
         }
 
-        public Task PatchCommittedContentVersionAsync(string appId, string contentVersionId, string oDataType, bool useBeta, CancellationToken cancellationToken)
+        public Task PatchCommittedContentVersionAsync(string appId, string contentVersionId, string oDataType, CancellationToken cancellationToken)
         {
             PatchedCommittedContentVersion = contentVersionId;
             ODataTypeCalls.Add(oDataType);
-            UseBetaCalls.Add(useBeta);
             return Task.CompletedTask;
         }
 
-        public Task PatchNotesAsync(string appId, string notes, string oDataType, bool useBeta, CancellationToken cancellationToken)
+        public Task PatchNotesAsync(string appId, string notes, string oDataType, CancellationToken cancellationToken)
         {
             PatchedNotes.Add(notes);
             ODataTypeCalls.Add(oDataType);
-            UseBetaCalls.Add(useBeta);
             return Task.CompletedTask;
         }
 
-        public Task<string> GetPublishingStateAsync(string appId, bool useBeta, CancellationToken cancellationToken)
+        public Task<string> GetPublishingStateAsync(string appId, CancellationToken cancellationToken)
         {
-            UseBetaCalls.Add(useBeta);
             if (PublishingStates.Count == 0)
             {
                 throw new InvalidOperationException("No more queued publishing states.");
@@ -149,9 +138,8 @@ public sealed class MobileAppContentUploadOrchestratorTests
         }
 
         public Task<MobileAppContentState> GetContentStateAsync(
-            string appId, string oDataType, bool useBeta, CancellationToken cancellationToken)
+            string appId, string oDataType, CancellationToken cancellationToken)
         {
-            UseBetaCalls.Add(useBeta);
             ODataTypeCalls.Add(oDataType);
             if (PublishingStates.Count == 0)
             {
@@ -274,9 +262,9 @@ public sealed class MobileAppContentUploadOrchestratorTests
 
     private static Task<ContentUploadResult> PublishAsync(
         MobileAppContentUploadOrchestrator orchestrator, string appId, PublishableContent content, string? storedInputHash,
-        ManagementMetadata metadata, ContentUploadOptions options, bool useBeta = false)
+        ManagementMetadata metadata, ContentUploadOptions options)
         => orchestrator.PublishContentAsync(
-            appId, content, storedInputHash, metadata, options, new IntuneWinContentExtractor(), WindowsODataType, useBeta, CancellationToken.None);
+            appId, content, storedInputHash, metadata, options, new IntuneWinContentExtractor(), WindowsODataType, CancellationToken.None);
 
     [TestMethod]
     public async Task PublishContentAsync_MatchingInputHash_SkipsUploadAndOnlyPatchesNotes()
@@ -771,12 +759,11 @@ public sealed class MobileAppContentUploadOrchestratorTests
         Assert.AreEqual("cv-1", client.PatchedCommittedContentVersion);
         Assert.HasCount(1, client.PatchedNotes);
         Assert.AreEqual(metadata.Serialize(), client.PatchedNotes[0]);
-        Assert.IsTrue(client.UseBetaCalls.TrueForAll(b => !b), "useBeta should stay false end to end for a Windows publish.");
         Assert.IsTrue(client.ODataTypeCalls.TrueForAll(t => t == WindowsODataType));
     }
 
     [TestMethod]
-    public async Task PublishContentAsync_UseBetaTrue_PassedThroughToEveryContentCall()
+    public async Task PublishContentAsync_MacOsPkgODataType_PassedThroughToEveryContentCall()
     {
         var client = new FakeMobileAppContentClient();
         client.FileResponses.Enqueue(FileState("azureStorageUriRequestSuccess", "https://sas.example/blob"));
@@ -787,10 +774,9 @@ public sealed class MobileAppContentUploadOrchestratorTests
 
         await orchestrator.PublishContentAsync(
             "app-1", CreateContent(), storedInputHash: null, CreateMetadata(), FastOptions(),
-            new IntuneWinContentExtractor(), "#microsoft.graph.macOSPkgApp", useBeta: true, CancellationToken.None);
+            new IntuneWinContentExtractor(), "#microsoft.graph.macOSPkgApp", CancellationToken.None);
 
-        Assert.IsTrue(client.UseBetaCalls.Count > 0);
-        Assert.IsTrue(client.UseBetaCalls.TrueForAll(b => b));
+        Assert.IsTrue(client.ODataTypeCalls.Count > 0);
         Assert.IsTrue(client.ODataTypeCalls.TrueForAll(t => t == "#microsoft.graph.macOSPkgApp"));
     }
 

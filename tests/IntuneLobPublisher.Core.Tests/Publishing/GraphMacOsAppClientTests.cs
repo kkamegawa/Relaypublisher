@@ -33,7 +33,7 @@ public sealed class GraphMacOsAppClientTests
     private static (GraphMacOsAppClient Client, QueueHandler Handler) CreateClient(params Func<HttpRequestMessage, HttpResponseMessage>[] responses)
     {
         var handler = new QueueHandler(responses);
-        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://graph.microsoft.com/v1.0/") };
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://graph.microsoft.com/beta/") };
         return (new GraphMacOsAppClient(httpClient), handler);
     }
 
@@ -66,7 +66,7 @@ public sealed class GraphMacOsAppClientTests
     {
         var (client, handler) = CreateClient(_ => JsonResponse(HttpStatusCode.Created, """{"id":"app-1"}"""));
 
-        var id = await client.CreateAppAsync(PkgPayload(), useBeta: true, CancellationToken.None);
+        var id = await client.CreateAppAsync(PkgPayload(), CancellationToken.None);
 
         Assert.AreEqual("app-1", id);
         Assert.AreEqual("POST", handler.Requests[0].Method);
@@ -95,7 +95,7 @@ public sealed class GraphMacOsAppClientTests
             PostInstallScript = new MacOsAppScriptPayload { ScriptContent = "IyEvYmluL2Jhc2gK" },
         };
 
-        await client.CreateAppAsync(payload, useBeta: true, CancellationToken.None);
+        await client.CreateAppAsync(payload, CancellationToken.None);
 
         // Parses the body instead of substring-matching the raw JSON, so this stays valid regardless
         // of System.Text.Json's property ordering/formatting.
@@ -114,7 +114,7 @@ public sealed class GraphMacOsAppClientTests
     {
         var (client, handler) = CreateClient(_ => JsonResponse(HttpStatusCode.Created, """{"id":"app-1"}"""));
 
-        await client.CreateAppAsync(PkgPayload(), useBeta: true, CancellationToken.None);
+        await client.CreateAppAsync(PkgPayload(), CancellationToken.None);
 
         var body = handler.Requests[0].Body!;
         StringAssert.Contains(body, "\"preInstallScript\":null");
@@ -122,14 +122,14 @@ public sealed class GraphMacOsAppClientTests
     }
 
     [TestMethod]
-    public async Task CreateAppAsync_Lob_PostsToV1WithMacOsLobAppODataTypeAndChildApps()
+    public async Task CreateAppAsync_Lob_PostsToBetaWithMacOsLobAppODataTypeAndChildApps()
     {
         var (client, handler) = CreateClient(_ => JsonResponse(HttpStatusCode.Created, """{"id":"app-2"}"""));
 
-        var id = await client.CreateAppAsync(LobPayload(), useBeta: false, CancellationToken.None);
+        var id = await client.CreateAppAsync(LobPayload(), CancellationToken.None);
 
         Assert.AreEqual("app-2", id);
-        Assert.AreEqual("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps", handler.Requests[0].Uri);
+        Assert.AreEqual("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps", handler.Requests[0].Uri);
         var body = handler.Requests[0].Body!;
         StringAssert.Contains(body, "\"@odata.type\":\"#microsoft.graph.macOSLobApp\"");
         StringAssert.Contains(body, "\"childApps\"");
@@ -142,7 +142,7 @@ public sealed class GraphMacOsAppClientTests
     {
         var (client, handler) = CreateClient(_ => new HttpResponseMessage(HttpStatusCode.OK));
 
-        await client.UpdateAppAsync("app-1", PkgPayload(), useBeta: true, CancellationToken.None);
+        await client.UpdateAppAsync("app-1", PkgPayload(), CancellationToken.None);
 
         Assert.AreEqual("PATCH", handler.Requests[0].Method);
         Assert.AreEqual("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-1", handler.Requests[0].Uri);
@@ -151,13 +151,13 @@ public sealed class GraphMacOsAppClientTests
     }
 
     [TestMethod]
-    public async Task UpdateAppAsync_Lob_PatchesV1()
+    public async Task UpdateAppAsync_Lob_PatchesBeta()
     {
         var (client, handler) = CreateClient(_ => new HttpResponseMessage(HttpStatusCode.OK));
 
-        await client.UpdateAppAsync("app-2", LobPayload(), useBeta: false, CancellationToken.None);
+        await client.UpdateAppAsync("app-2", LobPayload(), CancellationToken.None);
 
-        Assert.AreEqual("https://graph.microsoft.com/v1.0/deviceAppManagement/mobileApps/app-2", handler.Requests[0].Uri);
+        Assert.AreEqual("https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/app-2", handler.Requests[0].Uri);
     }
 
     [TestMethod]
@@ -172,7 +172,7 @@ public sealed class GraphMacOsAppClientTests
         });
 
         var ex = await Assert.ThrowsExactlyAsync<GraphRequestException>(
-            () => client.CreateAppAsync(PkgPayload(), useBeta: true, CancellationToken.None));
+            () => client.CreateAppAsync(PkgPayload(), CancellationToken.None));
 
         Assert.AreEqual(403, ex.StatusCode);
         Assert.AreEqual("client-id-1", ex.ClientRequestId);
@@ -185,6 +185,6 @@ public sealed class GraphMacOsAppClientTests
         var (client, _) = CreateClient(_ => JsonResponse(HttpStatusCode.Created, "{}"));
 
         await Assert.ThrowsExactlyAsync<GraphRequestException>(
-            () => client.CreateAppAsync(PkgPayload(), useBeta: true, CancellationToken.None));
+            () => client.CreateAppAsync(PkgPayload(), CancellationToken.None));
     }
 }

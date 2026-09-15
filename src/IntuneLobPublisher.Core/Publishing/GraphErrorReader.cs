@@ -44,12 +44,14 @@ public sealed record GraphFailure(
 
 /// <summary>
 /// Turns a failed Graph response into a message an operator can act on without reading the logs:
-/// Graph's own `error.code` / `error.message`, the `client-request-id` / `request-id` correlation
-/// headers, and - for 401/403 - the app-registration mistake that causes almost all of them.
-/// Without this, callers only reported the HTTP status, which cannot distinguish "the app registration
-/// is missing the permission" from "the tenant has no Intune license" from "beta is unavailable".
-/// Only the fields listed above are copied into the message; response headers are never dumped wholesale
-/// and the request's Authorization header is never touched (AGENTS.md secrets rule).
+/// the HTTP method (from `response.RequestMessage`, so a PATCH failure reads as a PATCH failure and
+/// not an ambiguous "request"), Graph's own `error.code` / `error.message`, the `client-request-id` /
+/// `request-id` correlation headers, and - for 401/403 - the app-registration mistake that causes
+/// almost all of them. Without this, callers only reported the HTTP status, which cannot distinguish
+/// "the app registration is missing the permission" from "the tenant has no Intune license" from
+/// "beta is unavailable". Only the fields listed above are copied into the message; response headers
+/// are never dumped wholesale and the request's Authorization header is never touched (AGENTS.md
+/// secrets rule).
 /// </summary>
 public static class GraphErrorReader
 {
@@ -83,9 +85,15 @@ public static class GraphErrorReader
         var (errorCode, errorMessage) = await ReadErrorBodyAsync(response, cancellationToken).ConfigureAwait(false);
         var clientRequestId = GetHeader(response, "client-request-id");
         var requestId = GetHeader(response, "request-id");
+        var method = response.RequestMessage?.Method;
 
-        var summary = new StringBuilder()
-            .Append("Graph request to '").Append(requestUri).Append("' returned ").Append(statusCode);
+        var summary = new StringBuilder().Append("Graph ");
+        if (method is not null)
+        {
+            summary.Append(method.Method).Append(' ');
+        }
+
+        summary.Append("request to '").Append(requestUri).Append("' returned ").Append(statusCode);
         if (errorCode is not null)
         {
             summary.Append(" (").Append(errorCode).Append(')');

@@ -3,8 +3,23 @@ namespace IntuneLobPublisher.Core.Publishing;
 /// <summary>Configuration for the Microsoft Graph HTTP pipeline (authentication, tenant guard, retry).</summary>
 public sealed class GraphClientOptions
 {
-    /// <summary>Graph base address. v1.0 unless overridden for testing against a stub server.</summary>
-    public Uri BaseAddress { get; init; } = new("https://graph.microsoft.com/v1.0/");
+    private readonly Uri _baseAddress = new("https://graph.microsoft.com/beta/");
+
+    /// <summary>
+    /// Graph base address. Beta unless overridden for testing against a stub server: every Intune app
+    /// resource this tool writes (win32LobApp, macOSPkgApp, macOSLobApp) is on Graph beta
+    /// (doc/adr/publishing.md 2026-09-10 entry), so there is no longer a per-call v1.0/beta split.
+    /// Every client resolves its relative request paths against this value with <see cref="Uri(Uri, string)"/>,
+    /// which treats a value without a trailing slash as ending in a file segment and drops it - a value with
+    /// no trailing slash is normalized here so a caller-supplied path prefix is never silently lost.
+    /// </summary>
+    public Uri BaseAddress
+    {
+        get => _baseAddress;
+        init => _baseAddress = value.AbsoluteUri.EndsWith('/')
+            ? value
+            : new Uri(value.AbsoluteUri + "/", UriKind.Absolute);
+    }
 
     /// <summary>OAuth scope requested from <c>DefaultAzureCredential</c>.</summary>
     public string Scope { get; init; } = "https://graph.microsoft.com/.default";

@@ -3,10 +3,9 @@ using IntuneLobPublisher.Core.Validation;
 
 namespace IntuneLobPublisher.Core.Publishing;
 
-/// <summary>Which Graph resource type an app maps to, and which API version its calls must use.</summary>
-/// <param name="UseBeta">True for <c>AppType: pkg</c> (macOSPkgApp is beta-only); false for <c>AppType: lob</c> (v1.0).</param>
+/// <summary>Which Graph resource type an app maps to.</summary>
 /// <param name="ODataType">The `@odata.type` value used for create and for the notes/committedContentVersion PATCH calls.</param>
-public sealed record MacOsAppTarget(bool UseBeta, string ODataType);
+public sealed record MacOsAppTarget(string ODataType);
 
 /// <summary>
 /// Maps a validated macOS manifest entry to a Graph <see cref="MacOsPkgAppPayload"/> or
@@ -19,11 +18,9 @@ public static class MacOsAppPayloadMapper
     private const string PkgODataType = "#microsoft.graph.macOSPkgApp";
     private const string LobODataType = "#microsoft.graph.macOSLobApp";
 
-    /// <summary>Resolves the target Graph resource type/API version from <see cref="AppManifest.AppType"/> without building a payload.</summary>
+    /// <summary>Resolves the target Graph resource type from <see cref="AppManifest.AppType"/> without building a payload.</summary>
     public static MacOsAppTarget ResolveTarget(AppManifest app)
-        => IsPkg(app)
-            ? new MacOsAppTarget(UseBeta: true, PkgODataType)
-            : new MacOsAppTarget(UseBeta: false, LobODataType);
+        => IsPkg(app) ? new MacOsAppTarget(PkgODataType) : new MacOsAppTarget(LobODataType);
 
     /// <param name="manifest">The root manifest, for top-level app info (description/publisher/owner/etc).</param>
     /// <param name="app">The platform/architecture-specific entry being published.</param>
@@ -34,7 +31,7 @@ public static class MacOsAppPayloadMapper
     /// property (doc/00-overview.md §6.13), and validation forbids `Scripts` there in the first place.
     /// </param>
     /// <param name="notes">Management metadata JSON for the `notes` field, set only on create requests.</param>
-    /// <exception cref="Exceptions.UnsupportedMacOsVersionException">`Requirements.MinimumOSVersion` has no known mapping, or needs a beta-only flag unavailable to `AppType: lob`.</exception>
+    /// <exception cref="Exceptions.UnsupportedMacOsVersionException">`Requirements.MinimumOSVersion` has no known mapping.</exception>
     /// <exception cref="Exceptions.UnsupportedIconFormatException">`iconBytes` was supplied but `Icon`'s extension is not recognized.</exception>
     public static MacOsAppPayloadBase Map(
         IntunePackageManifest manifest,
@@ -43,10 +40,9 @@ public static class MacOsAppPayloadMapper
         MacOsAppScripts? scripts = null,
         string? notes = null)
     {
-        var target = ResolveTarget(app);
         var includedApps = app.Detection!.IncludedApps!;
         var primary = includedApps[0];
-        var minimumSupportedOperatingSystem = MacOsMinimumOperatingSystemTable.Map(app.Requirements!.MinimumOSVersion!, target.UseBeta);
+        var minimumSupportedOperatingSystem = MacOsMinimumOperatingSystemTable.Map(app.Requirements!.MinimumOSVersion!);
 
         if (IsPkg(app))
         {

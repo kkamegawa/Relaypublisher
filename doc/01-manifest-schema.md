@@ -256,8 +256,10 @@ validation ルール:
 content upload の Graph URL は app の具体的な OData 型でキャストする。`contentVersions` は
 `mobileLobApp` から継承されるため、型キャストを省略した `/mobileApps/{id}/contentVersions` は
 Graph によって解決できず、`Resource not found for the segment 'contentVersions'`(HTTP 400)になる。
-`AppType: pkg` は beta の `microsoft.graph.macOSPkgApp`、`AppType: lob` は v1.0 の
-`microsoft.graph.macOSLobApp`、Windows は v1.0 の `microsoft.graph.win32LobApp` を使用する。
+`AppType: pkg` は beta の `microsoft.graph.macOSPkgApp`、`AppType: lob` は `microsoft.graph.macOSLobApp`
+(v1.0 にも存在するが `roleScopeTagIds` が beta にしか無いため beta を使用)、Windows は
+`microsoft.graph.win32LobApp`(同じ理由、加えて `displayVersion` も beta にしか無いため beta を使用)を
+使用する(doc/adr/publishing.md 2026-09-10 エントリ)。
 content version の作成後も、files、状態取得、`renewUpload`、`commit` に同じ具体型のキャストを付ける。
 中断状態の復旧は package metadata が一致する既存 file の `renewUpload` で行い、content version / file の
 DELETE や PATCH には依存しない。不一致 file が残る場合は追加 file を作成せず安全に fail する。
@@ -362,7 +364,7 @@ macOS:
 
 | manifest | Graph | 備考 |
 |---|---|---|
-| `MinimumOSVersion: "14.0"` | `minimumSupportedOperatingSystem` | boolean flag の複合型。v1.0 は `v13_0` までしか無く、macOS 14/15/26 のフラグは beta 専用。`AppType: lob`(v1.0)で 14 以降を指定すると fail する |
+| `MinimumOSVersion: "14.0"` | `minimumSupportedOperatingSystem` | boolean flag の複合型。v1.0 は `v13_0` までしか無く、macOS 14/15/26 のフラグは beta 専用。`AppType: pkg` / `lob` いずれも Graph 呼び出しは beta に統一されているため、両方とも 14 以降を指定できる |
 | `Detection.IncludedApps`(`AppType: pkg`) | `includedApps`(`macOSIncludedApp`: `bundleId` + `bundleVersion`) | 先頭要素の値がそのまま `primaryBundleId` / `primaryBundleVersion` にもなる |
 | `Detection.IncludedApps`(`AppType: lob`) | `childApps`(`macOSLobChildApp`: `bundleId` + `buildNumber` + `versionNumber`)。先頭要素が top-level `buildNumber` / `versionNumber` にもなる | `pkg` の `includedApps` とはフィールド名・形が異なる点に注意 |
 

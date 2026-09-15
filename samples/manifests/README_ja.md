@@ -49,7 +49,7 @@ defaults read /Applications/PowerShell.app/Contents/Info CFBundleIdentifier
 defaults read /Applications/PowerShell.app/Contents/Info CFBundleShortVersionString
 ```
 
-`Requirements.MinimumOSVersion: "14.0"` は意図的な選択です。PowerShell 7.6 (LTS) が対応する最小バージョンであり、同時に beta 専用の Graph フラグ `v14_0` を要求する最小バージョンでもあるため、`AppType: pkg`(beta)経路を `MacOsMinimumOperatingSystemTable` で正しく通します。`AppType: lob` は v1.0 に `v14_0`/`v15_0`/`v26_0` フラグが無いため `14.0` 以上を使えません。
+`Requirements.MinimumOSVersion: "14.0"` は意図的な選択です。PowerShell 7.6 (LTS) が対応する最小バージョンであり、同時に beta 専用の Graph フラグ `v14_0` を要求する最小バージョンでもあるため、`MacOsMinimumOperatingSystemTable` の beta 経路を正しく通します。`AppType: lob` も `14.0` 以上を使えます — `macOSLobApp` の Graph 呼び出しも beta に統一されたため(doc/adr/publishing.md 2026-09-10 エントリ)、以前の v1.0 限定の制限は撤廃されています。
 
 `Assignments` はどの tenant でも無編集で使えるよう、意図的に `[]` のままにしています。実際の(dry-run でない)`publish` 前に、自組織の group を追加してください。
 

@@ -112,7 +112,9 @@ public sealed class MacOsAppScriptPayload
 
 /// <summary>
 /// Write model for the Graph <c>macOSLobApp</c> resource (managed PKG, <c>AppType: lob</c>,
-/// doc/01-manifest-schema.md §5.4). Available in v1.0: https://learn.microsoft.com/graph/api/resources/intune-apps-macoslobapp.
+/// doc/01-manifest-schema.md §5.4). Also available in v1.0, but calls for this resource stay on
+/// **beta** because <c>roleScopeTagIds</c> only exists there (doc/adr/publishing.md 2026-09-10 entry):
+/// https://learn.microsoft.com/graph/api/resources/intune-apps-macoslobapp?view=graph-rest-beta.
 /// </summary>
 public sealed class MacOsLobAppPayload : MacOsAppPayloadBase
 {
@@ -192,22 +194,22 @@ public sealed class MacOsMinimumOperatingSystemPayload
     public bool V13_0 { get; init; }
 
     /// <summary>
-    /// Beta-only flag (<c>AppType: pkg</c> only; see <see cref="MacOsMinimumOperatingSystemTable"/>).
-    /// Nullable and omitted when unset (unlike the v1.0-only flags above): Graph's v1.0
-    /// <c>macOSMinimumOperatingSystem</c> has no <c>v14_0</c> property at all, so sending it as a plain
-    /// <c>false</c> on a <c>macOSLobApp</c> (v1.0) request makes Graph reject the whole call with 400
-    /// "The property 'v14_0' does not exist on type 'microsoft.graph.macOSMinimumOperatingSystem'".
+    /// A beta-only flag with no v1.0 equivalent (see <see cref="MacOsMinimumOperatingSystemTable"/>).
+    /// Both <c>macOSPkgApp</c> and <c>macOSLobApp</c> calls stay on Graph beta
+    /// (doc/adr/publishing.md 2026-09-10 entry), so this and the other beta-only flags below are always
+    /// safe to send; they stay nullable and omitted when unset only to keep the payload minimal - only
+    /// the one matched version flag is ever set to <c>true</c>, per <see cref="MacOsMinimumOperatingSystemTable.Map"/>.
     /// </summary>
     [JsonPropertyName("v14_0")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? V14_0 { get; init; }
 
-    /// <summary>Beta-only flag; see <see cref="V14_0"/> for why this is nullable.</summary>
+    /// <summary>Beta-only flag; see <see cref="V14_0"/>.</summary>
     [JsonPropertyName("v15_0")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? V15_0 { get; init; }
 
-    /// <summary>Beta-only flag; see <see cref="V14_0"/> for why this is nullable.</summary>
+    /// <summary>Beta-only flag; see <see cref="V14_0"/>.</summary>
     [JsonPropertyName("v26_0")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? V26_0 { get; init; }

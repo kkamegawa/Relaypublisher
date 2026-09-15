@@ -332,10 +332,10 @@ public enum AssignmentSyncMode
 ```csharp
 public interface ICategoryGraphClient
 {
-    Task<IReadOnlyList<IntuneAppCategory>> ListTenantCategoriesAsync(bool useBeta, CancellationToken cancellationToken);
-    Task<IReadOnlyList<IntuneAppCategory>> ListAppCategoriesAsync(string appId, bool useBeta, CancellationToken cancellationToken);
-    Task<bool> AddCategoryAsync(string appId, string categoryId, bool useBeta, CancellationToken cancellationToken);
-    Task<bool> RemoveCategoryAsync(string appId, string categoryId, bool useBeta, CancellationToken cancellationToken);
+    Task<IReadOnlyList<IntuneAppCategory>> ListTenantCategoriesAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<IntuneAppCategory>> ListAppCategoriesAsync(string appId, CancellationToken cancellationToken);
+    Task<bool> AddCategoryAsync(string appId, string categoryId, CancellationToken cancellationToken);
+    Task<bool> RemoveCategoryAsync(string appId, string categoryId, CancellationToken cancellationToken);
 }
 
 public interface ICategoryService
@@ -343,9 +343,12 @@ public interface ICategoryService
     // existingAppId が null(新規 app)なら tenant 名前解決だけを行い、per-app GET は行わない。
     Task<CategoryPlan> CreatePlanAsync(string? existingAppId, AppManifest app, CancellationToken cancellationToken);
 
-    Task ApplyAsync(CategoryPlan plan, AppManifest app, CancellationToken cancellationToken);
+    Task ApplyAsync(CategoryPlan plan, CancellationToken cancellationToken);
 }
 ```
+
+すべての呼び出しは Graph beta を経由する(win32LobApp / macOSPkgApp / macOSLobApp のすべてが beta のため、
+`useBeta` 引数は存在しない。doc/adr/publishing.md 2026-09-10 エントリ)。
 
 ```csharp
 public sealed record IntuneAppCategory(string Id, string DisplayName);

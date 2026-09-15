@@ -7,16 +7,16 @@ namespace IntuneLobPublisher.Core.Publishing.Categories;
 public interface ICategoryGraphClient
 {
     /// <summary>Lists the tenant's <c>mobileAppCategory</c> catalog, following <c>@odata.nextLink</c>.</summary>
-    Task<IReadOnlyList<IntuneAppCategory>> ListTenantCategoriesAsync(bool useBeta, CancellationToken cancellationToken);
+    Task<IReadOnlyList<IntuneAppCategory>> ListTenantCategoriesAsync(CancellationToken cancellationToken);
 
     /// <summary>Lists the categories currently related to one app, following <c>@odata.nextLink</c>.</summary>
-    Task<IReadOnlyList<IntuneAppCategory>> ListAppCategoriesAsync(string appId, bool useBeta, CancellationToken cancellationToken);
+    Task<IReadOnlyList<IntuneAppCategory>> ListAppCategoriesAsync(string appId, CancellationToken cancellationToken);
 
     /// <summary>Relates an existing tenant category to the app. Returns false when the relationship already existed.</summary>
-    Task<bool> AddCategoryAsync(string appId, string categoryId, bool useBeta, CancellationToken cancellationToken);
+    Task<bool> AddCategoryAsync(string appId, string categoryId, CancellationToken cancellationToken);
 
     /// <summary>Unrelates a category from the app. Returns false when the relationship was already gone.</summary>
-    Task<bool> RemoveCategoryAsync(string appId, string categoryId, bool useBeta, CancellationToken cancellationToken);
+    Task<bool> RemoveCategoryAsync(string appId, string categoryId, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -24,14 +24,12 @@ public interface ICategoryGraphClient
 /// <c>mobileApp</c> navigation relationship, not a scalar property, so the writes are OData
 /// <c>$ref</c> operations and never touch the tenant-wide category resource itself:
 /// <list type="bullet">
-/// <item><c>GET  /{version}/deviceAppManagement/mobileAppCategories</c></item>
-/// <item><c>GET  /{version}/deviceAppManagement/mobileApps/{appId}/categories</c></item>
-/// <item><c>POST /{version}/deviceAppManagement/mobileApps/{appId}/categories/$ref</c></item>
-/// <item><c>DELETE /{version}/deviceAppManagement/mobileApps/{appId}/categories/{categoryId}/$ref</c></item>
+/// <item><c>GET  /beta/deviceAppManagement/mobileAppCategories</c></item>
+/// <item><c>GET  /beta/deviceAppManagement/mobileApps/{appId}/categories</c></item>
+/// <item><c>POST /beta/deviceAppManagement/mobileApps/{appId}/categories/$ref</c></item>
+/// <item><c>DELETE /beta/deviceAppManagement/mobileApps/{appId}/categories/{categoryId}/$ref</c></item>
 /// </list>
-/// Each call builds an absolute <c>/v1.0/</c> or <c>/beta/</c> path, the same technique as
-/// <see cref="Assignments.AssignmentGraphClient"/>, because the shared <see cref="HttpClient"/>'s base
-/// address is <c>/v1.0/</c> while <c>macOSPkgApp</c> entries have to stay on beta.
+/// Every call is relative to the shared <see cref="HttpClient"/>'s base address (Graph beta).
 /// </summary>
 public sealed class CategoryGraphClient : ICategoryGraphClient
 {
@@ -42,9 +40,9 @@ public sealed class CategoryGraphClient : ICategoryGraphClient
         _httpClient = httpClient;
     }
 
-    public async Task<IReadOnlyList<IntuneAppCategory>> ListTenantCategoriesAsync(bool useBeta, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<IntuneAppCategory>> ListTenantCategoriesAsync(CancellationToken cancellationToken)
     {
-        var requestUri = $"{VersionSegment(useBeta)}/deviceAppManagement/mobileAppCategories?$select=id,displayName";
+        const string requestUri = "deviceAppManagement/mobileAppCategories?$select=id,displayName";
         return await ListAsync(
             requestUri,
             "Failed to list Intune app categories.",
@@ -55,9 +53,9 @@ public sealed class CategoryGraphClient : ICategoryGraphClient
             cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<IntuneAppCategory>> ListAppCategoriesAsync(string appId, bool useBeta, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<IntuneAppCategory>> ListAppCategoriesAsync(string appId, CancellationToken cancellationToken)
     {
-        var requestUri = $"{AppCategoriesPath(appId, useBeta)}?$select=id,displayName";
+        var requestUri = $"{AppCategoriesPath(appId)}?$select=id,displayName";
         return await ListAsync(
             requestUri,
             $"Failed to list categories for Intune app '{appId}'.",
@@ -65,10 +63,10 @@ public sealed class CategoryGraphClient : ICategoryGraphClient
             cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<bool> AddCategoryAsync(string appId, string categoryId, bool useBeta, CancellationToken cancellationToken)
+    public async Task<bool> AddCategoryAsync(string appId, string categoryId, CancellationToken cancellationToken)
     {
-        var requestUri = $"{AppCategoriesPath(appId, useBeta)}/$ref";
-        var payload = new CategoryReferencePayload { ODataId = BuildCategoryODataId(categoryId, useBeta) };
+        var requestUri = $"{AppCategoriesPath(appId)}/$ref";
+        var payload = new CategoryReferencePayload { ODataId = BuildCategoryODataId(categoryId) };
         using var response = await _httpClient.PostAsJsonAsync(requestUri, payload, cancellationToken).ConfigureAwait(false);
         if (response.IsSuccessStatusCode)
         {
@@ -88,9 +86,9 @@ public sealed class CategoryGraphClient : ICategoryGraphClient
         throw failure.ToRequestException($"Failed to add category '{categoryId}' to Intune app '{appId}'.");
     }
 
-    public async Task<bool> RemoveCategoryAsync(string appId, string categoryId, bool useBeta, CancellationToken cancellationToken)
+    public async Task<bool> RemoveCategoryAsync(string appId, string categoryId, CancellationToken cancellationToken)
     {
-        var requestUri = $"{AppCategoriesPath(appId, useBeta)}/{Uri.EscapeDataString(categoryId)}/$ref";
+        var requestUri = $"{AppCategoriesPath(appId)}/{Uri.EscapeDataString(categoryId)}/$ref";
         using var response = await _httpClient.DeleteAsync(requestUri, cancellationToken).ConfigureAwait(false);
         if (response.IsSuccessStatusCode)
         {
@@ -110,17 +108,14 @@ public sealed class CategoryGraphClient : ICategoryGraphClient
     }
 
     /// <summary>
-    /// The <c>@odata.id</c> of a tenant category. Built from the scheme and authority of the client's
-    /// base address plus the API version of the request that carries it: the base address already ends
-    /// in <c>/v1.0/</c>, so appending to it would produce a v1.0 reference inside a beta request and
-    /// would hardcode the host for stub-server tests.
+    /// The <c>@odata.id</c> of a tenant category, built from the client's base address (scheme,
+    /// authority, and <c>/beta/</c> path) so the host is never hardcoded, including for stub-server tests.
     /// </summary>
-    private string BuildCategoryODataId(string categoryId, bool useBeta)
+    private string BuildCategoryODataId(string categoryId)
     {
         var baseAddress = _httpClient.BaseAddress
             ?? throw new CategorySyncException("The Graph HttpClient has no base address, so a category '@odata.id' cannot be built.");
-        var authority = baseAddress.GetLeftPart(UriPartial.Authority);
-        return $"{authority}{VersionSegment(useBeta)}/deviceAppManagement/mobileAppCategories/{Uri.EscapeDataString(categoryId)}";
+        return new Uri(baseAddress, $"deviceAppManagement/mobileAppCategories/{Uri.EscapeDataString(categoryId)}").AbsoluteUri;
     }
 
     private async Task<IReadOnlyList<IntuneAppCategory>> ListAsync(
@@ -164,10 +159,8 @@ public sealed class CategoryGraphClient : ICategoryGraphClient
         return results;
     }
 
-    private static string AppCategoriesPath(string appId, bool useBeta)
-        => $"{VersionSegment(useBeta)}/deviceAppManagement/mobileApps/{Uri.EscapeDataString(appId)}/categories";
-
-    private static string VersionSegment(bool useBeta) => useBeta ? "/beta" : "/v1.0";
+    private static string AppCategoriesPath(string appId)
+        => $"deviceAppManagement/mobileApps/{Uri.EscapeDataString(appId)}/categories";
 
     private sealed class MobileAppCategoryListPage
     {
