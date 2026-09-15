@@ -61,7 +61,8 @@ Apple silicon の macOS 向けに、別リポジトリ `kkamegawa/homebrew-tap` 
 ### 未完了事項
 
 - 上記ダウングレード対策を入れた `release-publish.yml` はエージェントが `.github/` に書けないため、ユーザーが反映する。
-- tap の default branch に、`brew test-bot` の check を必須にする branch protection を設定する(リポジトリ所有者)。
+- tap の default branch の ruleset で、必須チェックを `brew test-bot` から `test-bot` に直す(リポジトリ所有者)。
+  `brew test-bot` は workflow 名で、実際の check 名は job 名の `test-bot` のため、このままでは tap の PR がマージできない。
 - `update-homebrew-tap` job による tap への PR 自動作成(GitHub App token の発行を含む)は、次の stable release で確認する。
 
 ## 2026-09-06: manifest 作成スクリプトを Windows file detection に追従させる

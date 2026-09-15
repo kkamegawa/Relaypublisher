@@ -466,8 +466,9 @@ stable release では、`release-publish.yml` の `update-homebrew-tap` job が 
   Environment protection rules はこの移行では変更しない。
 - Homebrew tap 用の GitHub App は次の設定で作る。webhook は無効、Repository permissions は Contents: Read and write /
   Pull requests: Read and write / Metadata: Read-only のみ。インストール先は `homebrew-tap` リポジトリだけに限定し、
-  生成した private key と App の client ID を上記 secrets に登録する。tap の default branch には branch protection で
-  `brew test-bot` の check を必須にする。
+  生成した private key と App の client ID を上記 secrets に登録する。tap の default branch には ruleset(または
+  branch protection)で `test-bot` の check を必須にする。check 名は workflow 名(`brew test-bot`)ではなく job 名
+  (`test-bot`)なので、workflow 名を指定すると check が一致せず、tap の pull request がマージできなくなる。
 - NuGet の policy と workflow の値は一致させる。特に実ファイル名は `release-publish.yml` (hyphen) であり、
   `release_publish.yml` や `.github/workflows/release-publish.yml` は指定しない。
 - `NuGet/login` の一時 output は保存せず、push 後は再利用しない。最大 1 時間で失効するが、

@@ -79,8 +79,10 @@ against the Homebrew tap (`kkamegawa/homebrew-tap`) that updates the formula. Se
 The `release` environment also holds `HOMEBREW_TAP_APP_CLIENT_ID` and
 `HOMEBREW_TAP_APP_PRIVATE_KEY`. Create the GitHub App with webhooks disabled and only these
 repository permissions: Contents read and write, Pull requests read and write, and Metadata
-read-only. Install it only on the `homebrew-tap` repository, and protect the tap's default branch so
-the `brew test-bot` check is required.
+read-only. Install it only on the `homebrew-tap` repository, and protect the tap's default branch with
+a ruleset (or branch protection) that requires the `test-bot` check. The check name is the job name
+(`test-bot`), not the workflow name (`brew test-bot`); requiring the workflow name never matches, so
+tap pull requests could not be merged.
 
 The single-file apps carry only the .NET SDK's ad-hoc signature; they are not signed with a Developer
 ID and not notarized. A zip downloaded directly from the GitHub
