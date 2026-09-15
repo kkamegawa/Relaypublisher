@@ -8,13 +8,23 @@ Relaypublisher は、winget 風の YAML manifest を CI から Microsoft Intune 
 - Command name: `relaypublisher`
 - Package version: Git tag `vX.Y.Z` から CI が注入
 - 配布 feed: nuget.org / GitHub Packages（このリポジトリ）/ Azure Artifacts
+- Apple silicon の macOS 向け Homebrew tap: `kkamegawa/homebrew-tap`。formula は GitHub release の
+  `osx-arm64` single-file app をインストールします(stable release のみ)。
 - `win-x64` / `win-arm64` / `osx-arm64` の self-contained single-file app を各 GitHub release に添付します。
-  署名・notarization は行っていないため、macOS では Gatekeeper の警告が出ます。
+  署名・notarization は行っていないため、zip を直接取得すると macOS では Gatekeeper の警告が出ます。
+  Homebrew 経由なら警告は出ません。
 
 Install:
 
 ```bash
 dotnet tool install --global relaypublisher
+```
+
+Apple silicon の macOS では Homebrew も使えます:
+
+```bash
+brew tap --trust kkamegawa/tap
+brew install relaypublisher
 ```
 
 GitHub Packages / Azure Artifacts からの install 手順は
@@ -39,7 +49,8 @@ GitHub Packages / Azure Artifacts からの install 手順は
 - `release-draft.yml` — main に `v*` tag を push すると、`.nupkg` / single-file app の zip /
   `SHA256SUMS.txt` を添付した **draft** GitHub release を作成します。
 - `release-publish.yml` — その draft release を手動で publish した時点で、release に添付された `.nupkg` を
-  GitHub Packages / Azure Artifacts / nuget.org へ push します。
+  GitHub Packages / Azure Artifacts / nuget.org へ push します。stable release では Homebrew tap の formula を
+  更新する pull request も作ります。
 
 設計は [doc/03-ci-github-actions.md](doc/03-ci-github-actions.md) を参照してください。
 

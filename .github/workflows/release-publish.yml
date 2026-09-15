@@ -8,6 +8,10 @@
 # `release: published` fires for ANY release in this repository, so this workflow re-derives
 # provenance itself: the tag must match vMAJOR.MINOR.PATCH, must be reachable from main, and
 # the release must carry exactly the package built for that tag.
+#
+# Stable releases also open a pull request against the Homebrew tap. That job does not depend on
+# the NuGet push, so neither can block the other, and a human merges the tap pull request after
+# the tap's own CI has installed and run the formula.
 name: Release (publish packages)
 
 on:
@@ -22,7 +26,7 @@ concurrency:
 
 jobs:
   # Read-only provenance gate. Nothing here can reach the publishing secrets, and the
-  # privileged job below does not start unless every check passes.
+  # privileged jobs below do not start unless every check passes.
   guard:
     name: verify release provenance
     runs-on: ubuntu-latest
@@ -31,6 +35,8 @@ jobs:
     outputs:
       version: ${{ steps.resolve.outputs.version }}
       package: ${{ steps.resolve.outputs.package }}
+      stable: ${{ steps.resolve.outputs.stable }}
+      mac-archive: ${{ steps.resolve.outputs.mac-archive }}
     env:
       TAG_NAME: ${{ github.event.release.tag_name }}
     steps:
@@ -49,6 +55,12 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "package=relaypublisher.${VERSION}.nupkg" >> "$GITHUB_OUTPUT"
+          echo "mac-archive=relaypublisher-${VERSION}-osx-arm64.zip" >> "$GITHUB_OUTPUT"
+          # Prereleases go to the NuGet feeds but never to the Homebrew tap.
+          case "$VERSION" in
+            *-*) echo "stable=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "stable=true" >> "$GITHUB_OUTPUT" ;;
+          esac
 
       # Only releases cut from main may publish. "behind" means main already contains the
       # tagged commit; "identical" means it is main's tip.
@@ -182,3 +194,127 @@ jobs:
           --source https://api.nuget.org/v3/index.json
           --api-key "$NUGET_TEMP_API_KEY"
           --skip-duplicate
+
+  # Opens (or refreshes) a pull request that points the Homebrew tap formula at this release's
+  # osx-arm64 archive. Deliberately not chained to push-packages: a tap failure must not block or
+  # roll back the NuGet push, and a feed failure must not hold back the tap.
+  update-homebrew-tap:
+    name: open Homebrew tap pull request
+    runs-on: ubuntu-latest
+    needs: guard
+    if: needs.guard.outputs.stable == 'true'
+    environment: release
+    permissions:
+      contents: read # gh release download
+    env:
+      TAG_NAME: ${{ github.event.release.tag_name }}
+      VERSION: ${{ needs.guard.outputs.version }}
+      MAC_ARCHIVE: ${{ needs.guard.outputs.mac-archive }}
+      TAP_REPOSITORY: ${{ github.repository_owner }}/homebrew-tap
+    steps:
+      # Only tools/New-HomebrewFormula.ps1 is needed from this repository.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # release-draft.yml attaches exactly one macOS archive and one checksum file. Download both
+      # by exact name so only the reviewed bits can reach the formula.
+      - name: Download the released macOS archive and checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          NAMES="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG_NAME}" --jq '.assets[].name')"
+          for NAME in "$MAC_ARCHIVE" SHA256SUMS.txt; do
+            COUNT="$(printf '%s\n' "$NAMES" | grep -Fxc -- "$NAME" || true)"
+            if [ "$COUNT" != "1" ]; then
+              echo "::error::expected exactly one release asset named ${NAME}, found ${COUNT}"
+              exit 1
+            fi
+          done
+          mkdir -p ./artifacts/homebrew
+          gh release download "$TAG_NAME" --pattern "$MAC_ARCHIVE" --dir ./artifacts/homebrew
+          gh release download "$TAG_NAME" --pattern SHA256SUMS.txt --dir ./artifacts/homebrew
+          ls -l ./artifacts/homebrew
+
+      # The formula pins the hash from SHA256SUMS.txt, so make sure it really is the archive's hash.
+      - name: Verify the archive against SHA256SUMS.txt
+        working-directory: ./artifacts/homebrew
+        run: |
+          set -euo pipefail
+          EXPECTED="$(awk -v name="$MAC_ARCHIVE" '{ file = $2; sub(/^\*/, "", file); sub(/^\.\//, "", file); if (file == name) print tolower($1) }' SHA256SUMS.txt)"
+          if [ "$(printf '%s' "$EXPECTED" | grep -c '^')" != "1" ]; then
+            echo "::error::SHA256SUMS.txt must list ${MAC_ARCHIVE} exactly once"
+            exit 1
+          fi
+          ACTUAL="$(sha256sum "$MAC_ARCHIVE" | cut -d' ' -f1)"
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::${MAC_ARCHIVE} hashes to ${ACTUAL}, but SHA256SUMS.txt records ${EXPECTED}"
+            exit 1
+          fi
+          echo "${MAC_ARCHIVE} matches SHA256SUMS.txt (${ACTUAL})"
+
+      - name: Render the formula
+        shell: pwsh
+        run: >
+          ./tools/New-HomebrewFormula.ps1
+          -Version $env:VERSION
+          -Sha256SumsPath ./artifacts/homebrew/SHA256SUMS.txt
+          -Repository $env:GITHUB_REPOSITORY
+          -OutputPath ./artifacts/homebrew/relaypublisher.rb
+
+      # A GitHub App installed only on the tap, scoped down again here, is the only credential
+      # that can write to it. GITHUB_TOKEN cannot write to another repository, and pull requests
+      # opened with it would not trigger the tap's CI.
+      - name: Create a tap-scoped GitHub App token
+        id: tap-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.HOMEBREW_TAP_APP_CLIENT_ID }}
+          private-key: ${{ secrets.HOMEBREW_TAP_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: homebrew-tap
+          permission-contents: write
+          permission-pull-requests: write
+
+      # The token is persisted for the push below; no code from either repository runs after this.
+      - name: Check out the tap
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.TAP_REPOSITORY }}
+          token: ${{ steps.tap-token.outputs.token }}
+          path: tap
+          fetch-depth: 0
+
+      - name: Open or update the tap pull request
+        working-directory: tap
+        env:
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          BRANCH="relaypublisher-${VERSION}"
+          DEFAULT_BRANCH="$(gh repo view "$TAP_REPOSITORY" --json defaultBranchRef --jq '.defaultBranchRef.name')"
+
+          # Rebuild the branch from the default branch on every run so a rerun is idempotent.
+          git switch -C "$BRANCH" "origin/${DEFAULT_BRANCH}"
+          mkdir -p Formula
+          cp ../artifacts/homebrew/relaypublisher.rb Formula/relaypublisher.rb
+          git add Formula/relaypublisher.rb
+          if git diff --cached --quiet; then
+            echo "Formula/relaypublisher.rb on ${DEFAULT_BRANCH} already pins ${VERSION}; nothing to do."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "relaypublisher ${VERSION}"
+          # The branch belongs to this job alone, so a rerun replaces it wholesale.
+          git push --force origin "$BRANCH"
+
+          PR_URL="$(gh pr list --repo "$TAP_REPOSITORY" --head "$BRANCH" --state open --json url --jq '.[0].url // empty')"
+          if [ -n "$PR_URL" ]; then
+            echo "Updated the existing pull request ${PR_URL}"
+          else
+            gh pr create --repo "$TAP_REPOSITORY" --base "$DEFAULT_BRANCH" --head "$BRANCH" \
+              --title "relaypublisher ${VERSION}" \
+              --body "Updates the formula to ${GITHUB_REPOSITORY} release ${TAG_NAME} (${MAC_ARCHIVE}). Opened by the release-publish workflow; merge after the brew test-bot check passes."
+          fi

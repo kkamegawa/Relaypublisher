@@ -2,6 +2,44 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-09-15: Homebrew tap による macOS 配布
+
+**ブランチ**: `feature/173-homebrew-tap`
+
+**対応 Issue**: [#173](https://github.com/kkamegawa/Relaypublisher/issues/173)(Wiki: `plan/Relaypublisher/issue-173-homebrew-tap-distribution`)
+
+### 実施内容(承認済み plan に基づく)
+
+Apple silicon の macOS 向けに、別リポジトリ `kkamegawa/homebrew-tap` の Homebrew formula で配布する設計と実装を行った。
+決定事項と根拠は [adr/ci-release.md](adr/ci-release.md) の同日エントリに記録した。
+
+1. 設計を先に更新した。[00-overview.md](00-overview.md) §6.17 の見出しを「NuGet global tool / Homebrew tap」に変え、
+   tap の不変条件(別リポジトリ、Formula、arm64 のみ、stable のみ、PR 方式、GitHub App token)を追加した。
+   [03-ci-github-actions.md](03-ci-github-actions.md) §12a には `update-homebrew-tap` job の設計、secrets、GitHub App の準備、
+   Gatekeeper の注記を追加した。[issues/issue-173-homebrew-tap-distribution.md](issues/issue-173-homebrew-tap-distribution.md) を新設し、
+   issue-019 の対象外リストに参照先を追記した。
+2. `tools/New-HomebrewFormula.ps1` を追加した。`SHA256SUMS.txt` から osx-arm64 zip の行をちょうど 1 行選び、
+   prerelease・不正な repository 名・checksum 行の欠落/重複/不正を拒否して、BOM なし LF の formula を生成する。
+3. `tests/Tools/HomebrewFormula.Tests.ps1` を追加した(6 ケース)。
+4. `release-publish.yml` の `guard` に `stable` / `mac-archive` output を足し、`push-packages` と独立した
+   `update-homebrew-tap` job を追加する。あわせて `ci.yml` に上記テストの実行 step を追加する。
+5. [05-operation.md](05-operation.md) / [05-operation_ja.md](05-operation_ja.md) §0、`README.md` / `README_ja.md` に
+   Homebrew での trust・install・upgrade・pin・uninstall と制約を追記した。
+6. tap リポジトリに push するファイル一式(formula v1.1.1、`brew test-bot` workflow、README 日英、LICENSE、SECURITY.md)を用意した。
+
+### 検証結果
+
+- `pwsh -NoProfile -File tests/Tools/HomebrewFormula.Tests.ps1`: 6 ケース成功。
+- `pwsh -NoProfile -File tests/Tools/YamlCreate.Tests.ps1`: 18 ケース成功。
+- `dotnet build` / `dotnet test`(Release): 763 件成功。
+- v1.1.1 の `SHA256SUMS.txt` から formula を生成し、sha256 が release の osx-arm64 zip の値と一致することを確認した。
+- `relaypublisher --version` が `<version>+<commit>` を出力することを確認した(formula の `assert_match version.to_s` が成立する)。
+
+### 未完了事項
+
+- tap リポジトリ・GitHub App・`release` environment の secrets・tap の branch protection はリポジトリ所有者が作成する。
+- tap CI での `codesign --verify --strict` と、次の stable release での PR 自動作成は、上記の作成後に確認する。
+
 ## 2026-09-06: manifest 作成スクリプトを Windows file detection に追従させる
 
 **ブランチ**: `feature/yamlcreate-manifest-tool`

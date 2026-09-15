@@ -31,7 +31,7 @@
 
 ## 対象外
 
-- Homebrew tap 設計・実装
+- Homebrew tap 設計・実装(Issue #173 で対応。`doc/issues/issue-173-homebrew-tap-distribution.md` を参照)
 - Windows Installer / PKG など NuGet 以外の配布チャネル
 - single-file app の署名・notarization
 - `linux-x64` の single-file app
@@ -41,6 +41,7 @@
 - 2026-08-24: 配布先を nuget.org 単独から 3 feed に拡張し、feed push の trigger を `push: tags` から
   `release: published` に変更した。workflow の置き場所を `workflows/github-actions/`(参照サンプル)から
   `.github/workflows/`(実 CI)に移した。理由は `doc/adr/ci-release.md` を参照。
+- 2026-09-15: 対象外としていた Homebrew tap を Issue #173 で設計・実装したため、対象外リストに参照先を追記した。
 
 ## 見積もり
 

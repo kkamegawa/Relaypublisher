@@ -8,13 +8,23 @@ Distribution:
 - Command name: `relaypublisher`
 - Package version: injected by CI from Git tag `vX.Y.Z`
 - Feeds: nuget.org, GitHub Packages (this repository), and Azure Artifacts
+- Homebrew tap for macOS on Apple silicon: `kkamegawa/homebrew-tap`. The formula installs the
+  `osx-arm64` single-file app from the GitHub release; stable releases only.
 - Self-contained single-file apps for `win-x64`, `win-arm64`, and `osx-arm64` are attached to each
-  GitHub release. They are neither code-signed nor notarized, so macOS shows a Gatekeeper warning.
+  GitHub release. They are neither code-signed nor notarized, so macOS shows a Gatekeeper warning
+  when the zip is downloaded directly. Installing through Homebrew avoids it.
 
 Quick install:
 
 ```bash
 dotnet tool install --global relaypublisher
+```
+
+On macOS (Apple silicon), Homebrew works too:
+
+```bash
+brew tap --trust kkamegawa/tap
+brew install relaypublisher
 ```
 
 See [doc/05-operation.md](doc/05-operation.md#0-tool-installation-and-version-control) for installing
@@ -79,7 +89,8 @@ Japanese translations are provided with the `_ja` postfix, for example [doc/05-o
 - `release-draft.yml` - on a `v*` tag pushed onto main, packs the release and creates a **draft** GitHub
   release with the `.nupkg`, the single-file app archives, and `SHA256SUMS.txt`.
 - `release-publish.yml` - when that draft release is published by hand, pushes the released `.nupkg` to
-  GitHub Packages, Azure Artifacts, and nuget.org.
+  GitHub Packages, Azure Artifacts, and nuget.org, and for stable releases opens a pull request that
+  updates the Homebrew tap formula.
 
 See [doc/03-ci-github-actions.md](doc/03-ci-github-actions.md) for the design.
 

@@ -8,8 +8,8 @@
 
 ## 0. ツールのインストールとバージョン運用
 
-Relaypublisher は NuGet global tool として配布します。同じ version を 3 つの feed に publish するため、
-環境から到達できる feed を選んでください。
+Relaypublisher は NuGet global tool として配布し、Apple silicon の macOS 向けには Homebrew tap でも配布します(後述)。
+同じ version を 3 つの NuGet feed に publish するため、環境から到達できる feed を選んでください。
 
 | Feed | 想定利用者 |
 | --- | --- |
@@ -68,7 +68,31 @@ dotnet tool install --global relaypublisher --add-source relaypublisher-ado --in
 `--interactive` で初回のサインインプロンプトが出ます。以降はキャッシュされた session token を
 再利用するため、このフラグは不要です。
 
-Update:
+Homebrew での install(Apple silicon の macOS)。formula は別リポジトリの tap `kkamegawa/homebrew-tap` にあり、
+各 GitHub release に添付した `osx-arm64` の self-contained single-file app をインストールするため、.NET SDK は不要です。
+Homebrew 6.0 以降は明示的に trust していない第三者 tap を読み込まないため、最初に一度 trust します:
+
+```bash
+brew tap --trust kkamegawa/tap
+brew install relaypublisher
+```
+
+更新・pin・削除は通常の Homebrew コマンドで行います(PowerShell 7 でも同じコマンドです):
+
+```bash
+brew upgrade relaypublisher
+brew pin relaypublisher
+brew uninstall relaypublisher
+```
+
+- 対応は Apple silicon のみです。Intel Mac では formula のインストールが拒否されます。Intel Mac と Linux では
+  NuGet global tool を使ってください。
+- tap に配信されるのは stable release だけです。prerelease は `dotnet tool` で install してください。
+- tap は最新 version だけを持ちます。rollback は `dotnet tool` の `--version` で行ってください。
+- Homebrew formula と NuGet global tool を両方入れないでください。`PATH` で先に見つかった方が使われます。
+  `which relaypublisher` で確認できます。
+
+NuGet global tool の Update:
 
 ```bash
 dotnet tool update --global relaypublisher
@@ -95,7 +119,10 @@ dotnet tool list --global | grep relaypublisher
   (`win-x64` / `win-arm64` / `osx-arm64`)、`SHA256SUMS.txt` を添付した **draft** GitHub release が作られます。
   その draft release を手動で publish した時点で 3 つの feed への push が走ります。
   詳細は [03-ci-github-actions.md](03-ci-github-actions.md) §12a を参照してください。
-- single-file app には署名・notarization を行っていません。macOS では Gatekeeper の警告が出ます。
+- stable release では Homebrew tap にも pull request が作られます。その pull request が tap の CI を通って
+  マージされた時点で、新しい version が `brew upgrade` に届きます。
+- single-file app には署名・notarization を行っていません。GitHub release から zip を直接取得すると macOS では
+  Gatekeeper の警告が出ます。Homebrew は formula のダウンロードに quarantine 属性を付けないため、Homebrew 経由では出ません。
 
 ## 1. Microsoft Entra app registration
 

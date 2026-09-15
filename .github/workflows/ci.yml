@@ -50,6 +50,9 @@ jobs:
       - name: Test manifest authoring script
         shell: pwsh
         run: pwsh -NoProfile -File ./tests/Tools/YamlCreate.Tests.ps1
+      - name: Test Homebrew formula script
+        shell: pwsh
+        run: pwsh -NoProfile -File ./tests/Tools/HomebrewFormula.Tests.ps1
 
       - name: Test
         run: >
