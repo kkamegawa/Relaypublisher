@@ -23,6 +23,7 @@
   | `actions/download-artifact` | v7.0.0 | `37930b1c2abaa49bbe596cd826c3c89aef350131` |
   | `azure/login` | v3.0.2 | `7ddb5af1ef8758cf1353cf3b42f940aee27ba21c` |
   | `NuGet/login` | v1.2.0 | `8d196754b4036150537f80ac539e15c2f1028841` |
+  | `actions/create-github-app-token` | v3.2.0 | `bcd2ba49218906704ab6c1aa796996da409d3eb1` |
 
 - **`actions/checkout` は必ず `persist-credentials: false` を指定する。** 既定の `true` は job token を
   `.git/config` に書き込むため、その後に走る `dotnet build` / `dotnet pack` / `dotnet publish`
@@ -309,7 +310,7 @@ jobs:
 | workflow | trigger | 役割 |
 |---|---|---|
 | `.github/workflows/release-draft.yml` | `push` tags `v*` | build / test / pack / single-file publish → **draft** GitHub release を作成し資産を添付して、選択済み `.nupkg` から per-build preview version の package を再構成して Azure Artifacts へ内部テスト用に push する |
-| `.github/workflows/release-publish.yml` | `release: [published]` | draft release を人が publish した時点で、その資産を GitHub Packages と nuget.org へ push する |
+| `.github/workflows/release-publish.yml` | `release: [published]` | draft release を人が publish した時点で、その資産を GitHub Packages と nuget.org へ push し、stable release では Homebrew tap に formula 更新の pull request を作る |
 
 ### なぜ 2 本に分けるか
 
@@ -417,6 +418,29 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
 - GitHub Packages と nuget.org の 2 feed とも `--skip-duplicate` を付け、release publish のやり直しを
   冪等にする。push step は独立させ、どちらかが失敗したら job は失敗する(`continue-on-error` は使わない)。
 
+### Homebrew tap 更新 job (`update-homebrew-tap`)
+
+stable release では、`release-publish.yml` の `update-homebrew-tap` job が Homebrew tap
+(`kkamegawa/homebrew-tap`)に formula 更新の pull request を作る。配布形態の設計判断は `00-overview.md` §6.17 を参照。
+
+- `guard` job が `stable`(version に `-` を含まない)と `mac-archive`(`relaypublisher-<version>-osx-arm64.zip`)を
+  output する。job は `if: needs.guard.outputs.stable == 'true'` で prerelease を skip する。
+- `push-packages` とは `needs` で繋がない。tap の失敗が NuGet feed への push を止めず、逆に feed push の失敗も
+  tap の更新を止めない。どちらも同じ reviewed 資産を使うため、片方だけ成功しても資産は食い違わない。
+- release の資産に `mac-archive` と `SHA256SUMS.txt` がそれぞれ**ちょうど 1 個**あることを確認してから、
+  正確な名前で download する。zip の実ハッシュを計算し、`SHA256SUMS.txt` の値と一致しなければ fail する。
+- formula は `tools/New-HomebrewFormula.ps1` で生成する。version / repository / sha256 の形式を検証し、
+  prerelease は拒否する。repository 名の検証は、値が Ruby の文字列リテラルを壊さないことも兼ねる。
+- tap への書き込みには `actions/create-github-app-token`(commit SHA 固定)で発行した token を使い、
+  `repositories: homebrew-tap` と `permission-contents: write` / `permission-pull-requests: write` に絞る。
+  `GITHUB_TOKEN` は他リポジトリに書けないうえ、`GITHUB_TOKEN` で作った pull request では tap 側の workflow が起動しない。
+- 冪等性: branch `relaypublisher-<version>` を tap の default branch から毎回作り直して force push する。
+  default branch の formula がすでにその version か、より新しい version を指していれば何もしない。これにより、
+  古い release の再実行や、新しい release の後に古い release を publish した場合にダウングレードの pull request を作らない。
+  同じ branch の open pull request があれば新規作成せず、branch の更新だけで終える。
+- この job は pull request をマージしない。tap の CI(`brew test-bot`、インストール後の `codesign --verify --strict`、
+  `relaypublisher --version`)が通った後に人がマージする。
+
 ### 必要な secrets (environment `release`)
 
 | 名前 | 用途 |
@@ -426,6 +450,8 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
 | `AZURE_ARTIFACTS_TENANT_ID` | tenant id |
 | `AZURE_ARTIFACTS_SUBSCRIPTION_ID` | subscription id |
 | `NUGET_USER` | Trusted Publishing policy に紐付く nuget.org profile username |
+| `HOMEBREW_TAP_APP_CLIENT_ID` | Homebrew tap に書き込む GitHub App の client ID |
+| `HOMEBREW_TAP_APP_PRIVATE_KEY` | 同 GitHub App の private key |
 
 `GITHUB_TOKEN` は自動供給される。Intune publish 用の `AZURE_CLIENT_ID` 等と名前空間を分けるため
 `AZURE_ARTIFACTS_` prefix を付けている。
@@ -435,12 +461,20 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
 - Azure Artifacts 側の事前セットアップ(managed identity 作成、federated credential 設定、
   Azure DevOps プロジェクトの Contributors への追加)は `doc/05-operation.md` §6 を参照する。
 - `release` environment は `release-draft.yml` の Azure Artifacts job と `release-publish.yml` の
-  nuget.org job で共用し、`NUGET_USER` と Azure Artifacts 用の 4 secrets を登録する。
+  nuget.org job / Homebrew tap job で共用し、`NUGET_USER`、Azure Artifacts 用の 4 secrets、
+  Homebrew tap 用の 2 secrets を登録する。
   Environment protection rules はこの移行では変更しない。
+- Homebrew tap 用の GitHub App は次の設定で作る。webhook は無効、Repository permissions は Contents: Read and write /
+  Pull requests: Read and write / Metadata: Read-only のみ。インストール先は `homebrew-tap` リポジトリだけに限定し、
+  生成した private key と App の client ID を上記 secrets に登録する。tap の default branch には ruleset(または
+  branch protection)で `test-bot` の check を必須にする。check 名は workflow 名(`brew test-bot`)ではなく job 名
+  (`test-bot`)なので、workflow 名を指定すると check が一致せず、tap の pull request がマージできなくなる。
 - NuGet の policy と workflow の値は一致させる。特に実ファイル名は `release-publish.yml` (hyphen) であり、
   `release_publish.yml` や `.github/workflows/release-publish.yml` は指定しない。
 - `NuGet/login` の一時 output は保存せず、push 後は再利用しない。最大 1 時間で失効するが、
   それまでの間も secret、artifact、ログへ保存しない。
-- single-file app には署名・notarization を行わない。macOS では Gatekeeper の警告が出る。
+- single-file app には Developer ID 署名・notarization を行わない(.NET SDK による ad-hoc 署名だけが付く)。
+  GitHub release から zip を直接取得した場合、macOS では
+  Gatekeeper の警告が出る。Homebrew formula 経由の導入では quarantine 属性が付かないため警告は出ない。
 
 ---

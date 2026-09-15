@@ -8,9 +8,10 @@ For a complete local terminal procedure, see [07-local-e2e.md](07-local-e2e.md).
 
 ## 0. Tool Installation and Version Control
 
-Relaypublisher is distributed as a NuGet global tool. nuget.org and GitHub Packages publish the
-official tag version, while Azure Artifacts carries per-build preview versions for internal testing,
-so pick the feed your environment can reach:
+Relaypublisher is distributed as a NuGet global tool and, for macOS on Apple silicon, also through a
+Homebrew tap (see below). nuget.org and GitHub Packages publish the official tag version, while Azure
+Artifacts carries per-build preview versions for internal testing, so pick the feed your environment
+can reach:
 
 | Feed | Intended consumer |
 | --- | --- |
@@ -69,7 +70,34 @@ dotnet tool install --global relaypublisher --add-source relaypublisher-ado --in
 `--interactive` triggers the sign-in prompt on first use. Later commands reuse the cached session
 token and do not need the flag.
 
-Update:
+Install with Homebrew (macOS on Apple silicon). The formula lives in a separate tap,
+`kkamegawa/homebrew-tap`, and installs the self-contained `osx-arm64` single-file app attached to each
+GitHub release, so no .NET SDK is needed. Homebrew 6.0 and later refuse to load a third-party tap until
+it is explicitly trusted, so add and trust the tap once first (`brew tap` itself has no `--trust`
+option):
+
+```bash
+brew tap kkamegawa/tap
+brew trust --tap kkamegawa/tap
+brew install relaypublisher
+```
+
+Upgrade, pin, and uninstall with the usual Homebrew commands (the same commands work in PowerShell 7):
+
+```bash
+brew upgrade relaypublisher
+brew pin relaypublisher
+brew uninstall relaypublisher
+```
+
+- Only Apple silicon is supported; the formula refuses to install on an Intel Mac. Use the NuGet
+  global tool on Intel Macs and on Linux.
+- Only stable releases reach the tap. Install a prerelease with `dotnet tool` instead.
+- The tap only carries the latest version. To roll back, use `dotnet tool` with `--version`.
+- Do not install both the Homebrew formula and the NuGet global tool: whichever comes first on `PATH`
+  wins. Check with `which relaypublisher`.
+
+Update the NuGet global tool:
 
 ```bash
 dotnet tool update --global relaypublisher
@@ -105,7 +133,12 @@ Release version policy:
   rerun publishes a new internal-test package instead of colliding with an earlier Azure Artifacts
   version. Operators should validate/install the preview version from Azure Artifacts and the
   official tag version from the draft release, GitHub Packages, or nuget.org.
-- The single-file apps are neither code-signed nor notarized. macOS shows a Gatekeeper warning.
+- Stable releases also open a pull request against the Homebrew tap. The new version reaches
+  `brew upgrade` once that pull request passes the tap's CI and is merged.
+- The single-file apps carry only the .NET SDK's ad-hoc signature; they are not signed with a
+  Developer ID and not notarized. A zip downloaded directly from the GitHub release triggers a
+  Gatekeeper warning on macOS; the Homebrew formula does not, because Homebrew does not quarantine
+  formula downloads.
 
 ## 1. Microsoft Entra App Registration
 

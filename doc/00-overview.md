@@ -123,7 +123,7 @@ repo/
 `.github/workflows/` 配下は **この repository 自身の CI/CD** であり、実際に動作する。
 `ci.yml` が pull request の build / test / 成果物生成、`release-draft.yml` が `v*` tag からの draft release
 作成と Azure Artifacts への内部テスト用 package push、`release-publish.yml` が draft release の手動 publish を
-トリガーとする GitHub Packages / nuget.org への push を行う。
+トリガーとする GitHub Packages / nuget.org への push と、stable release での Homebrew tap への formula 更新 PR 作成を行う。
 詳細は `doc/03-ci-github-actions.md` §11b / §12a を参照する。
 
 `workflows/` 配下は**利用者向けの参照用サンプル**であり、この repository では有効にならない。
@@ -464,7 +464,7 @@ Intune 系 Graph API は 429 が発生しやすい。すべての Graph 呼び�
 - 失敗時は `client-request-id` / `request-id` をログに出す。
 - Azure Storage への blob アップロード自体が SAS 認証で 403 を返した場合の回復(6.10、issue #150)は、この Graph 呼び出しの Retry-After 尊重とは別軸の仕組みである。対象は Graph API ではなく Azure Storage SDK が直接投げる `RequestFailedException` であり、待機・`renewUpload` による回復も `AzureStorageBlockBlobUploader` 内で完結する。
 
-### 6.17 配布形態(NuGet global tool)
+### 6.17 配布形態(NuGet global tool / Homebrew tap)
 
 本ツールの配布形態は **NuGet global tool** を正とする。
 
@@ -482,7 +482,19 @@ Intune 系 Graph API は 429 が発生しやすい。すべての Graph 呼び�
   workflow 名は underscore ではなく実ファイル名の hyphen を使う。
 - `NUGET_USER` は policy に紐付く nuget.org profile username を `release` environment secret として渡す。
   `NuGet/login` が返す一時的な API key は同じ job の `dotnet nuget push` にだけ渡し、保存・再利用しない。
-- macOS 向けの初期配布導線も `dotnet tool install --global relaypublisher` を標準とする(Homebrew tap は別トラックで検討)。
+- macOS(Apple silicon)向けには、NuGet global tool に加えて Homebrew tap からの配布を正式な経路とする(Issue #173)。
+  - tap は本リポジトリとは別の `kkamegawa/homebrew-tap` とし、利用者は `brew tap kkamegawa/tap` と
+    `brew trust --tap kkamegawa/tap` の後に `brew install relaypublisher` で導入する。homebrew-core / homebrew-cask には提出しない。
+  - formula が取得するのは GitHub Release に添付した `relaypublisher-<version>-osx-arm64.zip` だけとし、
+    Homebrew 用に別のバイナリはビルドしない。sha256 は同じ release の `SHA256SUMS.txt` から取る。
+  - Cask ではなく Formula とする。Homebrew は formula のダウンロードに quarantine 属性を付けないため、
+    Developer ID 署名・notarization のない(ad-hoc 署名だけの)single-file app でも Gatekeeper にブロックされない。
+  - 対象は `osx-arm64` のみとし、formula は `depends_on arch: :arm64` で Intel Mac を拒否する。Linux も対象外。
+  - Apple silicon は署名(ad-hoc 署名を含む)のない arm64 バイナリを実行しない。.NET 10 SDK は non-macOS host での single-file publish でも
+    ad-hoc 署名を付けるため、ビルドは ubuntu runner のまま変えず、署名の有効性は tap CI の `codesign --verify` で確認する。
+  - tap に配信するのは stable tag(version に `-` を含まない)だけとする。
+  - formula の更新は `release-publish.yml` が tap に作る pull request で行い、tap CI が通った後に人がマージする。
+    tap への書き込みには、tap リポジトリにだけインストールした GitHub App の token を使う。
 
 ### 6.18 テスト実行環境
 

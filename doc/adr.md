@@ -16,6 +16,7 @@
 
 | 日付 | エントリ | 領域 |
 |---|---|---|
+| 2026-09-15 | [Homebrew tap による macOS 配布 (Issue #173)](adr/ci-release.md#2026-09-15-homebrew-tap-による-macos-配布-issue-173) | ci-release |
 | 2026-09-10 | [Intune app 関連の Graph 呼び出しを beta に統一する (Issue #161)](adr/publishing.md#2026-09-10-intune-app-関連の-graph-呼び出しを-beta-に統一する-issue-161) | publishing |
 | 2026-09-06 | [manifest 作成スクリプトの Windows file detection 対応 (Issue #140)](adr/manifest-tooling.md#2026-09-06-manifest-作成スクリプトの-windows-file-detection-対応-issue-140) | manifest-tooling |
 | 2026-09-06 | [publish の SAS 認証 403 回復・result file 一本化・manifest エントリ単位の Graph セッション (Issue #150)](adr/publishing.md#2026-09-06-publish-の-sas-認証-403-回復・result-file-一本化・manifest-エントリ単位の-graph-セッション-issue-150) | publishing |

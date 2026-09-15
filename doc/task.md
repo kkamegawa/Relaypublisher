@@ -2,6 +2,73 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-09-15: Homebrew tap による macOS 配布
+
+**ブランチ**: `feature/173-homebrew-tap`
+
+**対応 Issue / PR**: [#173](https://github.com/kkamegawa/Relaypublisher/issues/173) / [#174](https://github.com/kkamegawa/Relaypublisher/pull/174)(Wiki: `plan/Relaypublisher/issue-173-homebrew-tap-distribution`)
+
+### 実施内容(承認済み plan に基づく)
+
+Apple silicon の macOS 向けに、別リポジトリ `kkamegawa/homebrew-tap` の Homebrew formula で配布する設計と実装を行った。
+決定事項と根拠は [adr/ci-release.md](adr/ci-release.md) の同日エントリに記録した。
+
+1. 設計を先に更新した。[00-overview.md](00-overview.md) §6.17 の見出しを「NuGet global tool / Homebrew tap」に変え、
+   tap の不変条件(別リポジトリ、Formula、arm64 のみ、stable のみ、PR 方式、GitHub App token)を追加した。
+   [03-ci-github-actions.md](03-ci-github-actions.md) §12a には `update-homebrew-tap` job の設計、secrets、GitHub App の準備、
+   Gatekeeper の注記を追加した。[issues/issue-173-homebrew-tap-distribution.md](issues/issue-173-homebrew-tap-distribution.md) を新設し、
+   issue-019 の対象外リストに参照先を追記した。
+2. `tools/New-HomebrewFormula.ps1` を追加した。`SHA256SUMS.txt` から osx-arm64 zip の行をちょうど 1 行選び、
+   prerelease・不正な repository 名・checksum 行の欠落/重複/不正を拒否して、BOM なし LF の formula を生成する。
+3. `tests/Tools/HomebrewFormula.Tests.ps1` を追加した(6 ケース)。
+4. `release-publish.yml` の `guard` に `stable` / `mac-archive` output を足し、`push-packages` と独立した
+   `update-homebrew-tap` job を追加した。あわせて `ci.yml` に上記テストの実行 step を追加した。`.github/workflows/` は
+   エージェントの書き込みが権限設定で拒否されるため、完成版ファイルを渡してユーザーが反映した。
+5. [05-operation.md](05-operation.md) / [05-operation_ja.md](05-operation_ja.md) §0、`README.md` / `README_ja.md` に
+   Homebrew での trust・install・upgrade・pin・uninstall と制約を追記した。
+6. tap リポジトリ `kkamegawa/homebrew-tap` に初回 commit(formula v1.1.1、`brew test-bot` workflow、README 日英、LICENSE、
+   SECURITY.md)を push した。
+7. GitHub App(tap リポジトリのみにインストール、Contents / Pull requests の read and write)をユーザーが作成し、
+   `HOMEBREW_TAP_APP_CLIENT_ID` / `HOMEBREW_TAP_APP_PRIVATE_KEY` を `release` environment に登録した。
+8. PR 作成後に main が Azure Artifacts の draft 先行配布(Issue #153 / #157)と Graph beta 統一(Issue #161)で進み、
+   README / README_ja / 03 / 05 / 05_ja / adr.md が衝突したため、main を merge して解消した(rebase・force push はしない)。
+   Azure Artifacts は `release-draft.yml`、GitHub Packages / nuget.org と Homebrew tap は `release-publish.yml` という
+   main 側の分担をそのまま採り、Homebrew の記述だけを追加する形にした。`release` environment は 3 系統の job で共用する。
+
+### 検証結果
+
+- main merge 後のツリーで:
+  - `pwsh -NoProfile -File tests/Tools/HomebrewFormula.Tests.ps1`: 6 ケース成功。
+  - `pwsh -NoProfile -File tests/Tools/YamlCreate.Tests.ps1`: 19 ケース成功。
+  - `dotnet build` / `dotnet test`(Release): 769 件成功。
+- v1.1.1 の `SHA256SUMS.txt` から formula を生成し、sha256 が release の osx-arm64 zip の値と一致することを確認した。
+- tap CI(`brew test-bot`、`macos-26`)が成功した。インストールした `relaypublisher` は `Mach-O 64-bit executable arm64` で、
+  `codesign --verify --strict` が `valid on disk` / `satisfies its Designated Requirement` を返し、
+  `--version` は `1.1.1+<commit>` を出力した。ubuntu で publish した osx-arm64 single-file の ad-hoc 署名が
+  Apple silicon で有効であることを確認できた。
+
+### レビュー対応(PR #174 の Copilot review)
+
+- `brew tap --trust` は存在しないオプションだった(Homebrew の `cmd/tap.rb` に `--trust` switch はなく、trust は
+  `cmd/trust.rb` の `brew trust --tap` という別コマンド)。README / README_ja / 00-overview / 05 / 05_ja / ADR(日英)/
+  issue-173 / tap の README(日英)/ Wiki の plan を `brew tap` → `brew trust --tap` → `brew install` の 3 手順に直した。
+- 「署名なし」と「.NET SDK が ad-hoc 署名する」が矛盾して読める記述を、「ad-hoc 署名のみで、Developer ID 署名・
+  notarization はない」に統一した。
+- 古い release の再実行や、新しい release の後に古い release を publish した場合に tap へダウングレードの PR を作る
+  問題を、`update-homebrew-tap` job で tap の default branch が同じか新しい version を固定していれば何もしないように直した。
+  03(日英)と issue-173 の冪等性の記述もあわせて更新した。
+
+- ダウングレード対策を入れた `release-publish.yml` は、エージェントが `.github/` に書けないためユーザーが反映した。
+  最初に渡したファイルは main merge 前の版を基にしており、main で `release-draft.yml` に移した Azure Artifacts の
+  push step を復活させていたため、HEAD を基に作り直した。HEAD との差分がダウングレード対策と PR 本文の
+  check 名だけ(+14/-1)で、Azure Artifacts の step を含まないことを確認してから commit した。
+- tap の ruleset の必須チェックが workflow 名の `brew test-bot` になっており、実際の check 名(job 名の `test-bot`)と
+  一致せず tap の PR がマージできない状態だったため、ユーザーが `test-bot` に直した(GitHub Actions の check として登録)。
+
+### 未完了事項
+
+- `update-homebrew-tap` job による tap への PR 自動作成(GitHub App token の発行を含む)は、次の stable release で確認する。
+
 ## 2026-09-06: manifest 作成スクリプトを Windows file detection に追従させる
 
 **ブランチ**: `feature/yamlcreate-manifest-tool`

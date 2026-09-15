@@ -6,6 +6,34 @@
 仕様を変更する必要がある場合は、必ず該当領域のファイルを確認し、変更理由が以前の修正と矛盾しないか確認してください。
 矛盾する可能性がある場合はユーザーに承認を求めます。
 
+## 2026-09-15: Homebrew tap による macOS 配布 (Issue #173)
+
+- **決定**: macOS(Apple silicon)向けに、本リポジトリとは別の tap リポジトリ `kkamegawa/homebrew-tap` から
+  Homebrew formula で配布する。formula は GitHub Release の `relaypublisher-<version>-osx-arm64.zip` を取得し、
+  Homebrew 用に別のバイナリはビルドしない。
+  - **理由**: バイナリの正本を GitHub Release に一本化したまま `brew install` / `brew upgrade` を提供するため。
+    tap を本リポジトリに同居させると、利用者が tap の URL を明示する必要があるうえ、release 後に formula 更新の
+    commit を main に入れる必要が生じ、tag と main を軸にした release gate と噛み合わない。
+- **決定**: Cask ではなく Formula を使う。
+  - **理由**: Homebrew は cask のダウンロードにだけ quarantine 属性を付け、Homebrew 5.0 で `--no-quarantine` を廃止した。
+    Developer ID 署名・notarization のない(ad-hoc 署名だけの)single-file app は cask だと Gatekeeper にブロックされるが、
+    formula なら属性が付かない。
+- **決定**: 対象は `osx-arm64` のみとし、Intel Mac は `depends_on arch: :arm64` で拒否する。Linux も対象外とする。
+  - **理由**: release は `osx-arm64` しか作っておらず、Homebrew 7.0 で Intel macOS は Tier 3 に下がった(2027-09 にサポート終了)。
+- **決定**: `release-draft.yml` の ubuntu runner でのビルドは変えない。
+  - **理由**: .NET 10 SDK は non-macOS host の single-file publish でも managed signer で ad-hoc 署名する
+    (dotnet/runtime PR #110417)。Apple silicon が要求する署名はこれで満たされる。
+  - **今後の注意**: .NET SDK を更新したら、tap CI の `codesign --verify --strict` が通ることを必ず確認する。
+- **決定**: tap に配信するのは stable release だけとし、formula は `release-publish.yml` の `update-homebrew-tap` job が
+  作る pull request で更新する。tap CI 通過後に人がマージする。書き込みには tap にだけインストールした GitHub App の token を使う。
+  - **理由**: 壊れた formula が利用者へ即座に届くのを防ぐため。GitHub App は PAT と違って有効期限の管理が要らず、
+    `GITHUB_TOKEN` と違って他リポジトリに書け、作った pull request で tap の CI が起動する。
+  - **影響**: `release` environment に `HOMEBREW_TAP_APP_CLIENT_ID` / `HOMEBREW_TAP_APP_PRIVATE_KEY` が必要。
+    tap の job は `push-packages` と独立しており、どちらの失敗も他方を止めない。
+- **今後の注意**: Homebrew 6.0 の tap trust により、利用者は install の前に `brew tap kkamegawa/tap` と
+  `brew trust --tap kkamegawa/tap` を実行する必要がある(`brew tap` に `--trust` オプションはない)。
+  Homebrew 7.0 で第三者 tap の `post_install` が非推奨になったため、formula に `post_install` を追加しない。
+
 ## 2026-08-30: nuget.org Trusted Publishing (OIDC) への移行 (Issue #131)
 
 - **決定**: `nuget.org` への自動 publish は GitHub Actions の `.github/workflows/release-publish.yml` に一本化し、
