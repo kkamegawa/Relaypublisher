@@ -259,6 +259,19 @@ jobs:
 
           # Rebuild the branch from the default branch on every run so a rerun is idempotent.
           git switch -C "$BRANCH" "origin/${DEFAULT_BRANCH}"
+
+          # Never move the tap backwards: rerunning an older release, or publishing an older release
+          # after a newer one, must not open a downgrade pull request.
+          CURRENT=""
+          if [ -f Formula/relaypublisher.rb ]; then
+            CURRENT="$(sed -nE 's#.*/releases/download/v([0-9]+\.[0-9]+\.[0-9]+)/.*#\1#p' Formula/relaypublisher.rb | head -n 1)"
+          fi
+          if [ -n "$CURRENT" ] && [ "$CURRENT" != "$VERSION" ] \
+            && [ "$(printf '%s\n%s\n' "$CURRENT" "$VERSION" | sort -V | tail -n 1)" = "$CURRENT" ]; then
+            echo "Formula/relaypublisher.rb on ${DEFAULT_BRANCH} already pins ${CURRENT}, newer than ${VERSION}; nothing to do."
+            exit 0
+          fi
+
           mkdir -p Formula
           cp ../artifacts/homebrew/relaypublisher.rb Formula/relaypublisher.rb
           git add Formula/relaypublisher.rb
@@ -278,5 +291,5 @@ jobs:
           else
             gh pr create --repo "$TAP_REPOSITORY" --base "$DEFAULT_BRANCH" --head "$BRANCH" \
               --title "relaypublisher ${VERSION}" \
-              --body "Updates the formula to ${GITHUB_REPOSITORY} release ${TAG_NAME} (${MAC_ARCHIVE}). Opened by the release-publish workflow; merge after the brew test-bot check passes."
+              --body "Updates the formula to ${GITHUB_REPOSITORY} release ${TAG_NAME} (${MAC_ARCHIVE}). Opened by the release-publish workflow; merge after the test-bot check passes."
           fi

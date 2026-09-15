@@ -58,11 +58,15 @@ Apple silicon の macOS 向けに、別リポジトリ `kkamegawa/homebrew-tap` 
   問題を、`update-homebrew-tap` job で tap の default branch が同じか新しい version を固定していれば何もしないように直した。
   03(日英)と issue-173 の冪等性の記述もあわせて更新した。
 
+- ダウングレード対策を入れた `release-publish.yml` は、エージェントが `.github/` に書けないためユーザーが反映した。
+  最初に渡したファイルは main merge 前の版を基にしており、main で `release-draft.yml` に移した Azure Artifacts の
+  push step を復活させていたため、HEAD を基に作り直した。HEAD との差分がダウングレード対策と PR 本文の
+  check 名だけ(+14/-1)で、Azure Artifacts の step を含まないことを確認してから commit した。
+- tap の ruleset の必須チェックが workflow 名の `brew test-bot` になっており、実際の check 名(job 名の `test-bot`)と
+  一致せず tap の PR がマージできない状態だったため、ユーザーが `test-bot` に直した(GitHub Actions の check として登録)。
+
 ### 未完了事項
 
-- 上記ダウングレード対策を入れた `release-publish.yml` はエージェントが `.github/` に書けないため、ユーザーが反映する。
-- tap の default branch の ruleset で、必須チェックを `brew test-bot` から `test-bot` に直す(リポジトリ所有者)。
-  `brew test-bot` は workflow 名で、実際の check 名は job 名の `test-bot` のため、このままでは tap の PR がマージできない。
 - `update-homebrew-tap` job による tap への PR 自動作成(GitHub App token の発行を含む)は、次の stable release で確認する。
 
 ## 2026-09-06: manifest 作成スクリプトを Windows file detection に追従させる
