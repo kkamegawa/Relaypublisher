@@ -12,8 +12,9 @@ Distribution:
 - Homebrew tap for macOS on Apple silicon: `kkamegawa/homebrew-tap`. The formula installs the
   `osx-arm64` single-file app from the GitHub release; stable releases only.
 - Self-contained single-file apps for `win-x64`, `win-arm64`, and `osx-arm64` are attached to each
-  GitHub release. They are neither code-signed nor notarized, so macOS shows a Gatekeeper warning
-  when the zip is downloaded directly. Installing through Homebrew avoids it.
+  GitHub release. They carry only the .NET SDK's ad-hoc signature (no Developer ID signature, no
+  notarization), so macOS shows a Gatekeeper warning when the zip is downloaded directly. Installing
+  through Homebrew avoids it.
 
 Quick install:
 
@@ -24,7 +25,8 @@ dotnet tool install --global relaypublisher
 On macOS (Apple silicon), Homebrew works too:
 
 ```bash
-brew tap --trust kkamegawa/tap
+brew tap kkamegawa/tap
+brew trust --tap kkamegawa/tap
 brew install relaypublisher
 ```
 

@@ -71,10 +71,12 @@ dotnet tool install --global relaypublisher --add-source relaypublisher-ado --in
 
 Homebrew での install(Apple silicon の macOS)。formula は別リポジトリの tap `kkamegawa/homebrew-tap` にあり、
 各 GitHub release に添付した `osx-arm64` の self-contained single-file app をインストールするため、.NET SDK は不要です。
-Homebrew 6.0 以降は明示的に trust していない第三者 tap を読み込まないため、最初に一度 trust します:
+Homebrew 6.0 以降は明示的に trust していない第三者 tap を読み込まないため、最初に一度 tap を追加して trust します
+(`brew tap` 自体に `--trust` オプションはありません):
 
 ```bash
-brew tap --trust kkamegawa/tap
+brew tap kkamegawa/tap
+brew trust --tap kkamegawa/tap
 brew install relaypublisher
 ```
 
@@ -130,8 +132,8 @@ dotnet tool list --global | grep relaypublisher
   検証・install 対象にしてください。
 - stable release では Homebrew tap にも pull request が作られます。その pull request が tap の CI を通って
   マージされた時点で、新しい version が `brew upgrade` に届きます。
-- single-file app には署名・notarization を行っていません。GitHub release から zip を直接取得すると macOS では
-  Gatekeeper の警告が出ます。Homebrew は formula のダウンロードに quarantine 属性を付けないため、Homebrew 経由では出ません。
+- single-file app には .NET SDK による ad-hoc 署名だけが付いており、Developer ID 署名・notarization は行っていません。
+  GitHub release から zip を直接取得すると macOS では Gatekeeper の警告が出ます。Homebrew は formula のダウンロードに quarantine 属性を付けないため、Homebrew 経由では出ません。
 
 ## 1. Microsoft Entra app registration
 

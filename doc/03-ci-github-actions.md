@@ -435,8 +435,9 @@ stable release では、`release-publish.yml` の `update-homebrew-tap` job が 
   `repositories: homebrew-tap` と `permission-contents: write` / `permission-pull-requests: write` に絞る。
   `GITHUB_TOKEN` は他リポジトリに書けないうえ、`GITHUB_TOKEN` で作った pull request では tap 側の workflow が起動しない。
 - 冪等性: branch `relaypublisher-<version>` を tap の default branch から毎回作り直して force push する。
-  default branch の formula がすでにその version を指していれば何もしない。同じ branch の open pull request が
-  あれば新規作成せず、branch の更新だけで終える。
+  default branch の formula がすでにその version か、より新しい version を指していれば何もしない。これにより、
+  古い release の再実行や、新しい release の後に古い release を publish した場合にダウングレードの pull request を作らない。
+  同じ branch の open pull request があれば新規作成せず、branch の更新だけで終える。
 - この job は pull request をマージしない。tap の CI(`brew test-bot`、インストール後の `codesign --verify --strict`、
   `relaypublisher --version`)が通った後に人がマージする。
 
@@ -471,7 +472,8 @@ stable release では、`release-publish.yml` の `update-homebrew-tap` job が 
   `release_publish.yml` や `.github/workflows/release-publish.yml` は指定しない。
 - `NuGet/login` の一時 output は保存せず、push 後は再利用しない。最大 1 時間で失効するが、
   それまでの間も secret、artifact、ログへ保存しない。
-- single-file app には署名・notarization を行わない。GitHub release から zip を直接取得した場合、macOS では
+- single-file app には Developer ID 署名・notarization を行わない(.NET SDK による ad-hoc 署名だけが付く)。
+  GitHub release から zip を直接取得した場合、macOS では
   Gatekeeper の警告が出る。Homebrew formula 経由の導入では quarantine 属性が付かないため警告は出ない。
 
 ---

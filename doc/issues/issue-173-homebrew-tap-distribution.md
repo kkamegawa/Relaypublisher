@@ -10,8 +10,8 @@ homebrew-cask. The formula installs the `relaypublisher-<version>-osx-arm64.zip`
 reasoning.
 
 - A Formula, not a Cask: Homebrew does not quarantine formula downloads, while cask downloads are
-  quarantined and Homebrew 5.0 removed `--no-quarantine`. The single-file app is neither code-signed nor
-  notarized.
+  quarantined and Homebrew 5.0 removed `--no-quarantine`. The single-file app carries only the .NET
+  SDK's ad-hoc signature; it is not signed with a Developer ID and not notarized.
 - Apple silicon only (`depends_on arch: :arm64`). Intel macOS dropped to Homebrew Tier 3 in 7.0.
 - The .NET 10 SDK ad-hoc signs osx-arm64 single-file bundles on non-macOS hosts, so the ubuntu build is
   unchanged; the tap CI verifies the signature.
@@ -42,10 +42,11 @@ reasoning.
 - The tap CI installs the formula on an Apple silicon runner, `codesign --verify --strict` passes, and
   `relaypublisher --version` prints the release version.
 - Publishing a stable release opens a pull request against the tap; publishing a prerelease skips the
-  job. Rerunning the job does not open a second pull request.
-- On an Apple silicon Mac, `brew tap --trust kkamegawa/tap && brew install relaypublisher` installs a
-  working CLI, and `brew upgrade relaypublisher` picks up the next release after its tap pull request is
-  merged.
+  job. Rerunning the job does not open a second pull request, and a release older than the version the
+  tap already pins opens no downgrade pull request.
+- On an Apple silicon Mac, `brew tap kkamegawa/tap`, `brew trust --tap kkamegawa/tap`, and
+  `brew install relaypublisher` install a working CLI, and `brew upgrade relaypublisher` picks up the
+  next release after its tap pull request is merged.
 
 ## Manual setup
 

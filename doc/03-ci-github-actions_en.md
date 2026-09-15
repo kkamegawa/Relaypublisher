@@ -69,8 +69,10 @@ against the Homebrew tap (`kkamegawa/homebrew-tap`) that updates the formula. Se
   `permission-pull-requests: write`. `GITHUB_TOKEN` cannot write to another repository, and pull
   requests opened with it do not trigger the tap's workflows.
 - Idempotency: it rebuilds branch `relaypublisher-<version>` from the tap's default branch on every
-  run and force pushes it. If the default branch already pins the version, it does nothing. If an
-  open pull request for the branch exists, it only updates the branch.
+  run and force pushes it. If the default branch already pins that version or a newer one, it does
+  nothing, so rerunning an older release, or publishing an older release after a newer one, never
+  opens a downgrade pull request. If an open pull request for the branch exists, it only updates the
+  branch.
 - The job never merges the pull request. A person merges it after the tap CI (`brew test-bot`,
   `codesign --verify --strict` on the installed binary, and `relaypublisher --version`) passes.
 
@@ -80,6 +82,7 @@ repository permissions: Contents read and write, Pull requests read and write, a
 read-only. Install it only on the `homebrew-tap` repository, and protect the tap's default branch so
 the `brew test-bot` check is required.
 
-The single-file apps are neither code-signed nor notarized. A zip downloaded directly from the GitHub
+The single-file apps carry only the .NET SDK's ad-hoc signature; they are not signed with a Developer
+ID and not notarized. A zip downloaded directly from the GitHub
 release triggers a Gatekeeper warning on macOS; installing through the Homebrew formula does not,
 because Homebrew does not quarantine formula downloads.

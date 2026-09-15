@@ -16,7 +16,8 @@
     commit を main に入れる必要が生じ、tag と main を軸にした release gate と噛み合わない。
 - **決定**: Cask ではなく Formula を使う。
   - **理由**: Homebrew は cask のダウンロードにだけ quarantine 属性を付け、Homebrew 5.0 で `--no-quarantine` を廃止した。
-    署名・notarization のない single-file app は cask だと Gatekeeper にブロックされるが、formula なら属性が付かない。
+    Developer ID 署名・notarization のない(ad-hoc 署名だけの)single-file app は cask だと Gatekeeper にブロックされるが、
+    formula なら属性が付かない。
 - **決定**: 対象は `osx-arm64` のみとし、Intel Mac は `depends_on arch: :arm64` で拒否する。Linux も対象外とする。
   - **理由**: release は `osx-arm64` しか作っておらず、Homebrew 7.0 で Intel macOS は Tier 3 に下がった(2027-09 にサポート終了)。
 - **決定**: `release-draft.yml` の ubuntu runner でのビルドは変えない。
@@ -29,7 +30,8 @@
     `GITHUB_TOKEN` と違って他リポジトリに書け、作った pull request で tap の CI が起動する。
   - **影響**: `release` environment に `HOMEBREW_TAP_APP_CLIENT_ID` / `HOMEBREW_TAP_APP_PRIVATE_KEY` が必要。
     tap の job は `push-packages` と独立しており、どちらの失敗も他方を止めない。
-- **今後の注意**: Homebrew 6.0 の tap trust により、利用者は最初に `brew tap --trust kkamegawa/tap` が必要。
+- **今後の注意**: Homebrew 6.0 の tap trust により、利用者は install の前に `brew tap kkamegawa/tap` と
+  `brew trust --tap kkamegawa/tap` を実行する必要がある(`brew tap` に `--trust` オプションはない)。
   Homebrew 7.0 で第三者 tap の `post_install` が非推奨になったため、formula に `post_install` を追加しない。
 
 ## 2026-08-30: nuget.org Trusted Publishing (OIDC) への移行 (Issue #131)

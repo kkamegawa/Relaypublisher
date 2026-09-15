@@ -47,8 +47,20 @@ Apple silicon の macOS 向けに、別リポジトリ `kkamegawa/homebrew-tap` 
   `--version` は `1.1.1+<commit>` を出力した。ubuntu で publish した osx-arm64 single-file の ad-hoc 署名が
   Apple silicon で有効であることを確認できた。
 
+### レビュー対応(PR #174 の Copilot review)
+
+- `brew tap --trust` は存在しないオプションだった(Homebrew の `cmd/tap.rb` に `--trust` switch はなく、trust は
+  `cmd/trust.rb` の `brew trust --tap` という別コマンド)。README / README_ja / 00-overview / 05 / 05_ja / ADR(日英)/
+  issue-173 / tap の README(日英)/ Wiki の plan を `brew tap` → `brew trust --tap` → `brew install` の 3 手順に直した。
+- 「署名なし」と「.NET SDK が ad-hoc 署名する」が矛盾して読める記述を、「ad-hoc 署名のみで、Developer ID 署名・
+  notarization はない」に統一した。
+- 古い release の再実行や、新しい release の後に古い release を publish した場合に tap へダウングレードの PR を作る
+  問題を、`update-homebrew-tap` job で tap の default branch が同じか新しい version を固定していれば何もしないように直した。
+  03(日英)と issue-173 の冪等性の記述もあわせて更新した。
+
 ### 未完了事項
 
+- 上記ダウングレード対策を入れた `release-publish.yml` はエージェントが `.github/` に書けないため、ユーザーが反映する。
 - tap の default branch に、`brew test-bot` の check を必須にする branch protection を設定する(リポジトリ所有者)。
 - `update-homebrew-tap` job による tap への PR 自動作成(GitHub App token の発行を含む)は、次の stable release で確認する。
 

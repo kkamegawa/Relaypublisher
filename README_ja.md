@@ -11,8 +11,8 @@ Relaypublisher は、winget 風の YAML manifest を CI から Microsoft Intune 
 - Apple silicon の macOS 向け Homebrew tap: `kkamegawa/homebrew-tap`。formula は GitHub release の
   `osx-arm64` single-file app をインストールします(stable release のみ)。
 - `win-x64` / `win-arm64` / `osx-arm64` の self-contained single-file app を各 GitHub release に添付します。
-  署名・notarization は行っていないため、zip を直接取得すると macOS では Gatekeeper の警告が出ます。
-  Homebrew 経由なら警告は出ません。
+  .NET SDK による ad-hoc 署名だけで、Developer ID 署名・notarization は行っていないため、zip を直接取得すると
+  macOS では Gatekeeper の警告が出ます。Homebrew 経由なら警告は出ません。
 
 Install:
 
@@ -23,7 +23,8 @@ dotnet tool install --global relaypublisher
 Apple silicon の macOS では Homebrew も使えます:
 
 ```bash
-brew tap --trust kkamegawa/tap
+brew tap kkamegawa/tap
+brew trust --tap kkamegawa/tap
 brew install relaypublisher
 ```
 

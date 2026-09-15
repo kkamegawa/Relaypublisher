@@ -15,8 +15,8 @@ This is the English counterpart for the release-distribution decision recorded i
     tag- and main-based release gate.
 - **Decision**: Use a Formula, not a Cask.
   - **Reason**: Homebrew quarantines only cask downloads, and Homebrew 5.0 removed
-    `--no-quarantine`. The single-file app is neither code-signed nor notarized, so Gatekeeper blocks
-    it as a cask but not as a formula.
+    `--no-quarantine`. The single-file app carries only an ad-hoc signature (no Developer ID signature,
+    no notarization), so Gatekeeper blocks it as a cask but not as a formula.
 - **Decision**: Support `osx-arm64` only; reject Intel Macs with `depends_on arch: :arm64`. Linux is
   out of scope.
   - **Reason**: Releases only ship `osx-arm64`, and Homebrew 7.0 moved Intel macOS to Tier 3 (support
@@ -36,7 +36,8 @@ This is the English counterpart for the release-distribution decision recorded i
   - **Impact**: The `release` environment needs `HOMEBREW_TAP_APP_CLIENT_ID` and
     `HOMEBREW_TAP_APP_PRIVATE_KEY`. The tap job is independent of `push-packages`, so neither
     failure blocks the other.
-- **Follow-up**: Homebrew 6.0 tap trust means users must run `brew tap --trust kkamegawa/tap` first.
+- **Follow-up**: Homebrew 6.0 tap trust means users must run `brew tap kkamegawa/tap` and then
+  `brew trust --tap kkamegawa/tap` before installing (`brew tap` has no `--trust` option).
   Homebrew 7.0 deprecated `post_install` in third-party taps, so do not add `post_install` to the
   formula.
 

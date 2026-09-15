@@ -73,10 +73,12 @@ token and do not need the flag.
 Install with Homebrew (macOS on Apple silicon). The formula lives in a separate tap,
 `kkamegawa/homebrew-tap`, and installs the self-contained `osx-arm64` single-file app attached to each
 GitHub release, so no .NET SDK is needed. Homebrew 6.0 and later refuse to load a third-party tap until
-it is explicitly trusted, so trust it once first:
+it is explicitly trusted, so add and trust the tap once first (`brew tap` itself has no `--trust`
+option):
 
 ```bash
-brew tap --trust kkamegawa/tap
+brew tap kkamegawa/tap
+brew trust --tap kkamegawa/tap
 brew install relaypublisher
 ```
 
@@ -133,9 +135,10 @@ Release version policy:
   official tag version from the draft release, GitHub Packages, or nuget.org.
 - Stable releases also open a pull request against the Homebrew tap. The new version reaches
   `brew upgrade` once that pull request passes the tap's CI and is merged.
-- The single-file apps are neither code-signed nor notarized. A zip downloaded directly from the
-  GitHub release triggers a Gatekeeper warning on macOS; the Homebrew formula does not, because
-  Homebrew does not quarantine formula downloads.
+- The single-file apps carry only the .NET SDK's ad-hoc signature; they are not signed with a
+  Developer ID and not notarized. A zip downloaded directly from the GitHub release triggers a
+  Gatekeeper warning on macOS; the Homebrew formula does not, because Homebrew does not quarantine
+  formula downloads.
 
 ## 1. Microsoft Entra App Registration
 
