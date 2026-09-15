@@ -23,6 +23,7 @@
   | `actions/download-artifact` | v7.0.0 | `37930b1c2abaa49bbe596cd826c3c89aef350131` |
   | `azure/login` | v3.0.2 | `7ddb5af1ef8758cf1353cf3b42f940aee27ba21c` |
   | `NuGet/login` | v1.2.0 | `8d196754b4036150537f80ac539e15c2f1028841` |
+  | `actions/create-github-app-token` | v3.2.0 | `bcd2ba49218906704ab6c1aa796996da409d3eb1` |
 
 - **`actions/checkout` は必ず `persist-credentials: false` を指定する。** 既定の `true` は job token を
   `.git/config` に書き込むため、その後に走る `dotnet build` / `dotnet pack` / `dotnet publish`
