@@ -2,6 +2,14 @@
 
 Relaypublisher は、winget 風の YAML manifest を CI から Microsoft Intune の LOB アプリとして公開するためのプロジェクトです。
 
+---
+
+## スクリーンショット
+
+![YAML manifest、GitHub Actions の実行結果、Microsoft Intune 管理センターに反映されたアプリ](media/screenshot-workflow.webp)
+
+---
+
 配布形態:
 
 - NuGet global tool package id: `relaypublisher`
