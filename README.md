@@ -2,6 +2,14 @@
 
 Relaypublisher publishes winget-like YAML manifests as Microsoft Intune LOB apps from CI.
 
+---
+
+## Screenshot
+
+![YAML manifest, GitHub Actions run, and the resulting app in Microsoft Intune admin center](media/screenshot-workflow.webp)
+
+---
+
 Distribution:
 
 - NuGet global tool package id: `relaypublisher`
