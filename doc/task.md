@@ -2,6 +2,23 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-09-30: 引数なし起動で終了コード 0 を返す(winget 検証対応)
+
+**ブランチ**: `claude/keen-meitner-3otjwg`
+
+**対応 Issue**: [#177](https://github.com/kkamegawa/Relaypublisher/issues/177)(v1.1.2 で修正)
+
+### 実施内容
+
+winget-pkgs のインストール検証は、インストール後の `relaypublisher.exe` を引数なしで起動し、0 以外の終了コードを失敗とみなす。
+root command に action が無かったため、System.CommandLine 2.0 が `Required command was not provided.` で終了コード 1 を返していた。
+同じログの `wminet_utils.dll` 例外は検証ツール自身の子プロセス後始末で発生したもので、本アプリ由来ではない。
+
+1. `src/IntuneLobPublisher.Cli/Commands/RootCommandFactory.cs` を追加し、root command の組み立てを `Program.cs` から移した。
+   root command に「help を表示して `ExitCodes.Success` を返す」action を設定した。
+2. `tests/IntuneLobPublisher.Core.Tests/Cli/RootCommandFactoryTests.cs` を追加した(引数なし・`--help`・未知の subcommand・subcommand 実行の 4 ケース)。
+3. Wiki は更新しない。winget-pkgs の manifest は v1.1.2 リリース後に更新する。
+
 ## 2026-09-15: Homebrew tap による macOS 配布
 
 **ブランチ**: `feature/173-homebrew-tap`
