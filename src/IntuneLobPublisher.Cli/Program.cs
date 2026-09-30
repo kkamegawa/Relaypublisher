@@ -1,4 +1,3 @@
-using System.CommandLine;
 using IntuneLobPublisher.Cli.Commands;
 using IntuneLobPublisher.Core.Manifests;
 using IntuneLobPublisher.Core.Packaging;
@@ -43,10 +42,12 @@ services.AddSingleton<PlanService>();
 
 await using var serviceProvider = services.BuildServiceProvider();
 
-var rootCommand = new RootCommand("Publishes winget-like YAML manifests as Microsoft Intune LOB apps.");
-rootCommand.Subcommands.Add(ValidateCommand.Create(serviceProvider));
-rootCommand.Subcommands.Add(PackageCommand.Create(serviceProvider));
-rootCommand.Subcommands.Add(PlanCommand.Create(serviceProvider));
-rootCommand.Subcommands.Add(PublishCommand.Create(serviceProvider));
+var rootCommand = RootCommandFactory.Create(
+[
+    ValidateCommand.Create(serviceProvider),
+    PackageCommand.Create(serviceProvider),
+    PlanCommand.Create(serviceProvider),
+    PublishCommand.Create(serviceProvider),
+]);
 
 return await rootCommand.Parse(args).InvokeAsync();
