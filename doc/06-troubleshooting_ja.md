@@ -48,7 +48,7 @@ Management metadata または DisplayName fallback のどちらかで複数 app 
 
 ## 1a. Management metadata が notes の上限を超えた
 
-Relaypublisher は `notes` に書く management metadata JSON の上限を 10,000 文字にしています。Intune admin center で truncate されうる metadata を書き込まず、publish を早い段階で fail させるためです。Size は Graph への write より前に check され、`--dry-run` でも同じです。Publish entry ごとに次の log が出ます。Check に失敗した entry でも出ます。
+Relaypublisher は `notes` に書く management metadata JSON の上限を 10,000 文字にしています。Intune admin center で truncate されうる metadata を書き込まず、publish を早い段階で fail させるためです。Size は Graph への write より前に check され、`--dry-run` でも同じです。この check に到達した entry では、check に失敗した場合も含めて次の size log が出ます。未対応 platform または downgrade により skip された entry は、この check に到達しないため size log は出ません。
 
 ```text
 Management metadata for <package-identifier> <platform>-<architecture> is <length>/10000 characters (<remaining> remaining)

@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Globalization;
 using IntuneLobPublisher.Cli.Commands;
 
 namespace IntuneLobPublisher.Core.Tests.Cli;
@@ -27,23 +28,45 @@ public sealed class RootCommandFactoryTests
         return (exitCode, output.ToString(), error.ToString());
     }
 
-    [TestMethod]
-    public void Invoke_NoArguments_ShowsHelpAndReturnsSuccess()
+    private static (int ExitCode, string Output, string Error) InvokeWithCulture(
+        string cultureName, params string[] args)
     {
-        var (exitCode, output, _) = Invoke();
-
-        Assert.AreEqual(ExitCodes.Success, exitCode);
-        Assert.Contains("Usage:", output);
-        Assert.Contains("validate", output);
+        var originalCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(cultureName);
+            return Invoke(args);
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = originalCulture;
+        }
     }
 
     [TestMethod]
-    public void Invoke_HelpOption_ReturnsSuccess()
+    [DataRow("en-US")]
+    [DataRow("ja-JP")]
+    public void Invoke_NoArguments_ShowsHelpAndReturnsSuccess(string cultureName)
     {
-        var (exitCode, output, _) = Invoke("--help");
+        var (exitCode, output, error) = InvokeWithCulture(cultureName);
 
         Assert.AreEqual(ExitCodes.Success, exitCode);
-        Assert.Contains("Usage:", output);
+        Assert.Contains("--help", output);
+        Assert.Contains("validate", output);
+        Assert.AreEqual(string.Empty, error);
+    }
+
+    [TestMethod]
+    [DataRow("en-US")]
+    [DataRow("ja-JP")]
+    public void Invoke_HelpOption_ReturnsSuccess(string cultureName)
+    {
+        var (exitCode, output, error) = InvokeWithCulture(cultureName, "--help");
+
+        Assert.AreEqual(ExitCodes.Success, exitCode);
+        Assert.Contains("--help", output);
+        Assert.Contains("validate", output);
+        Assert.AreEqual(string.Empty, error);
     }
 
     [TestMethod]
@@ -55,11 +78,14 @@ public sealed class RootCommandFactoryTests
     }
 
     [TestMethod]
-    public void Invoke_Subcommand_RunsSubcommandAction()
+    [DataRow("en-US")]
+    [DataRow("ja-JP")]
+    public void Invoke_Subcommand_RunsSubcommandAction(string cultureName)
     {
-        var (exitCode, output, _) = Invoke("validate");
+        var (exitCode, output, error) = InvokeWithCulture(cultureName, "validate");
 
         Assert.AreEqual(ExitCodes.Success, exitCode);
-        Assert.DoesNotContain("Usage:", output);
+        Assert.AreEqual(string.Empty, output);
+        Assert.AreEqual(string.Empty, error);
     }
 }

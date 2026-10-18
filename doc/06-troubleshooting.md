@@ -48,7 +48,7 @@ If multiple apps match either management metadata or DisplayName fallback, publi
 
 ## 1a. Management Metadata Exceeds the Notes Limit
 
-Relaypublisher caps the management metadata JSON written to `notes` at 10,000 characters, so a publish fails early rather than writing metadata the Intune admin center might truncate. The size is checked before any Graph write, in `--dry-run` as well, and every publish entry logs it, including an entry that fails the check:
+Relaypublisher caps the management metadata JSON written to `notes` at 10,000 characters, so a publish fails early rather than writing metadata the Intune admin center might truncate. The size is checked before any Graph write, in `--dry-run` as well. Every entry that reaches this check logs its metadata size as shown below, including an entry that fails it. Entries skipped because their platform is unsupported or their version is a downgrade do not reach this check and produce no size log:
 
 ```text
 Management metadata for <package-identifier> <platform>-<architecture> is <length>/10000 characters (<remaining> remaining)
