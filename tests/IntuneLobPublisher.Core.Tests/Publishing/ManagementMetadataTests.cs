@@ -57,6 +57,48 @@ public sealed class ManagementMetadataTests
     }
 
     [TestMethod]
+    public void Serialize_JsonExactlyAtNotesLimit_Succeeds()
+    {
+        var baseLength = CreateSample().Serialize().Length;
+        var sample = CreateSample();
+        var atLimit = WithManifestPath(sample, sample.ManifestPath + new string('a', ManagementMetadata.NotesMaxLength - baseLength));
+
+        Assert.AreEqual(ManagementMetadata.NotesMaxLength, atLimit.Serialize().Length);
+    }
+
+    [TestMethod]
+    public void Serialize_JsonOneOverNotesLimit_ReportsLengthsAndGuidance()
+    {
+        var baseLength = CreateSample().Serialize().Length;
+        var sample = CreateSample();
+        var manifestPath = sample.ManifestPath + new string('a', ManagementMetadata.NotesMaxLength - baseLength + 1);
+        var overLimit = WithManifestPath(sample, manifestPath);
+
+        var exception = Assert.ThrowsExactly<ManagementMetadataTooLargeException>(() => overLimit.Serialize());
+
+        Assert.AreEqual(ManagementMetadata.NotesMaxLength + 1, exception.ActualLength);
+        Assert.AreEqual(ManagementMetadata.NotesMaxLength, exception.MaxLength);
+        Assert.AreEqual(manifestPath.Length, exception.ManifestPathLength);
+        Assert.AreEqual(sample.SourceCommit.Length, exception.SourceCommitLength);
+        StringAssert.Contains(exception.Message, "by 1.");
+        StringAssert.Contains(exception.Message, "manifestPath");
+        StringAssert.Contains(exception.Message, "--source-commit");
+        Assert.DoesNotContain(manifestPath, exception.Message, "The message must carry lengths only, never values.");
+    }
+
+    private static ManagementMetadata WithManifestPath(ManagementMetadata source, string manifestPath) => new()
+    {
+        PackageIdentifier = source.PackageIdentifier,
+        PackageVersion = source.PackageVersion,
+        Platform = source.Platform,
+        Architecture = source.Architecture,
+        ManifestPath = manifestPath,
+        ManifestHash = source.ManifestHash,
+        InputHash = source.InputHash,
+        SourceCommit = source.SourceCommit,
+    };
+
+    [TestMethod]
     public void TryParse_NullOrBlank_ReturnsFalse()
     {
         Assert.IsFalse(ManagementMetadata.TryParse(null, out var metadata1));

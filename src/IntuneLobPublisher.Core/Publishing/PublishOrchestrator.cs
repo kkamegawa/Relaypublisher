@@ -110,6 +110,22 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
             SourceCommit = request.SourceCommit,
         };
 
+        // Serialized up front (dry-run included) so an oversized notes value fails before any write
+        // instead of after the app has been created or its content uploaded. The capacity is logged on
+        // the failure path too, where the negative remaining count makes it a warning.
+        string notesJson;
+        try
+        {
+            notesJson = managementMetadata.Serialize();
+        }
+        catch (ManagementMetadataTooLargeException ex)
+        {
+            LogNotesCapacity(identity, ex.ActualLength);
+            throw;
+        }
+
+        LogNotesCapacity(identity, notesJson.Length);
+
         var syncMode = AssignmentSyncModes.Parse(manifest.AssignmentSync);
 
         // Category preflight runs before the first app write: an unresolvable or ambiguous category
@@ -131,7 +147,7 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         if (resolution.Outcome == AppResolutionOutcome.NotFound)
         {
             // Create carries the metadata in `notes` so the new app is never metadata-less.
-            appId = await platformPublisher.CreateAppAsync(request, managementMetadata.Serialize(), cancellationToken)
+            appId = await platformPublisher.CreateAppAsync(request, notesJson, cancellationToken)
                 .ConfigureAwait(false);
             appCreated = true;
             _logger.LogInformation(
@@ -207,6 +223,26 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         return new PublishResult(
             PublishOutcome.DryRunCompleted, resolution.AppId, false, null, plan, null, categoryPlan);
     }
+
+    /// <summary>
+    /// Logs the notes length against <see cref="ManagementMetadata.NotesMaxLength"/>, as a warning once
+    /// less than <see cref="NotesCapacityWarningRatio"/> of the limit remains.
+    /// </summary>
+    private void LogNotesCapacity(AppIdentity identity, int notesLength)
+    {
+        var remaining = ManagementMetadata.NotesMaxLength - notesLength;
+        var level = remaining < ManagementMetadata.NotesMaxLength * NotesCapacityWarningRatio
+            ? LogLevel.Warning
+            : LogLevel.Information;
+        _logger.Log(
+            level,
+            "Management metadata for {PackageIdentifier} {Platform}-{Architecture} is {NotesLength}/{NotesMaxLength} characters ({Remaining} remaining)",
+            identity.PackageIdentifier, identity.Platform, identity.Architecture,
+            notesLength, ManagementMetadata.NotesMaxLength, remaining);
+    }
+
+    /// <summary>Remaining-capacity fraction of the notes limit below which the size log becomes a warning.</summary>
+    private const double NotesCapacityWarningRatio = 0.1;
 
     /// <summary>Reports the category plan only when the manifest actually asked for categories.</summary>
     private static void ReportCategoryPlan(PublishReport? report, CategoryPlan plan)

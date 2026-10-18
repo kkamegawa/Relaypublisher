@@ -5,6 +5,7 @@ using IntuneLobPublisher.Core.Packaging;
 using IntuneLobPublisher.Core.Publishing;
 using IntuneLobPublisher.Core.Publishing.Assignments;
 using IntuneLobPublisher.Core.Publishing.Categories;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IntuneLobPublisher.Core.Tests.Publishing;
@@ -196,7 +197,9 @@ public sealed class PublishOrchestratorTests
         List<string> Log);
 
     private static Harness CreateHarness(
-        IntuneAppSummary[]? existingApps = null, IReadOnlyDictionary<string, IPlatformAppPublisher>? extraPublishers = null)
+        IntuneAppSummary[]? existingApps = null,
+        IReadOnlyDictionary<string, IPlatformAppPublisher>? extraPublishers = null,
+        ILogger<PublishOrchestrator>? logger = null)
     {
         existingApps ??= [];
         var log = new List<string>();
@@ -217,20 +220,21 @@ public sealed class PublishOrchestratorTests
             platformPublishers,
             categoryService,
             assignmentService,
-            NullLogger<PublishOrchestrator>.Instance);
+            logger ?? NullLogger<PublishOrchestrator>.Instance);
         return new Harness(orchestrator, publisher, categoryService, assignmentService, log);
     }
 
     private PublishRequest CreateRequest(
         IntunePackageManifest? manifest = null,
         bool allowDowngrade = false,
-        bool dryRun = false)
+        bool dryRun = false,
+        string manifestRepoRelativePath = "manifests/contoso-tool.yaml")
     {
         manifest ??= TestManifests.CreateValid();
         return new PublishRequest(
             manifest,
             manifest.Apps[0],
-            "manifests/contoso-tool.yaml",
+            manifestRepoRelativePath,
             _repoRoot,
             _packageDirectory,
             "commit-1",
@@ -450,6 +454,44 @@ public sealed class PublishOrchestratorTests
         CollectionAssert.AreEqual(new[] { $"plan {ExistingAppId}" }, harness.AssignmentService.Calls);
         Assert.AreEqual(1, reported.Count);
         Assert.AreEqual(1, harness.Publisher.EnsureMappableCallCount, "Dry-run should map the payload once to surface mapping errors.");
+    }
+
+    [TestMethod]
+    public async Task PublishAsync_DryRunOversizedMetadata_ThrowsBeforeAnyWrite()
+    {
+        var logger = new CapturingLogger();
+        var harness = CreateHarness([ExistingManagedApp()], logger: logger);
+        var oversizedPath = "manifests/" + new string('a', ManagementMetadata.NotesMaxLength);
+
+        await Assert.ThrowsExactlyAsync<ManagementMetadataTooLargeException>(
+            () => harness.Orchestrator.PublishAsync(
+                CreateRequest(dryRun: true, manifestRepoRelativePath: oversizedPath), null, CancellationToken.None));
+
+        Assert.IsEmpty(harness.Publisher.AppCalls);
+        Assert.IsEmpty(harness.Publisher.ContentCalls);
+        Assert.IsEmpty(harness.CategoryService.Calls);
+        Assert.IsEmpty(harness.AssignmentService.Calls);
+        var capacityLog = logger.Entries.Single(e => e.Message.StartsWith("Management metadata for", StringComparison.Ordinal));
+        Assert.AreEqual(LogLevel.Warning, capacityLog.Level);
+        StringAssert.Contains(capacityLog.Message, $"/{ManagementMetadata.NotesMaxLength} characters");
+    }
+
+    /// <summary>Captures log level and formatted message so tests can assert on capacity logging.</summary>
+    private sealed class CapturingLogger : ILogger<PublishOrchestrator>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Entries.Add((logLevel, formatter(state, exception)));
     }
 
     [TestMethod]
