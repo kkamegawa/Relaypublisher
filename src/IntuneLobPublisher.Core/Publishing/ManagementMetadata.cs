@@ -63,7 +63,8 @@ public sealed class ManagementMetadata
         var json = JsonSerializer.Serialize(this, SerializerOptions);
         if (json.Length > NotesMaxLength)
         {
-            throw new Exceptions.ManagementMetadataTooLargeException(json.Length, NotesMaxLength);
+            throw new Exceptions.ManagementMetadataTooLargeException(
+                json.Length, NotesMaxLength, ManifestPath.Length, SourceCommit.Length);
         }
 
         return json;

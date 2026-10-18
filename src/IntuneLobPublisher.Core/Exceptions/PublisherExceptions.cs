@@ -132,19 +132,35 @@ public sealed class AmbiguousAppMatchException : PublisherException
     public IReadOnlyList<string> MatchedAppIds { get; }
 }
 
-/// <summary>The serialized management metadata JSON would not fit in the Intune `notes` field.</summary>
+/// <summary>
+/// The serialized management metadata JSON would not fit in the Intune `notes` field. The message
+/// carries only lengths, never field values, so it is safe to log and to record in the result file.
+/// </summary>
 public sealed class ManagementMetadataTooLargeException : PublisherException
 {
-    public ManagementMetadataTooLargeException(int actualLength, int maxLength)
-        : base($"Management metadata JSON is {actualLength} characters, which exceeds the {maxLength} character notes limit.")
+    public ManagementMetadataTooLargeException(
+        int actualLength, int maxLength, int manifestPathLength, int sourceCommitLength)
+        : base(
+            $"Management metadata JSON is {actualLength} characters, exceeding the {maxLength} character " +
+            $"Intune notes limit by {actualLength - maxLength}. manifestPath is {manifestPathLength} characters " +
+            $"and sourceCommit is {sourceCommitLength} characters; shorten the manifest's repository path " +
+            "or pass a shorter --source-commit value.")
     {
         ActualLength = actualLength;
         MaxLength = maxLength;
+        ManifestPathLength = manifestPathLength;
+        SourceCommitLength = sourceCommitLength;
     }
 
     public int ActualLength { get; }
 
     public int MaxLength { get; }
+
+    /// <summary>Length of the <c>manifestPath</c> value, the field most likely to grow.</summary>
+    public int ManifestPathLength { get; }
+
+    /// <summary>Length of the <c>sourceCommit</c> value.</summary>
+    public int SourceCommitLength { get; }
 }
 
 /// <summary>

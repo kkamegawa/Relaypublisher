@@ -224,13 +224,14 @@ public sealed class PublishOrchestratorTests
     private PublishRequest CreateRequest(
         IntunePackageManifest? manifest = null,
         bool allowDowngrade = false,
-        bool dryRun = false)
+        bool dryRun = false,
+        string manifestRepoRelativePath = "manifests/contoso-tool.yaml")
     {
         manifest ??= TestManifests.CreateValid();
         return new PublishRequest(
             manifest,
             manifest.Apps[0],
-            "manifests/contoso-tool.yaml",
+            manifestRepoRelativePath,
             _repoRoot,
             _packageDirectory,
             "commit-1",
@@ -450,6 +451,22 @@ public sealed class PublishOrchestratorTests
         CollectionAssert.AreEqual(new[] { $"plan {ExistingAppId}" }, harness.AssignmentService.Calls);
         Assert.AreEqual(1, reported.Count);
         Assert.AreEqual(1, harness.Publisher.EnsureMappableCallCount, "Dry-run should map the payload once to surface mapping errors.");
+    }
+
+    [TestMethod]
+    public async Task PublishAsync_DryRunOversizedMetadata_ThrowsBeforeAnyWrite()
+    {
+        var harness = CreateHarness([ExistingManagedApp()]);
+        var oversizedPath = "manifests/" + new string('a', ManagementMetadata.NotesMaxLength);
+
+        await Assert.ThrowsExactlyAsync<ManagementMetadataTooLargeException>(
+            () => harness.Orchestrator.PublishAsync(
+                CreateRequest(dryRun: true, manifestRepoRelativePath: oversizedPath), null, CancellationToken.None));
+
+        Assert.IsEmpty(harness.Publisher.AppCalls);
+        Assert.IsEmpty(harness.Publisher.ContentCalls);
+        Assert.IsEmpty(harness.CategoryService.Calls);
+        Assert.IsEmpty(harness.AssignmentService.Calls);
     }
 
     [TestMethod]
