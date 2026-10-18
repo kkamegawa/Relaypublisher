@@ -5,6 +5,7 @@ using IntuneLobPublisher.Core.Packaging;
 using IntuneLobPublisher.Core.Publishing;
 using IntuneLobPublisher.Core.Publishing.Assignments;
 using IntuneLobPublisher.Core.Publishing.Categories;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IntuneLobPublisher.Core.Tests.Publishing;
@@ -196,7 +197,9 @@ public sealed class PublishOrchestratorTests
         List<string> Log);
 
     private static Harness CreateHarness(
-        IntuneAppSummary[]? existingApps = null, IReadOnlyDictionary<string, IPlatformAppPublisher>? extraPublishers = null)
+        IntuneAppSummary[]? existingApps = null,
+        IReadOnlyDictionary<string, IPlatformAppPublisher>? extraPublishers = null,
+        ILogger<PublishOrchestrator>? logger = null)
     {
         existingApps ??= [];
         var log = new List<string>();
@@ -217,7 +220,7 @@ public sealed class PublishOrchestratorTests
             platformPublishers,
             categoryService,
             assignmentService,
-            NullLogger<PublishOrchestrator>.Instance);
+            logger ?? NullLogger<PublishOrchestrator>.Instance);
         return new Harness(orchestrator, publisher, categoryService, assignmentService, log);
     }
 
@@ -456,7 +459,8 @@ public sealed class PublishOrchestratorTests
     [TestMethod]
     public async Task PublishAsync_DryRunOversizedMetadata_ThrowsBeforeAnyWrite()
     {
-        var harness = CreateHarness([ExistingManagedApp()]);
+        var logger = new CapturingLogger();
+        var harness = CreateHarness([ExistingManagedApp()], logger: logger);
         var oversizedPath = "manifests/" + new string('a', ManagementMetadata.NotesMaxLength);
 
         await Assert.ThrowsExactlyAsync<ManagementMetadataTooLargeException>(
@@ -467,6 +471,27 @@ public sealed class PublishOrchestratorTests
         Assert.IsEmpty(harness.Publisher.ContentCalls);
         Assert.IsEmpty(harness.CategoryService.Calls);
         Assert.IsEmpty(harness.AssignmentService.Calls);
+        var capacityLog = logger.Entries.Single(e => e.Message.StartsWith("Management metadata for", StringComparison.Ordinal));
+        Assert.AreEqual(LogLevel.Warning, capacityLog.Level);
+        StringAssert.Contains(capacityLog.Message, $"/{ManagementMetadata.NotesMaxLength} characters");
+    }
+
+    /// <summary>Captures log level and formatted message so tests can assert on capacity logging.</summary>
+    private sealed class CapturingLogger : ILogger<PublishOrchestrator>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Entries.Add((logLevel, formatter(state, exception)));
     }
 
     [TestMethod]

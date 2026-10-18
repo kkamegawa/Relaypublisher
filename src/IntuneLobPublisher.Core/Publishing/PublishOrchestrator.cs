@@ -111,8 +111,19 @@ public sealed class PublishOrchestrator : IPublishOrchestrator
         };
 
         // Serialized up front (dry-run included) so an oversized notes value fails before any write
-        // instead of after the app has been created or its content uploaded.
-        var notesJson = managementMetadata.Serialize();
+        // instead of after the app has been created or its content uploaded. The capacity is logged on
+        // the failure path too, where the negative remaining count makes it a warning.
+        string notesJson;
+        try
+        {
+            notesJson = managementMetadata.Serialize();
+        }
+        catch (ManagementMetadataTooLargeException ex)
+        {
+            LogNotesCapacity(identity, ex.ActualLength);
+            throw;
+        }
+
         LogNotesCapacity(identity, notesJson.Length);
 
         var syncMode = AssignmentSyncModes.Parse(manifest.AssignmentSync);

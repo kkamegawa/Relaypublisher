@@ -48,7 +48,7 @@ If multiple apps match either management metadata or DisplayName fallback, publi
 
 ## 1a. Management Metadata Exceeds the Notes Limit
 
-Relaypublisher caps the management metadata JSON written to `notes` at 10,000 characters, so a publish fails early rather than writing metadata the Intune admin center might truncate. The size is checked before any Graph write, in `--dry-run` as well, and every publish entry logs it:
+Relaypublisher caps the management metadata JSON written to `notes` at 10,000 characters, so a publish fails early rather than writing metadata the Intune admin center might truncate. The size is checked before any Graph write, in `--dry-run` as well, and every publish entry logs it, including an entry that fails the check:
 
 ```text
 Management metadata for <package-identifier> <platform>-<architecture> is <length>/10000 characters (<remaining> remaining)
@@ -60,7 +60,7 @@ The line is logged as a warning once less than 10% of the limit is left. When th
 Management metadata JSON is <length> characters, exceeding the 10000 character Intune notes limit by <over>. manifestPath is <a> characters and sourceCommit is <b> characters; shorten the manifest's repository path or pass a shorter --source-commit value.
 ```
 
-The message gives only lengths, never the values. The other fields are short and bounded, so the cause is nearly always one of these two:
+The message gives only lengths, never the values. The other fields (package identifier, version, platform, architecture and the hashes) are usually short, so the cause is nearly always one of these two:
 
 - `manifestPath`: the manifest's path relative to the repository root. Move the manifest to a shorter path.
 - `sourceCommit`: the `--source-commit` value, which defaults to `GITHUB_SHA` or `BUILD_SOURCEVERSION`. Pass the 40-character commit SHA, not a longer custom string.

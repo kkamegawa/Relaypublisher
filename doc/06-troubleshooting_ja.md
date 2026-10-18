@@ -48,7 +48,7 @@ Management metadata または DisplayName fallback のどちらかで複数 app 
 
 ## 1a. Management metadata が notes の上限を超えた
 
-Relaypublisher は `notes` に書く management metadata JSON の上限を 10,000 文字にしています。Intune admin center で truncate されうる metadata を書き込まず、publish を早い段階で fail させるためです。Size は Graph への write より前に check され、`--dry-run` でも同じです。Publish entry ごとに次の log が出ます。
+Relaypublisher は `notes` に書く management metadata JSON の上限を 10,000 文字にしています。Intune admin center で truncate されうる metadata を書き込まず、publish を早い段階で fail させるためです。Size は Graph への write より前に check され、`--dry-run` でも同じです。Publish entry ごとに次の log が出ます。Check に失敗した entry でも出ます。
 
 ```text
 Management metadata for <package-identifier> <platform>-<architecture> is <length>/10000 characters (<remaining> remaining)
@@ -60,7 +60,7 @@ Management metadata for <package-identifier> <platform>-<architecture> is <lengt
 Management metadata JSON is <length> characters, exceeding the 10000 character Intune notes limit by <over>. manifestPath is <a> characters and sourceCommit is <b> characters; shorten the manifest's repository path or pass a shorter --source-commit value.
 ```
 
-Message には長さだけが含まれ、値そのものは含まれません。他の field は短く長さも限られているため、原因はほぼ次の 2 つのどちらかです。
+Message には長さだけが含まれ、値そのものは含まれません。他の field(package identifier、version、platform、architecture、hash)は通常短いため、原因はほぼ次の 2 つのどちらかです。
 
 - `manifestPath`: repository root からの manifest の相対 path。Manifest をより短い path に移動します。
 - `sourceCommit`: `--source-commit` の値。既定値は `GITHUB_SHA` または `BUILD_SOURCEVERSION`。長い独自の文字列ではなく、40 文字の commit SHA を渡します。
