@@ -113,11 +113,11 @@ jobs:
       PACKAGE: ${{ needs.guard.outputs.package }}
     steps:
       # Only global.json is needed here; keep the privileged token out of .git/config.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+      - uses: actions/setup-dotnet@v6.1.0
         with:
           global-json-file: global.json
 
@@ -144,7 +144,7 @@ jobs:
       # before publishing. The action masks its output; no long-lived API key is stored.
       - name: Sign in to nuget.org with Trusted Publishing
         id: nuget_login
-        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        uses: NuGet/login@v1.2.0
         with:
           user: ${{ secrets.NUGET_USER }}
 
@@ -175,7 +175,7 @@ jobs:
       TAP_REPOSITORY: ${{ github.repository_owner }}/homebrew-tap
     steps:
       # Only tools/New-HomebrewFormula.ps1 is needed from this repository.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -230,7 +230,7 @@ jobs:
       # opened with it would not trigger the tap's CI.
       - name: Create a tap-scoped GitHub App token
         id: tap-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@v3.3.0
         with:
           client-id: ${{ secrets.HOMEBREW_TAP_APP_CLIENT_ID }}
           private-key: ${{ secrets.HOMEBREW_TAP_APP_PRIVATE_KEY }}
@@ -241,7 +241,7 @@ jobs:
 
       # The token is persisted for the push below; no code from either repository runs after this.
       - name: Check out the tap
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           repository: ${{ env.TAP_REPOSITORY }}
           token: ${{ steps.tap-token.outputs.token }}

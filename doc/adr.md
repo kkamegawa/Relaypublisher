@@ -16,6 +16,7 @@
 
 | 日付 | エントリ | 領域 |
 |---|---|---|
+| 2026-11-11 | [GitHub Actions dependency lockfile](adr/ci-release.md#2026-11-11-github-actions-dependency-lockfile) | ci-release |
 | 2026-09-15 | [Homebrew tap による macOS 配布 (Issue #173)](adr/ci-release.md#2026-09-15-homebrew-tap-による-macos-配布-issue-173) | ci-release |
 | 2026-09-10 | [Intune app 関連の Graph 呼び出しを beta に統一する (Issue #161)](adr/publishing.md#2026-09-10-intune-app-関連の-graph-呼び出しを-beta-に統一する-issue-161) | publishing |
 | 2026-09-06 | [manifest 作成スクリプトの Windows file detection 対応 (Issue #140)](adr/manifest-tooling.md#2026-09-06-manifest-作成スクリプトの-windows-file-detection-対応-issue-140) | manifest-tooling |

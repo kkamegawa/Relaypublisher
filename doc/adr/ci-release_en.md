@@ -3,6 +3,22 @@
 This is the English counterpart for the release-distribution decision recorded in
 [ci-release.md](ci-release.md). The Japanese document remains the complete ADR history.
 
+## 2026-11-11: GitHub Actions dependency lockfile
+
+- **Previous decision**: Active workflows wrote commit SHAs directly in `uses:` and repeated the
+  release tag in comments; the consumer sample used major refs.
+- **Decision**: Use release tags in `uses:` and record exact direct and transitive action commits in
+  `.github/workflows/actions.lock`. Verify active workflows and the consumer sample in pull request
+  CI.
+- **Reason**: Preserve release traceability while centralizing exact pins and upstream provenance
+  checks in a generated lockfile.
+- **Impact**: Every `uses:` change must regenerate and commit the lockfile; consumers generate their
+  own lockfile after copying the sample. Azure Pipelines is unchanged.
+- **Update rule**: Review upstream changes before relocking; never use `--accept-moved` in automation.
+- **Approval**: The user approved this documentation change in this conversation on 2026-11-11.
+- **Sources**: [gh-actions-lock](https://github.com/github/gh-actions-lock) and its
+  [verification workflow](https://github.com/github/gh-actions-lock/blob/main/.github/workflows/verify-lockfile.yml).
+
 ## 2026-09-15: macOS Distribution Through a Homebrew Tap (Issue #173)
 
 - **Decision**: Distribute `relaypublisher` for macOS on Apple silicon as a Homebrew formula in a

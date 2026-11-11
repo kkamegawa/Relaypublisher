@@ -150,11 +150,11 @@ In CI, the same output is passed between jobs as the `intunewin-packages` artifa
 GitHub Actions:
 
 ```yaml
-- uses: actions/download-artifact@v4
+- uses: actions/download-artifact@v4.3.0
   with:
     name: manifest-list
 
-- uses: actions/download-artifact@v4
+- uses: actions/download-artifact@v4.3.0
   with:
     name: intunewin-packages
     path: ./out

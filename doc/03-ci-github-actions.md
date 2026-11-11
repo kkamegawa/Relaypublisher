@@ -7,23 +7,17 @@
 | **Relaypublisher 自身の CI/CD** (§11b, §12a) | このリポジトリのビルド・テスト・リリース | `.github/workflows/` に実在し、実際に動作する |
 | **利用者向け Intune publish サンプル** (§12) | manifest を持つ利用者リポジトリ | `workflows/github-actions/publish-intune-apps.yml`。コピーして使う参照サンプル |
 
-## 11a. 3 本共通の方針
+## 11a. 共通方針
 
 - workflow top-level は `permissions: {}`。job ごとに必要最小限の permission だけを与える。
-- **`uses:` の参照はすべて 40 桁の commit SHA でピン留めする。** major tag (`@v5` など) は
-  上流が同じ tag を別 commit に付け替えられるため、public リポジトリでは supply chain 上のリスクになる。
-  `actions/*` も例外にしない。行末コメントに対応する semver を書き、更新時はその両方を差し替える。
-  ピン留め対象と現在の版:
-
-  | action | semver | commit SHA |
-  |---|---|---|
-  | `actions/checkout` | v7.0.1 | `3d3c42e5aac5ba805825da76410c181273ba90b1` |
-  | `actions/setup-dotnet` | v6.0.0 | `a98b56852c35b8e3190ac28c8c2271da59106c68` |
-  | `actions/upload-artifact` | v7.0.1 | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` |
-  | `actions/download-artifact` | v7.0.0 | `37930b1c2abaa49bbe596cd826c3c89aef350131` |
-  | `azure/login` | v3.0.2 | `7ddb5af1ef8758cf1353cf3b42f940aee27ba21c` |
-  | `NuGet/login` | v1.2.0 | `8d196754b4036150537f80ac539e15c2f1028841` |
-  | `actions/create-github-app-token` | v3.2.0 | `bcd2ba49218906704ab6c1aa796996da409d3eb1` |
+- `uses:` は release tag (`@vX.Y.Z`) を参照し、direct / transitive action の exact commit SHA は
+  `.github/workflows/actions.lock` に記録する。`.github/workflows/verify-lockfile.yml` は
+  `gh actions-lock --verify .github/workflows workflows/github-actions/publish-intune-apps.yml` を実行し、
+  実 workflow と参照 sample の lock を検証する。
+- `uses:` を追加・変更したら、repository root から
+  `gh actions-lock .github/workflows workflows/github-actions/publish-intune-apps.yml` を実行し、
+  workflow と lockfile を同時に更新する。既存の SHA pin は対応する release tag に切り替え、
+  解決した SHA が元の値と一致することを確認する。
 
 - **`actions/checkout` は必ず `persist-credentials: false` を指定する。** 既定の `true` は job token を
   `.git/config` に書き込むため、その後に走る `dotnet build` / `dotnet pack` / `dotnet publish`
@@ -86,11 +80,11 @@
 Windows の package job は manifest が参照する installer input を download し、repository file を staging し、checksum を検証して、`./out` に最終 package を生成する。このディレクトリを `intunewin-packages` artifact として upload する。publish job は `publish` の前に同じ artifact を download する必要があり、manifest set を再構築または再計算しない。
 
 ```yaml
-- uses: actions/download-artifact@v4
+- uses: actions/download-artifact@v4.3.0
   with:
     name: manifest-list
 
-- uses: actions/download-artifact@v4
+- uses: actions/download-artifact@v4.3.0
   with:
     name: intunewin-packages
     path: ./out
@@ -160,11 +154,11 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4.3.1
         with:
           dotnet-version: "10.0.x"
 
@@ -205,7 +199,7 @@ jobs:
         run: >
           relaypublisher validate --manifest-list manifest-list.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4.6.2
         with:
           name: manifest-list
           path: manifest-list.json
@@ -223,22 +217,22 @@ jobs:
       # githubRelease provider 用。manifest の Auth.SecretName と対応させる。
       GH_RELEASE_PAT: ${{ secrets.GH_RELEASE_PAT }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4.3.1
         with:
           dotnet-version: "10.0.x"
 
       - shell: pwsh
         run: dotnet tool install --global relaypublisher
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4.3.0
         with:
           name: manifest-list
 
       # ExternalFiles に azureBlob を使う場合のみ必要
       - name: Azure login
-        uses: azure/login@v2
+        uses: azure/login@v2.3.1
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -248,7 +242,7 @@ jobs:
         run: >
           relaypublisher package --manifest-list manifest-list.json --output ./out
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4.6.2
         with:
           name: intunewin-packages
           path: ./out
@@ -266,26 +260,26 @@ jobs:
       id-token: write
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4.3.1
         with:
           dotnet-version: "10.0.x"
 
       - run: dotnet tool install --global relaypublisher
 
       - name: Azure login
-        uses: azure/login@v2
+        uses: azure/login@v2.3.1
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4.3.0
         with:
           name: manifest-list
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4.3.0
         with:
           name: intunewin-packages
           path: ./out
@@ -350,7 +344,8 @@ Trusted Publishing の policy は次の値で固定する。`Workflow File` は�
 | Environment | `release` |
 
 `NUGET_USER` には policy に紐付く nuget.org profile username を指定する。publish job には
-`id-token: write` が必要であり、`NuGet/login` は上記の commit SHA (v1.2.0) で固定する。
+`id-token: write` が必要であり、`NuGet/login@v1.2.0` を参照する。実行 commit は
+`.github/workflows/actions.lock` で固定・検証する。
 
 ### release-draft.yml の設計上のポイント
 
@@ -431,7 +426,8 @@ stable release では、`release-publish.yml` の `update-homebrew-tap` job が 
   正確な名前で download する。zip の実ハッシュを計算し、`SHA256SUMS.txt` の値と一致しなければ fail する。
 - formula は `tools/New-HomebrewFormula.ps1` で生成する。version / repository / sha256 の形式を検証し、
   prerelease は拒否する。repository 名の検証は、値が Ruby の文字列リテラルを壊さないことも兼ねる。
-- tap への書き込みには `actions/create-github-app-token`(commit SHA 固定)で発行した token を使い、
+- tap への書き込みには `actions/create-github-app-token@v3.3.0`(commit SHA は
+  `.github/workflows/actions.lock` で固定・検証)で発行した token を使い、
   `repositories: homebrew-tap` と `permission-contents: write` / `permission-pull-requests: write` に絞る。
   `GITHUB_TOKEN` は他リポジトリに書けないうえ、`GITHUB_TOKEN` で作った pull request では tap 側の workflow が起動しない。
 - 冪等性: branch `relaypublisher-<version>` を tap の default branch から毎回作り直して force push する。

@@ -475,7 +475,7 @@ Intune 系 Graph API は 429 が発生しやすい。すべての Graph 呼び�
 - `nuget.org` への publish は GitHub Actions の `.github/workflows/release-publish.yml` でのみ実行し、
   重複 version は `--skip-duplicate` で冪等に扱う。Azure Pipelines の NuGet release はサポート対象外とする。
 - `nuget.org` の認証は NuGet Trusted Publishing (OIDC) とし、長期有効な API key を secret に保存しない。
-  `NuGet/login` は commit SHA `8d196754b4036150537f80ac539e15c2f1028841` (v1.2.0) で固定し、
+  `NuGet/login@v1.2.0` を参照し、action の commit SHA は `.github/workflows/actions.lock` で固定・検証する。
   `id-token: write` を持つ publish job から push 直前に利用する。
 - Trusted Publishing policy は Repository Owner=`kkamegawa`、Repository=`Relaypublisher`、
   Workflow File=`release-publish.yml` (`.github/workflows/` を含めない)、Environment=`release` に固定する。

@@ -4,6 +4,21 @@ This is the English counterpart for the release-workflow guidance in
 [03-ci-github-actions.md](03-ci-github-actions.md). The Japanese document remains the complete
 GitHub Actions CI design.
 
+## GitHub Actions dependency locking
+
+Workflow `uses:` references point to release tags (`@vX.Y.Z`).
+`.github/workflows/actions.lock` records exact commits for direct and transitive actions. The
+`verify-lockfile.yml` workflow checks both the repository workflows and the consumer sample:
+
+```shell
+gh actions-lock --verify .github/workflows workflows/github-actions/publish-intune-apps.yml
+```
+
+After adding or changing a `uses:` reference, run
+`gh actions-lock .github/workflows workflows/github-actions/publish-intune-apps.yml` from the
+repository root and commit the workflow changes with the lockfile. The consumer sample is included
+explicitly because it is stored outside `.github/workflows/`.
+
 ## 12a. NuGet Global Tool Release Workflow
 
 Release `relaypublisher` with two workflows that are fully separate from the Intune publishing
@@ -64,8 +79,9 @@ against the Homebrew tap (`kkamegawa/homebrew-tap`) that updates the formula. Se
 - It renders the formula with `tools/New-HomebrewFormula.ps1`, which validates the version,
   repository, and sha256 formats and rejects prereleases. The repository-name check also keeps the
   value from breaking out of the Ruby string literals.
-- It writes to the tap with a token minted by `actions/create-github-app-token` (pinned to a commit
-  SHA), scoped to `repositories: homebrew-tap` with `permission-contents: write` and
+- It writes to the tap with a token minted by `actions/create-github-app-token@v3.3.0`, whose exact
+  commit is recorded and verified in `.github/workflows/actions.lock`, scoped to
+  `repositories: homebrew-tap` with `permission-contents: write` and
   `permission-pull-requests: write`. `GITHUB_TOKEN` cannot write to another repository, and pull
   requests opened with it do not trigger the tap's workflows.
 - Idempotency: it rebuilds branch `relaypublisher-<version>` from the tap's default branch on every
