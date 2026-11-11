@@ -2,6 +2,25 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-11-11: IntuneWinAppUtil 最新版照会を実行内で共有する
+
+**ブランチ**: `fix/184-cache-github-latest-release`
+
+**対応 Issue**: [#184](https://github.com/kkamegawa/Relaypublisher/issues/184)
+
+### 実施内容
+
+Build 4190 では、同じ `relaypublisher package` 実行中に manifest ごとに GitHub の latest release API を照会していたため、照会回数が増え、GitHub の rate limit に達していた。設計上の「pin がなければ最新 release を使う」挙動は維持し、`GitHubIntuneWinToolDownloader` のインスタンス内で成功したタグだけをキャッシュするようにした。`SemaphoreSlim` で同時照会を直列化し、HTTP エラーやキャンセル後は次の呼び出しが再試行できる。
+
+単体テストを追加し、同時・連続呼び出しでの照会一回化、HTTP エラー後の再試行、キャンセル後の再試行を確認した。Wiki は更新しない(ユーザー指定)。
+
+### 検証結果
+
+- `dotnet test tests/IntuneLobPublisher.Core.Tests/IntuneLobPublisher.Core.Tests.csproj --configuration Release --filter FullyQualifiedName~GitHubIntuneWinToolDownloaderTests`: 成功、3 件。
+- `dotnet test tests/IntuneLobPublisher.Core.Tests/IntuneLobPublisher.Core.Tests.csproj --configuration Release`: 成功、744 件合格、38 件スキップ、失敗 0 件。
+- `dotnet build IntuneLobPublisher.slnx --configuration Release`: 成功、警告・エラー 0 件。
+- `git diff --check`: 成功。
+
 ## 2026-09-30: 引数なし起動で終了コード 0 を返す(winget 検証対応)
 
 **ブランチ**: `claude/keen-meitner-3otjwg`
