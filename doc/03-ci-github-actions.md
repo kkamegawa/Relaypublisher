@@ -80,11 +80,11 @@
 Windows の package job は manifest が参照する installer input を download し、repository file を staging し、checksum を検証して、`./out` に最終 package を生成する。このディレクトリを `intunewin-packages` artifact として upload する。publish job は `publish` の前に同じ artifact を download する必要があり、manifest set を再構築または再計算しない。
 
 ```yaml
-- uses: actions/download-artifact@v4
+- uses: actions/download-artifact@v4.3.0
   with:
     name: manifest-list
 
-- uses: actions/download-artifact@v4
+- uses: actions/download-artifact@v4.3.0
   with:
     name: intunewin-packages
     path: ./out
@@ -154,11 +154,11 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4.3.1
         with:
           dotnet-version: "10.0.x"
 
@@ -199,7 +199,7 @@ jobs:
         run: >
           relaypublisher validate --manifest-list manifest-list.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4.6.2
         with:
           name: manifest-list
           path: manifest-list.json
@@ -217,22 +217,22 @@ jobs:
       # githubRelease provider 用。manifest の Auth.SecretName と対応させる。
       GH_RELEASE_PAT: ${{ secrets.GH_RELEASE_PAT }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4.3.1
         with:
           dotnet-version: "10.0.x"
 
       - shell: pwsh
         run: dotnet tool install --global relaypublisher
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4.3.0
         with:
           name: manifest-list
 
       # ExternalFiles に azureBlob を使う場合のみ必要
       - name: Azure login
-        uses: azure/login@v2
+        uses: azure/login@v2.3.1
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -242,7 +242,7 @@ jobs:
         run: >
           relaypublisher package --manifest-list manifest-list.json --output ./out
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4.6.2
         with:
           name: intunewin-packages
           path: ./out
@@ -260,26 +260,26 @@ jobs:
       id-token: write
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4.3.1
         with:
           dotnet-version: "10.0.x"
 
       - run: dotnet tool install --global relaypublisher
 
       - name: Azure login
-        uses: azure/login@v2
+        uses: azure/login@v2.3.1
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4.3.0
         with:
           name: manifest-list
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4.3.0
         with:
           name: intunewin-packages
           path: ./out

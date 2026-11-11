@@ -150,11 +150,11 @@ CI では同じ output を `intunewin-packages` artifact として job 間で渡
 GitHub Actions:
 
 ```yaml
-- uses: actions/download-artifact@v4
+- uses: actions/download-artifact@v4.3.0
   with:
     name: manifest-list
 
-- uses: actions/download-artifact@v4
+- uses: actions/download-artifact@v4.3.0
   with:
     name: intunewin-packages
     path: ./out

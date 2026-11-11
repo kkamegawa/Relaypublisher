@@ -401,11 +401,11 @@ In CI, the package job uploads the package directory as the `intunewin-packages`
 GitHub Actions:
 
 ```yaml
-- uses: actions/download-artifact@v4
+- uses: actions/download-artifact@v4.3.0
   with:
     name: manifest-list
 
-- uses: actions/download-artifact@v4
+- uses: actions/download-artifact@v4.3.0
   with:
     name: intunewin-packages
     path: ./out
