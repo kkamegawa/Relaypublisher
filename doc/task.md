@@ -21,6 +21,24 @@ Build 4190 では、同じ `relaypublisher package` 実行中に manifest ごと
 - `dotnet build IntuneLobPublisher.slnx --configuration Release`: 成功、警告・エラー 0 件。
 - `git diff --check`: 成功。
 
+## 2026-11-11: .NET 10 互換 NuGet パッケージを更新する
+
+**ブランチ**: `fix/185-latest-dotnet10-packages`
+
+**対応 Issue**: [#185](https://github.com/kkamegawa/Relaypublisher/issues/185)
+
+### 実施内容
+
+`net10.0` を維持して NuGet 依存を確認し、最新の安全な互換版がある参照を更新した。`Azure.Storage.Blobs` を 12.30.1、`FluentValidation` を 12.2.0、Microsoft.Extensions 系を 10.0.13、`System.CommandLine` を 3.0.0、`MSTest` を 4.5.2 に更新した。`Azure.Identity` と `YamlDotNet` は既に最新安全版のため変更していない。
+
+### 検証結果
+
+- `dotnet restore IntuneLobPublisher.slnx`: 成功。
+- `dotnet build IntuneLobPublisher.slnx --configuration Release --no-restore`: 成功、警告・エラー 0 件。
+- `dotnet test tests/IntuneLobPublisher.Core.Tests/IntuneLobPublisher.Core.Tests.csproj --configuration Release --no-build`: 成功、741 件合格、38 件スキップ、失敗 0 件。
+- `nuget-validate audit-project IntuneLobPublisher.slnx`: 成功、直接・推移依存に既知脆弱性なし。
+- `net10.0` を対象とする候補版の restore / build も成功。
+
 ## 2026-09-30: 引数なし起動で終了コード 0 を返す(winget 検証対応)
 
 **ブランチ**: `claude/keen-meitner-3otjwg`
