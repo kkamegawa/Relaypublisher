@@ -8,12 +8,13 @@ on:
     branches:
       - main
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       GH_TOKEN: ${{ github.token }}
     steps:

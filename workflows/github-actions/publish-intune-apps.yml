@@ -40,6 +40,7 @@ jobs:
       - uses: actions/checkout@v4.4.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@v4.3.1
         with:
@@ -103,6 +104,8 @@ jobs:
       GH_RELEASE_PAT: ${{ secrets.GH_RELEASE_PAT }}
     steps:
       - uses: actions/checkout@v4.4.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@v4.3.1
         with:
@@ -148,6 +151,8 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4.4.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@v4.3.1
         with:
