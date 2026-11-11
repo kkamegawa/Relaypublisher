@@ -19,6 +19,8 @@ public sealed class GitHubIntuneWinToolDownloader : IIntuneWinToolDownloader
 
     private readonly HttpClient _httpClient;
     private readonly ILogger<GitHubIntuneWinToolDownloader> _logger;
+    private readonly SemaphoreSlim _latestVersionGate = new(1, 1);
+    private string? _latestVersion;
 
     public GitHubIntuneWinToolDownloader(HttpClient httpClient, ILogger<GitHubIntuneWinToolDownloader> logger)
     {
@@ -28,16 +30,36 @@ public sealed class GitHubIntuneWinToolDownloader : IIntuneWinToolDownloader
 
     public async Task<string> GetLatestVersionAsync(CancellationToken cancellationToken)
     {
-        using var release = await GetReleaseAsync($"{ApiBaseUrl}/releases/latest", cancellationToken).ConfigureAwait(false);
-        var tag = release.RootElement.TryGetProperty("tag_name", out var tagName) ? tagName.GetString() : null;
-        if (string.IsNullOrWhiteSpace(tag))
+        if (_latestVersion is { } cachedVersion)
         {
-            throw new PackagingException(
-                $"Latest release of {RepositoryOwner}/{RepositoryName} has no tag_name.");
+            return cachedVersion;
         }
 
-        _logger.LogInformation("Latest {Repository} release is {Tag}", RepositoryName, tag);
-        return tag;
+        await _latestVersionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_latestVersion is { } resolvedVersion)
+            {
+                return resolvedVersion;
+            }
+
+            using var release = await GetReleaseAsync(
+                $"{ApiBaseUrl}/releases/latest", cancellationToken).ConfigureAwait(false);
+            var tag = release.RootElement.TryGetProperty("tag_name", out var tagName) ? tagName.GetString() : null;
+            if (string.IsNullOrWhiteSpace(tag))
+            {
+                throw new PackagingException(
+                    $"Latest release of {RepositoryOwner}/{RepositoryName} has no tag_name.");
+            }
+
+            _latestVersion = tag;
+            _logger.LogInformation("Latest {Repository} release is {Tag}", RepositoryName, tag);
+            return tag;
+        }
+        finally
+        {
+            _latestVersionGate.Release();
+        }
     }
 
     public async Task DownloadAsync(string version, string destinationPath, CancellationToken cancellationToken)
