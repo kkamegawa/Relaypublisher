@@ -588,6 +588,9 @@ Apps:
 ### GitHub Actions
 
 - [ ] `workflows/github-actions/publish-intune-apps.yml` を `.github/workflows/publish-intune-apps.yml` にコピーする。
+- [ ] 対象 repository の root で `gh extension install github/gh-actions-lock` と `gh actions-lock` を実行し、
+  生成された `.github/workflows/actions.lock` をコピーした workflow と一緒に commit する。`uses:` を変更したときも
+  `gh actions-lock` を再実行する。
 - [ ] `production` environment を作成し、reviewer または policy で保護する。
 - [ ] `id-token: write` は OIDC が必要な job だけに付与し、PR validation job には付与しない。
 - [ ] GitHub federated credential に issuer `https://token.actions.githubusercontent.com/`、subject `repo:<owner>/<repo>:environment:production`、audience `api://AzureADTokenExchange` を設定する。

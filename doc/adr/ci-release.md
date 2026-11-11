@@ -6,6 +6,16 @@
 仕様を変更する必要がある場合は、必ず該当領域のファイルを確認し、変更理由が以前の修正と矛盾しないか確認してください。
 矛盾する可能性がある場合はユーザーに承認を求めます。
 
+## 2026-11-11: GitHub Actions dependency lockfile
+
+- **変更前**: 実 workflow の `uses:` に commit SHA を直接書き、行末コメントに release tag を記載していた。利用者向け sample は major ref を使っていた。
+- **決定**: `uses:` には release tag を指定し、direct / transitive action の exact commit SHA は `.github/workflows/actions.lock` に記録する。pull request CI で実 workflow と利用者向け sample の lock を検証する。
+- **理由**: release tag による traceability を維持しながら、direct / transitive action の exact pin と upstream provenance を生成済み lockfile で一元管理するため。
+- **影響**: `uses:` を変更したら lockfile を再生成して workflow と同時に commit する。利用者は sample をコピーした repository で独自の lockfile を生成する。Azure Pipelines は変更しない。
+- **更新時の注意**: upstream の変更を確認してから relock する。自動化で `--accept-moved` を使わない。
+- **承認**: この文書変更は 2026-11-11 に会話内で承認された。
+- **参照**: [gh-actions-lock](https://github.com/github/gh-actions-lock) と[公式 verification workflow](https://github.com/github/gh-actions-lock/blob/main/.github/workflows/verify-lockfile.yml)。
+
 ## 2026-09-15: Homebrew tap による macOS 配布 (Issue #173)
 
 - **決定**: macOS(Apple silicon)向けに、本リポジトリとは別の tap リポジトリ `kkamegawa/homebrew-tap` から

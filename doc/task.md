@@ -2,6 +2,24 @@
 
 このファイルは、作業終了時にセッションごとの作業内容を記録するログです。各エントリは実施した plan と、参照した issue / Work Item へのリンクを含みます。
 
+## 2026-11-11: GitHub Actions dependency lockfile
+
+**ブランチ**: `chore/188-gh-actions-lock`
+
+**対応 Issue**: [#188](https://github.com/kkamegawa/Relaypublisher/issues/188) / [#189](https://github.com/kkamegawa/Relaypublisher/issues/189) / [#190](https://github.com/kkamegawa/Relaypublisher/issues/190)
+
+### 実施内容
+
+- `.github/workflows/` の実 workflow と利用者向け GitHub Actions sample の action 参照を release tag にし、exact commit を `.github/workflows/actions.lock` で管理した。
+- `verify-lockfile.yml` を追加し、実 workflow と sample の lock を CI で検証するようにした。
+- CI 設計・運用手順・ADR を更新した。Azure Pipelines 定義は変更していない。
+
+### 検証結果
+
+- `gh actions-lock --verify .github/workflows workflows/github-actions/publish-intune-apps.yml`: 成功、5 workflows valid。
+- `git diff --check`: 成功。
+- .NET build/test は実行していない（workflow と文書だけの変更）。
+
 ## 2026-11-11: IntuneWinAppUtil 最新版照会を実行内で共有する
 
 **ブランチ**: `fix/184-cache-github-latest-release`

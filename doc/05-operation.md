@@ -605,6 +605,9 @@ This section covers the *consumer* workflows that publish Intune apps. Relaypubl
 ### GitHub Actions
 
 - [ ] Copy `workflows/github-actions/publish-intune-apps.yml` to `.github/workflows/publish-intune-apps.yml`.
+- [ ] From the target repository root, run `gh extension install github/gh-actions-lock` and
+  `gh actions-lock`, and commit the generated `.github/workflows/actions.lock` with the copied workflow. Rerun
+  `gh actions-lock` after every `uses:` change.
 - [ ] Create the `production` environment and protect it with the required reviewers or policy.
 - [ ] Give `id-token: write` only to jobs that need OIDC; PR validation jobs must not receive it.
 - [ ] Configure the GitHub federated credential with issuer `https://token.actions.githubusercontent.com/`, subject `repo:<owner>/<repo>:environment:production`, and audience `api://AzureADTokenExchange`.
